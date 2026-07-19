@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-zinc-950 bg-zinc-50 dark:text-zinc-50 dark:bg-[#09090b];
+  }
+}
+
+/* Custom Scrollbar for Sleek Look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-300 dark:bg-zinc-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-400 dark:bg-zinc-700;
+}
+
+/* Glassmorphism Styles */
+.glass-panel {
+  @apply bg-white/70 dark:bg-[#0c0c0f]/70 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50;
+}
+
+.glass-card {
+  @apply bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-xl transition-all duration-300 hover:shadow-md;
+}
+
+/* Tab bar styles */
+.excel-tab {
+  @apply px-4 py-1.5 text-xs font-semibold border-r border-zinc-200 dark:border-zinc-800 select-none cursor-pointer transition-colors duration-150 flex items-center gap-1.5;
+}
+
+/* Print Layout Optimization */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Hide all dashboard navigation controls during printing */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Prevent first blank page by positioning print container absolutely to top-left of page 1 */
+  .print-all-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force report card printing block to take full width and separate pages correctly */
+  .print-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    display: block !important;
+    position: relative !important;
+  }
+
+  .print-page:last-child {
+    page-break-after: avoid !important;
+  }
+
+  /* Optimize print font sizes and table spacing */
+  .print-page table {
+    font-size: 11px !important;
+    border-collapse: collapse !important;
+  }
+
+  .print-page td, .print-page th {
+    padding: 3px 5px !important;
+    border: 1px solid black !important;
+  }
+}
+
+/* Visible gridlines for grading spreadsheet tables */
+.gradebook-table th,
+.gradebook-table td {
+  border: 1px solid #d4d4d8 !important; /* zinc-300 */
+}
+
+.dark .gradebook-table th,
+.dark .gradebook-table td {
+  border: 1px solid #3f3f46 !important; /* zinc-700 */
+}
+
+.gradebook-table th {
+  border-bottom: 2px solid #a1a1aa !important; /* zinc-400 */
+}
+
+.dark .gradebook-table th {
+  border-bottom: 2px solid #52525b !important; /* zinc-600 */
+}
