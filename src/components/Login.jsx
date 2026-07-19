@@ -141,9 +141,13 @@ export default function Login({ onLoginSuccess }) {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col items-center mb-8 relative">
-          <div className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center mb-3 text-indigo-400 shadow-inner">
-            {showSetup ? <Settings className="w-6 h-6 animate-spin-slow" /> : <LogIn className="w-6 h-6" />}
-          </div>
+          {showSetup ? (
+            <div className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center mb-3 text-indigo-400 shadow-inner">
+              <Settings className="w-6 h-6 animate-spin-slow" />
+            </div>
+          ) : (
+            <img src="/icon.png" className="w-16 h-16 object-contain mb-3 select-none" alt="Flawlex logo" />
+          )}
           <h1 className="text-xl font-bold tracking-tight text-white">Flawlex Technologies SBA Portal</h1>
           <p className="text-xs text-zinc-400 mt-1 text-center">
             {showSetup 

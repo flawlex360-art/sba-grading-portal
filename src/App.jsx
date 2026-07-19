@@ -360,7 +360,7 @@ export default function App() {
       {/* 1. Header Bar */}
       <header className="glass-panel sticky top-0 z-40 px-6 py-4 flex items-center justify-between no-print shadow-sm">
         <div className="flex items-center gap-2.5">
-          <span className="text-xl">🎓</span>
+          <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
           <div>
             <h1 className="text-md font-black uppercase tracking-wider text-zinc-900 dark:text-white">
               Flawlex Technologies SBA Portal

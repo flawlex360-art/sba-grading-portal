@@ -521,7 +521,7 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       {/* Top Navbar */}
       <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
+          <img src="/icon.png" className="w-5 h-5 object-contain" alt="Flawlex logo" />
           <span className="font-bold tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
         </div>
         <div className="flex items-center gap-2.5">
