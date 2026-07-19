@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 112.5% !important; /* Scale up base font size (16px -> 18px) to increase all rem sizes by 12.5% */
+  }
   body {
     @apply antialiased text-zinc-950 bg-zinc-50 dark:text-zinc-50 dark:bg-[#09090b];
   }
@@ -109,3 +112,18 @@
 .dark .gradebook-table th {
   border-bottom: 2px solid #52525b !important; /* zinc-600 */
 }
+
+/* Scaling up arbitrary small pixel font sizes for high-readability */
+.text-\[9px\] {
+  font-size: 11px !important;
+}
+.text-\[10px\] {
+  font-size: 12px !important;
+}
+.text-\[11px\] {
+  font-size: 13px !important;
+}
+.text-\[12px\] {
+  font-size: 14px !important;
+}
+
