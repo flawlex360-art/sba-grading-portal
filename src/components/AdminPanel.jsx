@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
 import { collection, doc, setDoc, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
-import { createClient } from '@supabase/supabase-js';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff 
@@ -73,42 +72,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
 
-  // Supabase Backup states
-  const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('supabase_url') || '');
-  const [supabaseServiceKey, setSupabaseServiceKey] = useState(() => localStorage.getItem('supabase_service_key') || '');
-  const [backupLoading, setBackupLoading] = useState(false);
-  const [backupStatus, setBackupStatus] = useState('');
-  const [backupError, setBackupError] = useState('');
-  const [backupSuccess, setBackupSuccess] = useState('');
-  const [showSqlInstructions, setShowSqlInstructions] = useState(false);
 
-  const sqlSchemaScript = `-- 1. Create the teachers table
-CREATE TABLE IF NOT EXISTS public.teachers (
-    uid TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    assigned_class TEXT,
-    created_date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    password TEXT,
-    level TEXT DEFAULT 'JHS',
-    subjects JSONB DEFAULT '[]'::jsonb
-);
-
--- 2. Create the schools table
-CREATE TABLE IF NOT EXISTS public.schools (
-    teacher_uid TEXT PRIMARY KEY REFERENCES public.teachers(uid) ON DELETE CASCADE,
-    metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
-    students JSONB DEFAULT '[]'::jsonb NOT NULL,
-    grades JSONB DEFAULT '{}'::jsonb NOT NULL,
-    drop_lists JSONB DEFAULT '{}'::jsonb NOT NULL
-);
-
--- Enable RLS but allow service_role to bypass it
-ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.schools ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow service role full access" ON public.teachers USING (true) WITH CHECK (true);
-CREATE POLICY "Allow service role full access" ON public.schools USING (true) WITH CHECK (true);`;
 
   // Default initial school template for newly registered teachers
   const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr) => ({
@@ -398,123 +362,6 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
     }
   };
 
-  // Supabase backup procedure
-  const handleSupabaseBackup = async (e) => {
-    e.preventDefault();
-    if (!supabaseUrl.trim() || !supabaseServiceKey.trim()) {
-      setBackupError("Supabase URL and Service Role Key are required.");
-      return;
-    }
-
-    setBackupLoading(true);
-    setBackupError('');
-    setBackupSuccess('');
-    setBackupStatus('Initializing connection to Supabase...');
-
-    try {
-      // Save credentials locally
-      localStorage.setItem('supabase_url', supabaseUrl.trim());
-      localStorage.setItem('supabase_service_key', supabaseServiceKey.trim());
-
-      const supabase = createClient(supabaseUrl.trim(), supabaseServiceKey.trim(), {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      });
-
-      setBackupStatus('Extracting user logs from Firebase...');
-      // 1. Fetch all teachers from Firestore
-      const teachersSnapshot = await getDocs(collection(db, "teachers"));
-      const firebaseTeachers = [];
-      teachersSnapshot.forEach((docSnap) => {
-        firebaseTeachers.push({ uid: docSnap.id, ...docSnap.data() });
-      });
-
-      if (firebaseTeachers.length === 0) {
-        throw new Error("No active teacher databases found on Firebase to backup.");
-      }
-
-      let syncCount = 0;
-
-      for (const teacher of firebaseTeachers) {
-        setBackupStatus(`Syncing account auth: ${teacher.email} (${syncCount + 1}/${firebaseTeachers.length})...`);
-        const authPass = teacher.password || 'password123';
-
-        // A. Attempt to register the user in Supabase Auth via Admin API
-        try {
-          const { data: userList, error: listError } = await supabase.auth.admin.listUsers();
-          if (listError) throw listError;
-
-          const exists = userList.users.find(u => u.email?.toLowerCase() === teacher.email.toLowerCase());
-          if (!exists) {
-            const { error: createError } = await supabase.auth.admin.createUser({
-              email: teacher.email,
-              password: authPass,
-              email_confirm: true,
-              user_metadata: { name: teacher.name }
-            });
-            if (createError) throw createError;
-          }
-        } catch (authErr) {
-          console.warn(`Supabase Auth sync warning for ${teacher.email}:`, authErr);
-        }
-
-        // B. Upsert profile into public.teachers table
-        setBackupStatus(`Backing up profile: ${teacher.name}...`);
-        const { error: teacherErr } = await supabase
-          .from('teachers')
-          .upsert({
-            uid: teacher.uid,
-            name: teacher.name,
-            email: teacher.email,
-            assigned_class: teacher.assignedClass || null,
-            created_date: teacher.createdDate || new Date().toISOString(),
-            password: authPass,
-            level: teacher.level || 'JHS',
-            subjects: teacher.subjects || []
-          }, { onConflict: 'uid' });
-
-        if (teacherErr) {
-          throw new Error(`Failed backing up teacher metadata: ${teacherErr.message}. Make sure you ran the SQL tables script in Supabase!`);
-        }
-
-        // C. Fetch and Sync spreadsheet document data
-        const schoolDocRef = doc(db, "schools", teacher.uid);
-        const schoolSnap = await getDoc(schoolDocRef);
-
-        if (schoolSnap.exists()) {
-          const schoolData = schoolSnap.data();
-          setBackupStatus(`Backing up grading sheet: ${teacher.name}...`);
-          
-          const { error: schoolErr } = await supabase
-            .from('schools')
-            .upsert({
-              teacher_uid: teacher.uid,
-              metadata: schoolData.metadata || {},
-              students: schoolData.students || [],
-              grades: schoolData.grades || {},
-              drop_lists: schoolData.dropLists || {}
-            }, { onConflict: 'teacher_uid' });
-
-          if (schoolErr) {
-            throw new Error(`Failed backing up grading records: ${schoolErr.message}`);
-          }
-        }
-
-        syncCount++;
-      }
-
-      setBackupSuccess(`Backup Completed! Synced ${syncCount} teacher profiles, login settings, and grading records successfully to Supabase!`);
-      setBackupStatus('');
-    } catch (err) {
-      console.error(err);
-      setBackupError(err.message || "Cloud backup failed. Make sure your project SQL tables are configured.");
-      setBackupStatus('');
-    } finally {
-      setBackupLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans select-none flex flex-col transition-colors duration-300">
@@ -545,7 +392,7 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left 5 Columns: Creator Form & Supabase Backup */}
+        {/* Left 5 Columns: Creator Form */}
         <div className="lg:col-span-5 space-y-4">
           
           {/* Main Creator Card */}
@@ -786,100 +633,6 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
             </form>
           </div>
 
-          {/* Supabase Backup & Sync Card */}
-          <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 backdrop-blur-xl relative overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800/80 pb-3 mb-4">
-              <Server className="w-5 h-5 text-emerald-500" />
-              <div>
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Supabase Cloud Backup</h3>
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">Sync Firebase databases and credentials to Supabase</p>
-              </div>
-            </div>
-
-            {backupSuccess && (
-              <div className="bg-emerald-950/20 border border-emerald-800/40 text-emerald-300 rounded-lg p-3 text-xs flex gap-2 mb-4 animate-fade-in">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{backupSuccess}</p>
-              </div>
-            )}
-
-            {backupError && (
-              <div className="bg-rose-950/20 border border-rose-800/40 text-rose-300 rounded-lg p-3 text-xs flex gap-2 mb-4">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{backupError}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSupabaseBackup} className="space-y-3 text-xs font-semibold text-zinc-650 dark:text-zinc-300">
-              <div>
-                <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Supabase Project URL</label>
-                <input
-                  type="text"
-                  required
-                  value={supabaseUrl}
-                  onChange={(e) => setSupabaseUrl(e.target.value)}
-                  placeholder="https://your-project.supabase.co"
-                  className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Service Role Secret API Key</label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showSupaKey ? "text" : "password"}
-                    required
-                    value={supabaseServiceKey}
-                    onChange={(e) => setSupabaseServiceKey(e.target.value)}
-                    placeholder="Bypass RLS Secret Key"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg pl-3 pr-10 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSupaKey(!showSupaKey)}
-                    className="absolute right-3 text-zinc-500 hover:text-zinc-350 dark:hover:text-zinc-200 focus:outline-none"
-                  >
-                    {showSupaKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {backupLoading && (
-                <div className="bg-zinc-100 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 text-[11px] flex gap-2.5 items-center text-zinc-600 dark:text-zinc-400">
-                  <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin flex-shrink-0" />
-                  <span className="font-medium animate-pulse">{backupStatus}</span>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={backupLoading}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow"
-                >
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  {backupLoading ? "Backing up..." : "Backup Database & Login Systems"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowSqlInstructions(!showSqlInstructions)}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white underline text-left focus:outline-none"
-                >
-                  {showSqlInstructions ? "Hide SQL Table Script" : "Show Required Supabase SQL Script"}
-                </button>
-              </div>
-
-              {showSqlInstructions && (
-                <div className="mt-2 text-[10px] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
-                  <p className="text-zinc-500">Copy and run this inside your Supabase SQL Editor to prepare database tables first:</p>
-                  <pre className="p-2 bg-zinc-100 dark:bg-[#121214] text-zinc-700 dark:text-emerald-400 rounded border border-zinc-200 dark:border-zinc-850 font-mono overflow-x-auto whitespace-pre">
-                    {sqlSchemaScript}
-                  </pre>
-                </div>
-              )}
-            </form>
-          </div>
         </div>
 
         {/* Right 7 Columns: Active accounts log */}
