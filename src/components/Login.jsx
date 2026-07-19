@@ -144,7 +144,7 @@ export default function Login({ onLoginSuccess }) {
           <div className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/30 rounded-xl flex items-center justify-center mb-3 text-indigo-400 shadow-inner">
             {showSetup ? <Settings className="w-6 h-6 animate-spin-slow" /> : <LogIn className="w-6 h-6" />}
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">SBA Grading Portal</h1>
+          <h1 className="text-xl font-bold tracking-tight text-white">Flawlex Technologies SBA Portal</h1>
           <p className="text-xs text-zinc-400 mt-1 text-center">
             {showSetup 
               ? "Link your grading portal to your Firebase cloud project" 

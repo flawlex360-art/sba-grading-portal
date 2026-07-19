@@ -320,7 +320,7 @@ export default function App() {
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-zinc-50 dark:bg-[#09090b]">
         <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-indigo-600 animate-spin" />
         <span className="text-sm text-zinc-500 font-semibold uppercase tracking-widest animate-pulse">
-          Loading SBA Portal...
+          Loading Flawlex Technologies SBA Portal...
         </span>
       </div>
     );
@@ -363,7 +363,7 @@ export default function App() {
           <span className="text-xl">🎓</span>
           <div>
             <h1 className="text-md font-black uppercase tracking-wider text-zinc-900 dark:text-white">
-              SBA Portal
+              Flawlex Technologies SBA Portal
             </h1>
             <p className="text-[10px] text-zinc-400 font-bold uppercase">
               {metadata.schoolName} — {metadata.classLevel}

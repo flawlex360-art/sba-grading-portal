@@ -890,7 +890,7 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                 <Users className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Active Teacher Accounts</h3>
-                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-0.5">Manage credentials for the SBA Portal ({teachers.length} active)</p>
+                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-0.5">Manage credentials for the Flawlex Technologies SBA Portal ({teachers.length} active)</p>
                 </div>
               </div>
             </div>
