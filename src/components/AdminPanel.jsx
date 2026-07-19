@@ -592,7 +592,17 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Assigned Class</label>
                   <select
                     value={assignedClass}
-                    onChange={(e) => setAssignedClass(e.target.value)}
+                    onChange={(e) => {
+                      const newClass = e.target.value;
+                      setAssignedClass(newClass);
+                      const calculatedLevel = ['BS. 7', 'BS. 8', 'BS. 9'].includes(newClass) ? 'JHS' : 'Primary';
+                      setLevel(calculatedLevel);
+                      if (calculatedLevel === 'Primary') {
+                        setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
+                      } else {
+                        setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
+                      }
+                    }}
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="BS. 7">BS. 7</option>
@@ -693,6 +703,7 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Level / Category</label>
                   <select
                     value={level}
+                    disabled
                     onChange={(e) => {
                       const selectedVal = e.target.value;
                       setLevel(selectedVal);
@@ -1016,7 +1027,17 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                     <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Assigned Class</label>
                     <select
                       value={editClass}
-                      onChange={(e) => setEditClass(e.target.value)}
+                      onChange={(e) => {
+                        const newClass = e.target.value;
+                        setEditClass(newClass);
+                        const calculatedLevel = ['BS. 7', 'BS. 8', 'BS. 9'].includes(newClass) ? 'JHS' : 'Primary';
+                        setEditLevel(calculatedLevel);
+                        if (calculatedLevel === 'Primary') {
+                          setEditSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
+                        } else {
+                          setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
+                        }
+                      }}
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
                       <option value="BS. 7">BS. 7</option>
@@ -1084,6 +1105,7 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                     <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Level / Category</label>
                     <select
                       value={editLevel}
+                      disabled
                       onChange={(e) => {
                         const selectedVal = e.target.value;
                         setEditLevel(selectedVal);
