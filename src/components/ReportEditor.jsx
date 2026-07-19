@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Printer, User, Search, ChevronRight, FileCheck } from 'lucide-react';
 import ReportCard from './ReportCard';
 
-export default function ReportEditor({ students, metadata, computedResults, dropLists, onSave, onPrintAll, onPrintSingle }) {
+export default function ReportEditor({ students, metadata, computedResults, dropLists, onSave, onPrintAll, onPrintSingle, teacherSubjects }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -351,6 +351,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
               student={previewStudent}
               metadata={metadata}
               calculatedScores={computedResults}
+              teacherSubjects={teacherSubjects}
             />
           ) : (
             <div className="glass-card p-12 text-center text-zinc-400 no-print">

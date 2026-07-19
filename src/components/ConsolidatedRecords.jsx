@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Filter, FileSpreadsheet } from 'lucide-react';
 
-const SUBJECT_KEYS = [
+const DEFAULT_JHS_KEYS = [
   { name: "English Language", key: "ENG. LANG." },
   { name: "Mathematics", key: "MATHS" },
   { name: "Science", key: "SCIENCE" },
@@ -13,7 +13,8 @@ const SUBJECT_KEYS = [
   { name: "Creative Arts & Design", key: "C. ARTS" }
 ];
 
-export default function ConsolidatedRecords({ students, gradesStore }) {
+export default function ConsolidatedRecords({ students, gradesStore, teacherSubjects }) {
+  const SUBJECT_KEYS = teacherSubjects && teacherSubjects.length > 0 ? teacherSubjects : DEFAULT_JHS_KEYS;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('ALL');
   const [selectedGrade, setSelectedGrade] = useState('ALL');

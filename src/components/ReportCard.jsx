@@ -14,20 +14,24 @@ function formatDate(dateStr) {
   }
 }
 
-export default function ReportCard({ student, metadata, calculatedScores }) {
+const DEFAULT_JHS_SUBJECTS = [
+  { name: "English Language", key: "English Language" },
+  { name: "Mathematics", key: "Mathematics" },
+  { name: "Science", key: "Science" },
+  { name: "Career Technology", key: "Career Technology" },
+  { name: "Social Studies", key: "Social Studies" },
+  { name: "Computing", key: "Computing" },
+  { name: "Religious and Moral Education", key: "Religious and Moral Education" },
+  { name: "Ghanaian Language", key: "Ghanaian Language" },
+  { name: "Creative Arts & Design", key: "Creative Arts & Design" }
+];
+
+export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects }) {
   if (!student) return null;
 
-  const subjects = [
-    { name: "English Language", key: "English Language" },
-    { name: "Mathematics", key: "Mathematics" },
-    { name: "Science", key: "Science" },
-    { name: "Career Technology", key: "Career Technology" },
-    { name: "Social Studies", key: "Social Studies" },
-    { name: "Computing", key: "Computing" },
-    { name: "Religious and Moral Education", key: "Religious and Moral Education" },
-    { name: "Ghanaian Language", key: "Ghanaian Language" },
-    { name: "Creative Arts & Design", key: "Creative Arts & Design" }
-  ];
+  const subjects = teacherSubjects && teacherSubjects.length > 0 
+    ? teacherSubjects.map(sub => ({ name: sub.name, key: sub.name }))
+    : DEFAULT_JHS_SUBJECTS;
 
   const rollCount = calculatedScores.length;
   

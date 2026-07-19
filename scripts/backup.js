@@ -103,11 +103,13 @@ const runBackup = async () => {
           email: teacher.email,
           assigned_class: teacher.assignedClass || null,
           created_date: teacher.createdDate || new Date().toISOString(),
-          password: authPass
+          password: authPass,
+          level: teacher.level || 'JHS',
+          subjects: teacher.subjects || []
         }, { onConflict: 'uid' });
         
       if (teacherErr) {
-        throw new Error(`Failed saving teacher profile ${teacher.name}: ${teacherErr.message}`);
+        throw new Error(`Failed saving teacher profile ${teacher.name}: ${teacherErr.message}. Make sure your Supabase table has the 'level' and 'subjects' columns!`);
       }
       
       // C. Sync Schools spreadsheet data

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Save, FileSpreadsheet } from 'lucide-react';
 import { calculateGrade, getOrdinalSuffix } from '../utils/calculations';
 
-const SUBJECT_TABS = [
+const DEFAULT_JHS_TABS = [
   { name: "English Language", key: "ENG. LANG." },
   { name: "Mathematics", key: "MATHS" },
   { name: "Science", key: "SCIENCE" },
@@ -14,11 +14,22 @@ const SUBJECT_TABS = [
   { name: "Creative Arts & Design", key: "C. ARTS" }
 ];
 
-export default function Gradebook({ students, gradesStore, onSave }) {
+export default function Gradebook({ students, gradesStore, onSave, teacherSubjects }) {
+  const SUBJECT_TABS = teacherSubjects && teacherSubjects.length > 0 ? teacherSubjects : DEFAULT_JHS_TABS;
   const [activeTab, setActiveTab] = useState(SUBJECT_TABS[0]);
   const [localGrades, setLocalGrades] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [activeRow, setActiveRow] = useState(null);
+
+  // Ensure activeTab matches any updates in teacherSubjects
+  useEffect(() => {
+    if (teacherSubjects && teacherSubjects.length > 0) {
+      const exists = teacherSubjects.find(t => t.key === activeTab.key);
+      if (!exists) {
+        setActiveTab(teacherSubjects[0]);
+      }
+    }
+  }, [teacherSubjects]);
 
   // Load grades when active subject tab changes or gradesStore changes
   useEffect(() => {

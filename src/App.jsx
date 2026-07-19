@@ -26,7 +26,7 @@ const MAIN_TABS = [
   { id: 'droplists', name: 'Drop Lists', icon: Settings }
 ];
 
-const SUBJECT_MAP = {
+const DEFAULT_JHS_SUBJECT_MAP = {
   "English Language": "ENG. LANG.",
   "Mathematics": "MATHS",
   "Science": "SCIENCE",
@@ -37,7 +37,18 @@ const SUBJECT_MAP = {
   "Ghanaian Language": "GH. LANG.",
   "Creative Arts & Design": "C. ARTS"
 };
-const SUBJECTS = Object.keys(SUBJECT_MAP);
+
+const DEFAULT_PRIMARY_SUBJECT_MAP = {
+  "English Language": "ENG. LANG.",
+  "Mathematics": "MATHS",
+  "Science": "SCIENCE",
+  "History": "HISTORYY",
+  "Our World Our People": "OWOP",
+  "Computing": "COMPUTING",
+  "Religious and Moral Education": "RME",
+  "Ghanaian Language": "GH. LANG.",
+  "Creative Arts": "C. ARTS"
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -58,6 +69,35 @@ export default function App() {
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
   const [dropLists, setDropLists] = useState(null);
+
+  // Get active subjects based on teacher profile
+  const getTeacherSubjects = () => {
+    if (userProfile && Array.isArray(userProfile.subjects) && userProfile.subjects.length > 0) {
+      const map = {};
+      userProfile.subjects.forEach(sub => {
+        map[sub.name] = sub.key;
+      });
+      return {
+        subjectMap: map,
+        subjectsList: userProfile.subjects.map(s => s.name),
+        teacherSubjects: userProfile.subjects
+      };
+    }
+    
+    const fallbackMap = (userProfile?.level === 'Primary') 
+      ? DEFAULT_PRIMARY_SUBJECT_MAP 
+      : DEFAULT_JHS_SUBJECT_MAP;
+      
+    const teacherSubjects = Object.entries(fallbackMap).map(([name, key]) => ({ name, key }));
+
+    return {
+      subjectMap: fallbackMap,
+      subjectsList: Object.keys(fallbackMap),
+      teacherSubjects
+    };
+  };
+
+  const { subjectMap, subjectsList, teacherSubjects } = getTeacherSubjects();
   const [isLoading, setIsLoading] = useState(true);
 
   // API Key & Chat states
@@ -309,7 +349,7 @@ export default function App() {
   }
 
   // Calculate ranks and totals class-wide in real-time
-  const computedResults = computeClassResults(students, grades, SUBJECTS, SUBJECT_MAP);
+  const computedResults = computeClassResults(students, grades, subjectsList, subjectMap);
 
   const isPrinting = printAll || !!printSingleStudent;
 
@@ -429,17 +469,20 @@ export default function App() {
             students={students}
             gradesStore={grades}
             onSave={handleSaveGrades}
+            teacherSubjects={teacherSubjects}
           />
         )}
         {activeTab === 'positions' && (
           <ConsolidatedView
             computedResults={computedResults}
+            teacherSubjects={teacherSubjects}
           />
         )}
         {activeTab === 'open' && (
           <ConsolidatedRecords
             students={students}
             gradesStore={grades}
+            teacherSubjects={teacherSubjects}
           />
         )}
         {activeTab === 'reports' && (
@@ -451,6 +494,7 @@ export default function App() {
             onSave={handleSaveStudentReport}
             onPrintAll={handlePrintAll}
             onPrintSingle={handlePrintSingle}
+            teacherSubjects={teacherSubjects}
           />
         )}
         {activeTab === 'droplists' && (
@@ -517,6 +561,7 @@ export default function App() {
                 student={student}
                 metadata={metadata}
                 calculatedScores={computedResults}
+                teacherSubjects={teacherSubjects}
               />
             ))
           ) : (
@@ -524,6 +569,7 @@ export default function App() {
               student={printSingleStudent}
               metadata={metadata}
               calculatedScores={computedResults}
+              teacherSubjects={teacherSubjects}
             />
           )}
         </div>

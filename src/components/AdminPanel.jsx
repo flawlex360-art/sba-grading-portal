@@ -7,12 +7,42 @@ import {
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff 
 } from 'lucide-react';
 
+const JHS_SUBJECTS_LIST = [
+  { name: "English Language", key: "ENG. LANG." },
+  { name: "Mathematics", key: "MATHS" },
+  { name: "Science", key: "SCIENCE" },
+  { name: "Career Technology", key: "C. TECH" },
+  { name: "Social Studies", key: "SOCIAL" },
+  { name: "Computing", key: "COMPUTING" },
+  { name: "Religious and Moral Education", key: "RME" },
+  { name: "Ghanaian Language", key: "GH. LANG." },
+  { name: "Creative Arts & Design", key: "C. ARTS" },
+  { name: "French", key: "FRENCH" },
+  { name: "Arabic", key: "ARABIC" }
+];
+
+const PRIMARY_SUBJECTS_LIST = [
+  { name: "English Language", key: "ENG. LANG." },
+  { name: "Mathematics", key: "MATHS" },
+  { name: "Science", key: "SCIENCE" },
+  { name: "History", key: "HISTORYY" },
+  { name: "Our World Our People", key: "OWOP" },
+  { name: "Computing", key: "COMPUTING" },
+  { name: "Religious and Moral Education", key: "RME" },
+  { name: "Ghanaian Language", key: "GH. LANG." },
+  { name: "Creative Arts", key: "C. ARTS" }
+];
+
 export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) {
   const [teachers, setTeachers] = useState([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [assignedClass, setAssignedClass] = useState('BS. 7');
+  const [level, setLevel] = useState('JHS');
+  const [selectedSubjects, setSelectedSubjects] = useState(
+    JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key)
+  );
   
   // Custom metadata fields entered by the Admin for new accounts
   const [schoolName, setSchoolName] = useState('Anglican JHS');
@@ -35,6 +65,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
   const [editDistrict, setEditDistrict] = useState('');
   const [editTerm, setEditTerm] = useState('ONE');
   const [editAcademicYear, setEditAcademicYear] = useState('');
+  const [editLevel, setEditLevel] = useState('JHS');
+  const [editSelectedSubjects, setEditSelectedSubjects] = useState([]);
   
   const [editLoading, setEditLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -57,7 +89,9 @@ CREATE TABLE IF NOT EXISTS public.teachers (
     email TEXT UNIQUE NOT NULL,
     assigned_class TEXT,
     created_date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    password TEXT
+    password TEXT,
+    level TEXT DEFAULT 'JHS',
+    subjects JSONB DEFAULT '[]'::jsonb
 );
 
 -- 2. Create the schools table
@@ -146,6 +180,9 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
     setEditName(teacher.name === 'New Teacher' ? '' : (teacher.name || ''));
     setEditClass(teacher.assignedClass || 'BS. 7');
     setEditPassword(teacher.password || 'password123');
+    setEditLevel(teacher.level || 'JHS');
+    const activeSubjects = teacher.subjects || JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC');
+    setEditSelectedSubjects(activeSubjects.map(s => s.key));
     setEditLoading(true);
     setEditError('');
     setEditSuccess('');
@@ -200,11 +237,17 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       }
 
       // 2. Update teachers/{uid} doc
+      const finalEditSubjects = editLevel === 'Primary'
+        ? PRIMARY_SUBJECTS_LIST
+        : JHS_SUBJECTS_LIST.filter(s => editSelectedSubjects.includes(s.key));
+
       const teacherDocRef = doc(db, "teachers", selectedTeacher.uid);
       await setDoc(teacherDocRef, {
         name: finalEditName,
         assignedClass: editClass,
-        password: editPassword.trim()
+        password: editPassword.trim(),
+        level: editLevel,
+        subjects: finalEditSubjects
       }, { merge: true });
 
       // 3. Update schools/{uid} metadata doc
@@ -304,13 +347,19 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       const teacherUid = await createTeacherUser(email.trim(), password);
       
       // 2. Create the teacher profile document in Firestore 'teachers'
+      const finalSubjects = level === 'Primary' 
+        ? PRIMARY_SUBJECTS_LIST 
+        : JHS_SUBJECTS_LIST.filter(s => selectedSubjects.includes(s.key));
+
       const teacherDocRef = doc(db, "teachers", teacherUid);
       const teacherInfo = {
         name: finalName,
         email: email.trim().toLowerCase(),
         assignedClass: assignedClass,
         createdDate: new Date().toISOString(),
-        password: password.trim() // Save password for administrator access
+        password: password.trim(), // Save password for administrator access
+        level: level,
+        subjects: finalSubjects
       };
       await setDoc(teacherDocRef, teacherInfo);
 
@@ -330,6 +379,8 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       setEmail('');
       setPassword('');
       setAssignedClass('BS. 7');
+      setLevel('JHS');
+      setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
       
       // Refresh teacher list
       fetchTeachersList();
@@ -421,7 +472,9 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
             email: teacher.email,
             assigned_class: teacher.assignedClass || null,
             created_date: teacher.createdDate || new Date().toISOString(),
-            password: authPass
+            password: authPass,
+            level: teacher.level || 'JHS',
+            subjects: teacher.subjects || []
           }, { onConflict: 'uid' });
 
         if (teacherErr) {
@@ -636,6 +689,89 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                 </div>
               </div>
 
+              {/* Level / Category Selector */}
+              <div className="grid grid-cols-2 gap-3 border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Level / Category</label>
+                  <select
+                    value={level}
+                    onChange={(e) => {
+                      const selectedVal = e.target.value;
+                      setLevel(selectedVal);
+                      if (selectedVal === 'Primary') {
+                        setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
+                      } else {
+                        setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
+                      }
+                    }}
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="JHS">Junior High School (JHS)</option>
+                    <option value="Primary">Primary School</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Subject Selection Checkboxes */}
+              <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects</label>
+                  {level === 'JHS' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSubjects.length === JHS_SUBJECTS_LIST.length) {
+                          setSelectedSubjects([]);
+                        } else {
+                          setSelectedSubjects(JHS_SUBJECTS_LIST.map(s => s.key));
+                        }
+                      }}
+                      className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                    >
+                      {selectedSubjects.length === JHS_SUBJECTS_LIST.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
+
+                {level === 'Primary' ? (
+                  <div className="bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 text-[11px] text-zinc-500 dark:text-zinc-450 leading-relaxed">
+                    Primary school teachers are automatically assigned all 9 subjects:
+                    <div className="grid grid-cols-2 gap-1 mt-2 text-[10px] text-zinc-650 dark:text-zinc-350 font-mono">
+                      {PRIMARY_SUBJECTS_LIST.map(s => (
+                        <div key={s.key} className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                          <span>{s.name} ({s.key})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 max-h-40 overflow-y-auto">
+                    {JHS_SUBJECTS_LIST.map(s => {
+                      const checked = selectedSubjects.includes(s.key);
+                      return (
+                        <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              if (checked) {
+                                setSelectedSubjects(selectedSubjects.filter(k => k !== s.key));
+                              } else {
+                                setSelectedSubjects([...selectedSubjects, s.key]);
+                              }
+                            }}
+                            className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                          />
+                          <span>{s.name} ({s.key})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+
               <button
                 type="submit"
                 disabled={loading}
@@ -782,6 +918,8 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                       <th className="px-4 py-3 text-left">Teacher Name</th>
                       <th className="px-4 py-3 text-left">Email Address</th>
                       <th className="px-4 py-3 w-20">Class</th>
+                      <th className="px-4 py-3 w-20">Level</th>
+                      <th className="px-4 py-3 text-left">Subjects</th>
                       <th className="px-4 py-3 w-20">Actions</th>
                     </tr>
                   </thead>
@@ -794,6 +932,12 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                           <span className="bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 dark:border-indigo-500/25 px-2 py-0.5 rounded text-[10px] font-bold">
                             {teacher.assignedClass}
                           </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
+                          {teacher.level || 'JHS'}
+                        </td>
+                        <td className="px-4 py-2.5 text-left text-zinc-500 dark:text-zinc-400 text-[10px] max-w-[150px] truncate" title={teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'All standard JHS'}>
+                          {teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'Default JHS'}
                         </td>
                         <td className="px-4 py-2.5 flex justify-center gap-1.5">
                           <button
@@ -949,6 +1093,88 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                     onChange={(e) => setEditAcademicYear(e.target.value)}
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
+                </div>
+
+                {/* Edit Level Selector */}
+                <div className="grid grid-cols-2 gap-3 border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Level / Category</label>
+                    <select
+                      value={editLevel}
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        setEditLevel(selectedVal);
+                        if (selectedVal === 'Primary') {
+                          setEditSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
+                        } else {
+                          setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
+                        }
+                      }}
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="JHS">Junior High School (JHS)</option>
+                      <option value="Primary">Primary School</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Edit Subject Selection Checkboxes */}
+                <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects</label>
+                    {editLevel === 'JHS' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editSelectedSubjects.length === JHS_SUBJECTS_LIST.length) {
+                            setEditSelectedSubjects([]);
+                          } else {
+                            setEditSelectedSubjects(JHS_SUBJECTS_LIST.map(s => s.key));
+                          }
+                        }}
+                        className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                      >
+                        {editSelectedSubjects.length === JHS_SUBJECTS_LIST.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
+
+                  {editLevel === 'Primary' ? (
+                    <div className="bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 text-[10px] text-zinc-500 dark:text-zinc-450 leading-relaxed font-mono">
+                      Primary school:
+                      <div className="grid grid-cols-2 gap-1 mt-1 text-[9px] text-zinc-650 dark:text-zinc-350">
+                        {PRIMARY_SUBJECTS_LIST.map(s => (
+                          <div key={s.key} className="flex items-center gap-1">
+                            <span className="w-1 h-1 bg-emerald-500 rounded-full" />
+                            <span>{s.key}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1.5 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
+                      {JHS_SUBJECTS_LIST.map(s => {
+                        const checked = editSelectedSubjects.includes(s.key);
+                        return (
+                          <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[10px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                if (checked) {
+                                  setEditSelectedSubjects(editSelectedSubjects.filter(k => k !== s.key));
+                                } else {
+                                  setEditSelectedSubjects([...editSelectedSubjects, s.key]);
+                                }
+                              }}
+                              className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                            />
+                            <span>{s.name} ({s.key})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-4">

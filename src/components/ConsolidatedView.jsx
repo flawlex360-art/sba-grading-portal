@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Award, Download, Printer } from 'lucide-react';
 
-const SUBJECT_HEADERS = [
+const DEFAULT_JHS_HEADERS = [
   { name: "ENG. LANG.", key: "English Language" },
   { name: "MATHS", key: "Mathematics" },
   { name: "SCIENCE", key: "Science" },
@@ -13,7 +13,10 @@ const SUBJECT_HEADERS = [
   { name: "C. ARTS", key: "Creative Arts & Design" }
 ];
 
-export default function ConsolidatedView({ computedResults }) {
+export default function ConsolidatedView({ computedResults, teacherSubjects }) {
+  const SUBJECT_HEADERS = teacherSubjects && teacherSubjects.length > 0 
+    ? teacherSubjects.map(sub => ({ name: sub.key, key: sub.name }))
+    : DEFAULT_JHS_HEADERS;
   const [hoverRow, setHoverRow] = useState(null);
 
   const handlePrint = () => {
