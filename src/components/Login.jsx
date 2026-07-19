@@ -1,14 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, isConfigValid, getFirebaseConfig } from '../utils/firebase';
-import { doc, setDoc } from 'firebase/firestore';
-import { LogIn, Key, Mail, Lock, ShieldAlert, AlertCircle, HelpCircle, Save, Settings } from 'lucide-react';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { LogIn, Key, Mail, Lock, ShieldAlert, AlertCircle, HelpCircle, Save, Settings, Eye, EyeOff } from 'lucide-react';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [adminExists, setAdminExists] = useState(false);
+
+  useEffect(() => {
+    const checkAdminExists = async () => {
+      try {
+        const q = query(collection(db, "teachers"), where("isAdmin", "==", true));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          setAdminExists(true);
+        }
+      } catch (e) {
+        console.error("Error checking admin status:", e);
+      }
+    };
+    checkAdminExists();
+  }, []);
 
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
@@ -78,18 +95,23 @@ export default function Login({ onLoginSuccess }) {
       console.error(err);
       let errMsg = "Invalid email or password. Please try again.";
       if (email.trim().toLowerCase() === 'admin@school.com') {
-        setError(
-          <div className="flex flex-col gap-2">
-            <span>No Admin account found. Would you like to register this password as your Administrator login?</span>
-            <button
-              type="button"
-              onClick={handleRegisterAdmin}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
-            >
-              Register Admin Account
-            </button>
-          </div>
-        );
+        if (adminExists) {
+          setError("Incorrect password for Administrator account.");
+        } else {
+          setError(
+            <div className="flex flex-col gap-2">
+              <span>Admin account not registered yet.</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Administrator login for this database:</span>
+              <button
+                type="button"
+                onClick={handleRegisterAdmin}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
+              >
+                Register Admin Account
+              </button>
+            </div>
+          );
+        }
         setLoading(false);
         return;
       }
@@ -251,16 +273,23 @@ export default function Login({ onLoginSuccess }) {
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
                 Password
               </label>
-              <div className="relative">
+              <div className="relative flex items-center">
                 <Lock className="absolute left-3 top-2.5 w-4 h-4 text-zinc-500" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-10 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 text-zinc-500 hover:text-zinc-350 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                </button>
               </div>
             </div>
 

@@ -4,7 +4,7 @@ import { collection, doc, setDoc, getDocs, getDoc, deleteDoc } from 'firebase/fi
 import { createClient } from '@supabase/supabase-js';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
-  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw 
+  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff 
 } from 'lucide-react';
 
 export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) {
@@ -27,6 +27,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
 
   // Editing state variables
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [showSupaKey, setShowSupaKey] = useState(false);
   const [editName, setEditName] = useState('');
   const [editClass, setEditClass] = useState('BS. 7');
   const [editPassword, setEditPassword] = useState('');
@@ -694,14 +695,23 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
 
               <div>
                 <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Service Role Secret API Key</label>
-                <input
-                  type="password"
-                  required
-                  value={supabaseServiceKey}
-                  onChange={(e) => setSupabaseServiceKey(e.target.value)}
-                  placeholder="Bypass RLS Secret Key"
-                  className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showSupaKey ? "text" : "password"}
+                    required
+                    value={supabaseServiceKey}
+                    onChange={(e) => setSupabaseServiceKey(e.target.value)}
+                    placeholder="Bypass RLS Secret Key"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg pl-3 pr-10 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSupaKey(!showSupaKey)}
+                    className="absolute right-3 text-zinc-500 hover:text-zinc-350 dark:hover:text-zinc-200 focus:outline-none"
+                  >
+                    {showSupaKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {backupLoading && (
