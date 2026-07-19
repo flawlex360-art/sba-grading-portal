@@ -1,5 +1,5 @@
 export async function transcribeSheetImage(base64Image, mimeType, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
   
   const prompt = `You are an expert grading OCR assistant. Extract student grades from this handwritten or printed SBA grading sheet.
   Return a structured JSON array of student rows. 
