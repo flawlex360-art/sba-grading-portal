@@ -104,92 +104,34 @@ export default function Roster({ students, onSave, onImport }) {
   };
 
   const processFile = async (file) => {
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const isDocx = file.name.endsWith('.docx');
 
-    if (!isExcel && !isDocx) {
-      setUploadError('Only Excel (.xlsx, .xls) and Word (.docx) files are supported.');
+    if (!isDocx) {
+      setUploadError('Only Word (.docx) files are supported.');
       return;
     }
 
     setIsSaving(true);
 
-    if (isDocx) {
-      try {
-        const names = await parseDocxRoster(file);
-        const importedStudents = names.map((name, i) => ({
-          sn: i + 1,
-          name: name.toUpperCase(),
-          attendance: 0,
-          conduct: "",
-          interest: "",
-          remarks: "",
-          promotedTo: ""
-        }));
+    try {
+      const names = await parseDocxRoster(file);
+      const importedStudents = names.map((name, i) => ({
+        sn: i + 1,
+        name: name.toUpperCase(),
+        attendance: 0,
+        conduct: "",
+        interest: "",
+        remarks: "",
+        promotedTo: ""
+      }));
 
-        setList(importedStudents);
-        await onImport(importedStudents);
-        setIsSaving(false);
-      } catch (err) {
-        console.error(err);
-        setUploadError(err.message || 'An error occurred during Word document import.');
-        setIsSaving(false);
-      }
-    } else {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const XLSX = await import('xlsx');
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames.find(n => n.toUpperCase() === "NAMES");
-          if (!sheetName) {
-            throw new Error("'NAMES' tab sheet not found in the Excel file.");
-          }
-          const worksheet = workbook.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          const names = [];
-          
-          for (let idx = 0; idx < rows.length; idx++) {
-            if (idx >= 7) { // Row 8 is index 7
-              const row = rows[idx];
-              if (row && row.length > 4) {
-                const nameVal = String(row[4]).trim();
-                if (nameVal && nameVal !== "Name (Surname First)" && nameVal !== "undefined" && nameVal !== "") {
-                  names.push(nameVal);
-                }
-              }
-            }
-          }
-          
-          if (names.length === 0) {
-            throw new Error("No student names found in Column E starting at Row 8.");
-          }
-          
-          const importedStudents = names.map((name, i) => ({
-            sn: i + 1,
-            name: name.toUpperCase(),
-            attendance: 0,
-            conduct: "",
-            interest: "",
-            remarks: "",
-            promotedTo: ""
-          }));
-
-          setList(importedStudents);
-          await onImport(importedStudents);
-          setIsSaving(false);
-        } catch (err) {
-          console.error(err);
-          setUploadError(err.message || 'An error occurred during local Excel import.');
-          setIsSaving(false);
-        }
-      };
-      reader.onerror = () => {
-        setUploadError('Failed to read the file.');
-        setIsSaving(false);
-      };
-      reader.readAsArrayBuffer(file);
+      setList(importedStudents);
+      await onImport(importedStudents);
+      setIsSaving(false);
+    } catch (err) {
+      console.error(err);
+      setUploadError(err.message || 'An error occurred during Word document import.');
+      setIsSaving(false);
     }
   };
 
@@ -222,8 +164,8 @@ export default function Roster({ students, onSave, onImport }) {
           {/* Roster Import Card */}
           <div className="glass-card p-6">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 mb-4 flex items-center gap-1.5">
-              <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-              Import Roster (Excel / Word)
+              <Upload className="w-4 h-4 text-emerald-500" />
+              Import Roster (Word)
             </h3>
             <div
               onDragOver={handleDragOver}
@@ -239,7 +181,7 @@ export default function Roster({ students, onSave, onImport }) {
                 type="file"
                 id="roster-file"
                 onChange={handleFileSelect}
-                accept=".xlsx, .xls, .docx"
+                accept=".docx"
                 className="hidden"
               />
               <label htmlFor="roster-file" className="cursor-pointer space-y-2 block">
@@ -250,7 +192,7 @@ export default function Roster({ students, onSave, onImport }) {
                   <span className="font-semibold text-blue-600 dark:text-blue-400">Click to upload</span> or drag and drop
                 </div>
                 <div className="text-[10px] text-zinc-400">
-                  Excel (.xlsx) or Word (.docx) document containing roster
+                  Word (.docx) document containing roster
                 </div>
               </label>
             </div>
@@ -352,7 +294,7 @@ export default function Roster({ students, onSave, onImport }) {
                   {list.length === 0 && (
                     <tr>
                       <td colSpan={3} className="px-4 py-12 text-center text-zinc-400">
-                        No students enrolled. Upload an Excel file or add students manually.
+                        No students enrolled. Upload a Word file or add students manually.
                       </td>
                     </tr>
                   )}
