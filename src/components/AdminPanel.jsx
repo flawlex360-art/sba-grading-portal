@@ -237,9 +237,8 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       }
 
       // 2. Update teachers/{uid} doc
-      const finalEditSubjects = editLevel === 'Primary'
-        ? PRIMARY_SUBJECTS_LIST
-        : JHS_SUBJECTS_LIST.filter(s => editSelectedSubjects.includes(s.key));
+      const finalEditSubjects = (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST)
+        .filter(s => editSelectedSubjects.includes(s.key));
 
       const teacherDocRef = doc(db, "teachers", selectedTeacher.uid);
       await setDoc(teacherDocRef, {
@@ -347,9 +346,8 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
       const teacherUid = await createTeacherUser(email.trim(), password);
       
       // 2. Create the teacher profile document in Firestore 'teachers'
-      const finalSubjects = level === 'Primary' 
-        ? PRIMARY_SUBJECTS_LIST 
-        : JHS_SUBJECTS_LIST.filter(s => selectedSubjects.includes(s.key));
+      const finalSubjects = (level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST)
+        .filter(s => selectedSubjects.includes(s.key));
 
       const teacherDocRef = doc(db, "teachers", teacherUid);
       const teacherInfo = {
@@ -715,60 +713,45 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
               {/* Subject Selection Checkboxes */}
               <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
                 <div className="flex justify-between items-center mb-2">
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects</label>
-                  {level === 'JHS' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedSubjects.length === JHS_SUBJECTS_LIST.length) {
-                          setSelectedSubjects([]);
-                        } else {
-                          setSelectedSubjects(JHS_SUBJECTS_LIST.map(s => s.key));
-                        }
-                      }}
-                      className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
-                    >
-                      {selectedSubjects.length === JHS_SUBJECTS_LIST.length ? 'Deselect All' : 'Select All'}
-                    </button>
-                  )}
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects ({level})</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const activeList = level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST;
+                      if (selectedSubjects.length === activeList.length) {
+                        setSelectedSubjects([]);
+                      } else {
+                        setSelectedSubjects(activeList.map(s => s.key));
+                      }
+                    }}
+                    className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                  >
+                    {selectedSubjects.length === (level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
+                  </button>
                 </div>
 
-                {level === 'Primary' ? (
-                  <div className="bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 text-[11px] text-zinc-500 dark:text-zinc-450 leading-relaxed">
-                    Primary school teachers are automatically assigned all 9 subjects:
-                    <div className="grid grid-cols-2 gap-1 mt-2 text-[10px] text-zinc-650 dark:text-zinc-350 font-mono">
-                      {PRIMARY_SUBJECTS_LIST.map(s => (
-                        <div key={s.key} className="flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                          <span>{s.name} ({s.key})</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 max-h-40 overflow-y-auto">
-                    {JHS_SUBJECTS_LIST.map(s => {
-                      const checked = selectedSubjects.includes(s.key);
-                      return (
-                        <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              if (checked) {
-                                setSelectedSubjects(selectedSubjects.filter(k => k !== s.key));
-                              } else {
-                                setSelectedSubjects([...selectedSubjects, s.key]);
-                              }
-                            }}
-                            className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
-                          />
-                          <span>{s.name} ({s.key})</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 max-h-40 overflow-y-auto">
+                  {(level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).map(s => {
+                    const checked = selectedSubjects.includes(s.key);
+                    return (
+                      <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            if (checked) {
+                              setSelectedSubjects(selectedSubjects.filter(k => k !== s.key));
+                            } else {
+                              setSelectedSubjects([...selectedSubjects, s.key]);
+                            }
+                          }}
+                          className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                        />
+                        <span>{s.name} ({s.key})</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
 
@@ -1121,60 +1104,45 @@ CREATE POLICY "Allow service role full access" ON public.schools USING (true) WI
                 {/* Edit Subject Selection Checkboxes */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects</label>
-                    {editLevel === 'JHS' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (editSelectedSubjects.length === JHS_SUBJECTS_LIST.length) {
-                            setEditSelectedSubjects([]);
-                          } else {
-                            setEditSelectedSubjects(JHS_SUBJECTS_LIST.map(s => s.key));
-                          }
-                        }}
-                        className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
-                      >
-                        {editSelectedSubjects.length === JHS_SUBJECTS_LIST.length ? 'Deselect All' : 'Select All'}
-                      </button>
-                    )}
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects ({editLevel})</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const activeList = editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST;
+                        if (editSelectedSubjects.length === activeList.length) {
+                          setEditSelectedSubjects([]);
+                        } else {
+                          setEditSelectedSubjects(activeList.map(s => s.key));
+                        }
+                      }}
+                      className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                    >
+                      {editSelectedSubjects.length === (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
+                    </button>
                   </div>
 
-                  {editLevel === 'Primary' ? (
-                    <div className="bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 text-[10px] text-zinc-500 dark:text-zinc-450 leading-relaxed font-mono">
-                      Primary school:
-                      <div className="grid grid-cols-2 gap-1 mt-1 text-[9px] text-zinc-650 dark:text-zinc-350">
-                        {PRIMARY_SUBJECTS_LIST.map(s => (
-                          <div key={s.key} className="flex items-center gap-1">
-                            <span className="w-1 h-1 bg-emerald-500 rounded-full" />
-                            <span>{s.key}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1.5 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
-                      {JHS_SUBJECTS_LIST.map(s => {
-                        const checked = editSelectedSubjects.includes(s.key);
-                        return (
-                          <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[10px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                if (checked) {
-                                  setEditSelectedSubjects(editSelectedSubjects.filter(k => k !== s.key));
-                                } else {
-                                  setEditSelectedSubjects([...editSelectedSubjects, s.key]);
-                                }
-                              }}
-                              className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3 h-3"
-                            />
-                            <span>{s.name} ({s.key})</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="grid grid-cols-2 gap-1.5 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
+                    {(editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).map(s => {
+                      const checked = editSelectedSubjects.includes(s.key);
+                      return (
+                        <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[10px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              if (checked) {
+                                setEditSelectedSubjects(editSelectedSubjects.filter(k => k !== s.key));
+                              } else {
+                                setEditSelectedSubjects([...editSelectedSubjects, s.key]);
+                              }
+                            }}
+                            className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                          />
+                          <span>{s.name} ({s.key})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="flex gap-2 pt-4">
