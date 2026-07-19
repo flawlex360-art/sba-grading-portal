@@ -397,10 +397,10 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
           
           {/* Main Creator Card */}
           <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 backdrop-blur-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-ink/5 rounded-full blur-2xl pointer-events-none" />
             
             <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800/80 pb-3 mb-5">
-              <UserPlus className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
+              <UserPlus className="w-5 h-5 text-emerald-ink dark:text-emerald-400" />
               <div>
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Generate Teacher Account</h3>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">Register login credential, school details and class</p>
@@ -432,7 +432,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Kofi Mensah (or blank)"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
                 <div>
@@ -450,7 +450,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                       }
                     }}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   >
                     <option value="BS. 7">BS. 7</option>
                     <option value="BS. 8">BS. 8</option>
@@ -475,7 +475,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
                     placeholder="e.g. Anglican JHS"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
                 <div>
@@ -486,7 +486,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={district}
                     onChange={(e) => setDistrict(e.target.value)}
                     placeholder="e.g. Kpando"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
               </div>
@@ -498,7 +498,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                   <select
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   >
                     <option value="ONE">ONE</option>
                     <option value="TWO">TWO</option>
@@ -513,7 +513,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={academicYear}
                     onChange={(e) => setAcademicYear(e.target.value)}
                     placeholder="e.g. 2025/2026"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
               </div>
@@ -528,7 +528,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="teacher@school.com"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
                 <div>
@@ -539,7 +539,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min 6 characters"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink font-mono"
                   />
                 </div>
               </div>
@@ -560,7 +560,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                       }
                     }}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   >
                     <option value="JHS">Junior High School (JHS)</option>
                     <option value="Primary">Primary School</option>
@@ -582,7 +582,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         setSelectedSubjects(activeList.map(s => s.key));
                       }
                     }}
-                    className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                    className="text-[10px] text-emerald-ink dark:text-emerald-400 hover:underline"
                   >
                     {selectedSubjects.length === (level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
                   </button>
@@ -603,7 +603,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                               setSelectedSubjects([...selectedSubjects, s.key]);
                             }
                           }}
-                          className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                          className="rounded border-zinc-300 dark:border-zinc-800 text-emerald-ink focus:ring-emerald-ink w-3.5 h-3.5"
                         />
                         <span>{s.name} ({s.key})</span>
                       </label>
@@ -616,7 +616,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow"
+                className="w-full bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow"
               >
                 {loading ? (
                   <>
@@ -640,7 +640,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
           <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 flex flex-col h-full">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3 mb-5">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
+                <Users className="w-5 h-5 text-emerald-ink dark:text-emerald-400" />
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Active Teacher Accounts</h3>
                   <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-0.5">Manage credentials for the Flawlex Technologies SBA Portal ({teachers.length} active)</p>
@@ -650,7 +650,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
 
             {fetching ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 text-xs">
-                <span className="w-6 h-6 border-2 border-zinc-200 dark:border-zinc-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mb-2" />
+                <span className="w-6 h-6 border-2 border-zinc-200 dark:border-zinc-700 border-t-emerald-ink dark:border-t-emerald-ink rounded-full animate-spin mb-2" />
                 Retrieving active roster...
               </div>
             ) : teachers.length === 0 ? (
@@ -676,7 +676,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         <td className="px-4 py-2.5 text-left font-bold text-zinc-900 dark:text-white">{teacher.name}</td>
                         <td className="px-4 py-2.5 text-left text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">{teacher.email}</td>
                         <td className="px-4 py-2.5 font-mono text-[11px]">
-                          <span className="bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 dark:border-indigo-500/25 px-2 py-0.5 rounded text-[10px] font-bold">
+                          <span className="bg-emerald-ink/10 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 dark:border-emerald-ink/25 px-2 py-0.5 rounded text-[10px] font-bold">
                             {teacher.assignedClass}
                           </span>
                         </td>
@@ -689,7 +689,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         <td className="px-4 py-2.5 flex justify-center gap-1.5">
                           <button
                             onClick={() => handleEditClick(teacher)}
-                            className="p-1 rounded bg-indigo-500/10 hover:bg-indigo-500/25 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 transition-colors"
+                            className="p-1 rounded bg-emerald-ink/10 hover:bg-emerald-ink/25 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 transition-colors"
                             title="Edit Teacher Profile"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -725,7 +725,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
             </button>
 
             <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 mb-5">
-              <Pencil className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
+              <Pencil className="w-5 h-5 text-emerald-ink dark:text-emerald-400" />
               <div>
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Edit Teacher Profile</h3>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">Modify class assignment, school name and settings</p>
@@ -734,7 +734,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
 
             {editLoading ? (
               <div className="py-12 flex flex-col items-center justify-center text-xs text-zinc-500">
-                <span className="w-6 h-6 border-2 border-zinc-250 border-t-indigo-600 rounded-full animate-spin mb-2" />
+                <span className="w-6 h-6 border-2 border-zinc-250 border-t-emerald-ink rounded-full animate-spin mb-2" />
                 Loading teacher metadata...
               </div>
             ) : (
@@ -760,7 +760,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       placeholder="e.g. Kofi Mensah"
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     />
                   </div>
                   <div>
@@ -770,7 +770,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                       required
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink font-mono"
                     />
                   </div>
                 </div>
@@ -791,7 +791,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                           setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                         }
                       }}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     >
                       <option value="BS. 7">BS. 7</option>
                       <option value="BS. 8">BS. 8</option>
@@ -809,7 +809,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     <select
                       value={editTerm}
                       onChange={(e) => setEditTerm(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     >
                       <option value="ONE">ONE</option>
                       <option value="TWO">TWO</option>
@@ -826,7 +826,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                       required
                       value={editSchoolName}
                       onChange={(e) => setEditSchoolName(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     />
                   </div>
                   <div>
@@ -836,7 +836,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                       required
                       value={editDistrict}
                       onChange={(e) => setEditDistrict(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     />
                   </div>
                 </div>
@@ -848,7 +848,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     required
                     value={editAcademicYear}
                     onChange={(e) => setEditAcademicYear(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
 
@@ -868,7 +868,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                           setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                         }
                       }}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     >
                       <option value="JHS">Junior High School (JHS)</option>
                       <option value="Primary">Primary School</option>
@@ -890,7 +890,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                           setEditSelectedSubjects(activeList.map(s => s.key));
                         }
                       }}
-                      className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline"
+                      className="text-[10px] text-emerald-ink dark:text-emerald-400 hover:underline"
                     >
                       {editSelectedSubjects.length === (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
                     </button>
@@ -911,7 +911,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                                 setEditSelectedSubjects([...editSelectedSubjects, s.key]);
                               }
                             }}
-                            className="rounded border-zinc-300 dark:border-zinc-800 text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                            className="rounded border-zinc-300 dark:border-zinc-800 text-emerald-ink focus:ring-emerald-ink w-3 h-3"
                           />
                           <span>{s.name} ({s.key})</span>
                         </label>
@@ -931,7 +931,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                   <button
                     type="submit"
                     disabled={savingEdit}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1 transition-colors shadow"
+                    className="flex-1 bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1 transition-colors shadow"
                   >
                     {savingEdit ? (
                       <>

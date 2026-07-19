@@ -20,9 +20,19 @@ class ErrorBoundary extends Component {
 }
 
 export default function ChatPanel({ isOpen, onClose, apiKey }) {
-  const [messages, setMessages] = useState([
-    { role: 'model', content: "Hi! I am Antigravity's Grading Assistant. Ask me anything about your class grades, rankings, or performance trends." }
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const saved = localStorage.getItem('gemini_chat_history');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return [
+      { role: 'model', content: "Hi! I am Antigravity's Grading Assistant. Ask me anything about your class grades, rankings, or performance trends." }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('gemini_chat_history', JSON.stringify(messages));
+  }, [messages]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [expandedThoughts, setExpandedThoughts] = useState({});
@@ -144,7 +154,7 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center gap-2">
-          <Bot className="w-5 h-5 text-blue-500" />
+          <Bot className="w-5 h-5 text-emerald-ink" />
           <span className="font-bold text-sm uppercase tracking-wider">Gemini SBA Assistant</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded">
@@ -235,12 +245,12 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
           disabled={isLoading}
           placeholder="Ask grading queries (e.g. List top students in science)..."
           rows={1}
-          className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-4 pr-12 py-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none max-h-28"
+          className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-xl pl-4 pr-12 py-3 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-ink text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none max-h-28"
         />
         <button 
           type="submit" 
           disabled={!input.trim() || isLoading} 
-          className="absolute right-5 bottom-5 p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-full transition-colors shadow"
+          className="absolute right-5 bottom-5 p-2 bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-full transition-colors shadow"
         >
           <Send className="w-4 h-4" />
         </button>

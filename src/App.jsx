@@ -101,14 +101,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   // API Key & Chat states
-  const [apiKey, setApiKey] = useState(
-    localStorage.getItem('gemini_api_key') || 
-    import.meta.env.VITE_GEMINI_API_KEY || 
-    ''
-  );
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [tempKey, setTempKey] = useState('');
 
   // Printing states (Root level to bypass parent spacing layout issues)
   const [printAll, setPrintAll] = useState(false);
@@ -301,12 +295,7 @@ export default function App() {
     }
   };
 
-  // API Key handlers
-  const handleSaveKey = () => {
-    setApiKey(tempKey);
-    localStorage.setItem('gemini_api_key', tempKey);
-    setShowKeyModal(false);
-  };
+
 
   const handleLogout = async () => {
     if (auth) {
@@ -322,7 +311,7 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-zinc-50 dark:bg-[#09090b]">
-        <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-indigo-600 animate-spin" />
+        <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-emerald-ink animate-spin" />
         <span className="text-sm text-zinc-500 font-semibold uppercase tracking-widest animate-pulse">
           Loading Flawlex Technologies SBA Portal...
         </span>
@@ -344,7 +333,7 @@ export default function App() {
   if (!metadata || !dropLists) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-zinc-50 dark:bg-[#09090b]">
-        <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-indigo-600 animate-spin" />
+        <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-emerald-ink animate-spin" />
         <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
           Initializing Class Project...
         </span>
@@ -387,18 +376,7 @@ export default function App() {
             </span>
           </div>
 
-          <button
-            onClick={() => { setTempKey(apiKey); setShowKeyModal(true); }}
-            className={`p-2 rounded-lg border transition-colors flex items-center gap-1.5 text-xs font-semibold ${
-              apiKey 
-                ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' 
-                : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-            }`}
-            title="Configure Gemini API Key"
-          >
-            <Key className="w-4 h-4" />
-            <span className="hidden md:inline">{apiKey ? "Key Saved" : "Set API Key"}</span>
-          </button>
+
 
           {/* Theme Switcher */}
           <button
@@ -420,7 +398,7 @@ export default function App() {
           {/* Floating Assistant Trigger */}
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
+            className="bg-emerald-ink hover:bg-emerald-900 text-white rounded-lg p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
           >
             <Bot className="w-4 h-4" />
             <span className="hidden md:inline">Ask AI</span>
@@ -439,7 +417,7 @@ export default function App() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-5 py-3 md:px-4 md:py-2 text-sm md:text-xs font-bold rounded-lg border transition-all truncate ${
                 isActive
-                  ? 'border-blue-500/20 bg-blue-50/40 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-extrabold shadow-sm'
+                  ? 'border-emerald-ink/20 bg-champagne/40 dark:bg-emerald-900/10 text-emerald-ink dark:text-emerald-400 font-extrabold shadow-sm'
                   : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
@@ -519,42 +497,7 @@ export default function App() {
         apiKey={apiKey}
       />
 
-      {/* API Key Modal Dialog */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-          <div className="glass-card bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1.5">
-              <Key className="w-4 h-4 text-emerald-500" />
-              Configure Gemini API Key
-            </h3>
-            <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-              To chat with your school records locally, please enter your Gemini API Key. 
-              The key is saved locally in your browser and never shared.
-            </p>
-            <input
-              type="password"
-              placeholder="AIzaSy..."
-              value={tempKey}
-              onChange={(e) => setTempKey(e.target.value)}
-              className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono mb-6"
-            />
-            <div className="flex justify-end gap-2 text-xs font-semibold">
-              <button
-                onClick={() => setShowKeyModal(false)}
-                className="bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 rounded-lg px-3 py-2 transition-colors border border-zinc-200 dark:border-zinc-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveKey}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 transition-colors shadow"
-              >
-                Save Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       </div>
 

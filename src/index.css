@@ -7,7 +7,7 @@
     font-size: 112.5% !important; /* Scale up base font size (16px -> 18px) to increase all rem sizes by 12.5% */
   }
   body {
-    @apply antialiased text-zinc-950 bg-zinc-50 dark:text-zinc-50 dark:bg-[#09090b];
+    @apply antialiased text-emerald-ink bg-champagne dark:text-zinc-50 dark:bg-[#09090b];
   }
 }
 

@@ -79,7 +79,7 @@ export default function Login({ onLoginSuccess }) {
               <button
                 type="button"
                 onClick={handleRegisterAdmin}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
+                className="bg-emerald-ink hover:bg-emerald-900 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
               >
                 Register Admin Account
               </button>
@@ -143,7 +143,7 @@ export default function Login({ onLoginSuccess }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="teacher@school.com"
-                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
+                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink focus:border-emerald-ink font-medium"
                 />
               </div>
             </div>
@@ -160,7 +160,7 @@ export default function Login({ onLoginSuccess }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-10 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                  className="w-full bg-[#121214] border border-zinc-800/80 rounded-lg pl-10 pr-10 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink focus:border-emerald-ink font-mono"
                 />
                 <button
                   type="button"
@@ -175,7 +175,7 @@ export default function Login({ onLoginSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-lg mt-6"
+              className="w-full bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-lg mt-6"
             >
               {loading ? (
                 <span className="flex items-center gap-2">

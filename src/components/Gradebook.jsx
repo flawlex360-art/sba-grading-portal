@@ -40,7 +40,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
     if (!file) return;
 
     if (!apiKey) {
-      alert("Gemini API Key is not configured! Please click 'Set API Key' in the header to configure it first.");
+      alert("Gemini API Key is not configured! Please set VITE_GEMINI_API_KEY in your environment variables.");
       return;
     }
 
