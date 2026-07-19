@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, FileSpreadsheet } from 'lucide-react';
+import { Save, FileSpreadsheet, Camera, UploadCloud, Sparkles } from 'lucide-react';
 import { calculateGrade, getOrdinalSuffix } from '../utils/calculations';
+import { transcribeSheetImage } from '../utils/aiTranscriber';
 
 const DEFAULT_JHS_TABS = [
   { name: "English Language", key: "ENG. LANG." },
@@ -14,12 +15,86 @@ const DEFAULT_JHS_TABS = [
   { name: "Creative Arts & Design", key: "C. ARTS" }
 ];
 
-export default function Gradebook({ students, gradesStore, onSave, teacherSubjects }) {
+export default function Gradebook({ students, gradesStore, onSave, teacherSubjects, apiKey }) {
   const SUBJECT_TABS = teacherSubjects && teacherSubjects.length > 0 ? teacherSubjects : DEFAULT_JHS_TABS;
   const [activeTab, setActiveTab] = useState(SUBJECT_TABS[0]);
   const [localGrades, setLocalGrades] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [activeRow, setActiveRow] = useState(null);
+  
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!apiKey) {
+      alert("Gemini API Key is not configured! Please click 'Set API Key' in the header to configure it first.");
+      return;
+    }
+
+    setIsTranscribing(true);
+
+    try {
+      const base64Str = await fileToBase64(file);
+      const mimeType = file.type;
+      const base64Data = base64Str.split(',')[1];
+
+      const records = await transcribeSheetImage(base64Data, mimeType, apiKey);
+
+      if (!records || records.length === 0) {
+        alert("AI scan finished, but no student records could be parsed. Ensure the columns and values are clear.");
+        return;
+      }
+
+      // Map scores to localGrades state
+      const updatedGrades = { ...localGrades };
+
+      records.forEach(rec => {
+        let matchedStudent = null;
+        if (rec.sn) {
+          matchedStudent = students.find(s => parseInt(s.sn) === parseInt(rec.sn));
+        }
+        if (!matchedStudent && rec.name) {
+          matchedStudent = students.find(s => s.name.toLowerCase().trim() === rec.name.toLowerCase().trim());
+        }
+
+        if (matchedStudent) {
+          const studentSn = matchedStudent.sn;
+          const currentVals = updatedGrades[studentSn] || { gw1: '', test: '', gw2: '', proj: '', exams: '' };
+          
+          updatedGrades[studentSn] = {
+            gw1: rec.gw1 !== undefined && rec.gw1 !== null ? rec.gw1.toString() : currentVals.gw1,
+            test: rec.test !== undefined && rec.test !== null ? rec.test.toString() : currentVals.test,
+            gw2: rec.gw2 !== undefined && rec.gw2 !== null ? rec.gw2.toString() : currentVals.gw2,
+            proj: rec.proj !== undefined && rec.proj !== null ? rec.proj.toString() : currentVals.proj,
+            exams: rec.exams !== undefined && rec.exams !== null ? rec.exams.toString() : currentVals.exams
+          };
+        }
+      });
+
+      setLocalGrades(updatedGrades);
+      alert(`AI scan complete! Successfully filled marks for ${records.length} students. Verify the cells and click 'Save Changes' to finalize.`);
+    } catch (err) {
+      console.error(err);
+      alert(`AI scan failed: ${err.message}`);
+    } finally {
+      setIsTranscribing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  };
 
   // Ensure activeTab matches any updates in teacherSubjects
   useEffect(() => {
@@ -173,14 +248,62 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
               Calculations update in real time. Hover / click fields to input scores.
             </p>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={isSaving || students.length === 0}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
-          >
-            <Save className="w-4 h-4" />
-            {isSaving ? "Saving..." : "Save Changes"}
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={cameraInputRef}
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
+            {isTranscribing ? (
+              <div className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
+                <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                <span>Scanning...</span>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={students.length === 0}
+                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  title="Snap photo of grading sheet"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Snap Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={students.length === 0}
+                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  title="Upload grading sheet image"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Upload Image</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={handleSave}
+              disabled={isSaving || students.length === 0 || isTranscribing}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm animate-none"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {isSaving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto max-h-[500px]">

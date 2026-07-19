@@ -101,10 +101,14 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   // API Key & Chat states
-  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+  const [apiKey, setApiKey] = useState(
+    localStorage.getItem('gemini_api_key') || 
+    import.meta.env.VITE_GEMINI_API_KEY || 
+    ''
+  );
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [tempKey, setTempKey] = useState(apiKey);
+  const [tempKey, setTempKey] = useState('');
 
   // Printing states (Root level to bypass parent spacing layout issues)
   const [printAll, setPrintAll] = useState(false);
@@ -383,9 +387,8 @@ export default function App() {
             </span>
           </div>
 
-          {/* Key trigger */}
           <button
-            onClick={() => setShowKeyModal(true)}
+            onClick={() => { setTempKey(apiKey); setShowKeyModal(true); }}
             className={`p-2 rounded-lg border transition-colors flex items-center gap-1.5 text-xs font-semibold ${
               apiKey 
                 ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5' 
@@ -470,6 +473,7 @@ export default function App() {
             gradesStore={grades}
             onSave={handleSaveGrades}
             teacherSubjects={teacherSubjects}
+            apiKey={apiKey}
           />
         )}
         {activeTab === 'positions' && (
