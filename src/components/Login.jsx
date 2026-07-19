@@ -192,6 +192,7 @@ export default function Login({ onLoginSuccess }) {
           </form>
 
         <div className="mt-8 pt-4 border-t border-zinc-800/60 text-center flex flex-col gap-2">
+          <p className="text-[10px] text-zinc-500 font-medium">SBA portal by Flawlex Technologiess (0592664865)</p>
         </div>
 
       </div>

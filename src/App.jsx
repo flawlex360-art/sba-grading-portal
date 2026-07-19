@@ -366,7 +366,7 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
           <div>
-            <h1 className="text-md font-black uppercase tracking-wider text-zinc-900 dark:text-white">
+            <h1 className="text-md font-black tracking-wider text-zinc-900 dark:text-white">
               Flawlex Technologies SBA Portal
             </h1>
             <p className="text-[10px] text-zinc-400 font-bold uppercase">
@@ -437,13 +437,13 @@ export default function App() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border transition-all truncate ${
+              className={`flex items-center gap-2 px-5 py-3 md:px-4 md:py-2 text-sm md:text-xs font-bold rounded-lg border transition-all truncate ${
                 isActive
                   ? 'border-blue-500/20 bg-blue-50/40 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 font-extrabold shadow-sm'
                   : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              <Icon className="w-4 h-4 flex-shrink-0" />
+              <Icon className="w-5 h-5 md:w-4 md:h-4 flex-shrink-0" />
               {tab.name}
             </button>
           );
@@ -509,6 +509,9 @@ export default function App() {
         )}
       </main>
 
+      <footer className="w-full text-center py-4 text-[10px] text-zinc-500 font-medium no-print">
+        SBA portal by Flawlex Technologiess (0592664865)
+      </footer>
       {/* 4. Floating Chat Panel */}
       <ChatPanel
         isOpen={isChatOpen}

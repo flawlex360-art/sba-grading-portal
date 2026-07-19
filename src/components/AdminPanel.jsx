@@ -948,6 +948,10 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
           </div>
         </div>
       )}
+
+      <footer className="w-full text-center py-4 text-[10px] text-zinc-500 font-medium mt-auto">
+        SBA portal by Flawlex Technologiess (0592664865)
+      </footer>
     </div>
   );
 }

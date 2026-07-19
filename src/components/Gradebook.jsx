@@ -225,7 +225,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
             <button
               key={tab.key}
               onClick={() => handleTabSwitch(tab)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all truncate max-w-[130px] ${
+              className={`px-4 py-3 md:px-3 md:py-1.5 text-sm md:text-xs font-semibold rounded-md transition-all truncate max-w-[130px] ${
                 activeTab.key === tab.key
                   ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-sm"
                   : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
