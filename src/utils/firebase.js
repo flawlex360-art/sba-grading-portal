@@ -7,7 +7,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import { 
-  getFirestore, 
+  initializeFirestore, 
   doc, 
   getDoc, 
   setDoc, 
@@ -53,7 +53,9 @@ if (isConfigValid(firebaseConfig)) {
   try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    });
     
     // Enable local caching/offline persistence for Firestore
     enableIndexedDbPersistence(db).catch((err) => {
