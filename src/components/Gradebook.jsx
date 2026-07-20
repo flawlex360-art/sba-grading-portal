@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, FileSpreadsheet, Camera, UploadCloud, Sparkles } from 'lucide-react';
+import { Save, FileSpreadsheet, Camera, UploadCloud, Sparkles, Check } from 'lucide-react';
 import { calculateGrade, getOrdinalSuffix } from '../utils/calculations';
 import { transcribeSheetImage } from '../utils/aiTranscriber';
 
@@ -20,6 +20,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   const [activeTab, setActiveTab] = useState(SUBJECT_TABS[0]);
   const [localGrades, setLocalGrades] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeRow, setActiveRow] = useState(null);
   
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -168,6 +169,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
     setIsSaving(true);
     await saveCurrentGrades(activeTab.key, localGrades);
     setIsSaving(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   const handleBlur = () => {
@@ -297,11 +300,24 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
 
             <button
               onClick={handleSave}
-              disabled={isSaving || students.length === 0 || isTranscribing}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm animate-none"
+              disabled={isSaving || students.length === 0 || isTranscribing || saveSuccess}
+              className={`text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm animate-none ${
+                saveSuccess
+                  ? 'bg-emerald-500 hover:bg-emerald-600'
+                  : 'bg-emerald-ink hover:bg-emerald-900'
+              } disabled:opacity-50`}
             >
-              <Save className="w-3.5 h-3.5" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              {saveSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </>
+              )}
             </button>
           </div>
         </div>

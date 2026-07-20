@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Printer, User, Search, ChevronRight, FileCheck } from 'lucide-react';
+import { Save, Printer, User, Search, ChevronRight, FileCheck, Check } from 'lucide-react';
 import ReportCard from './ReportCard';
 
 export default function ReportEditor({ students, metadata, computedResults, dropLists, onSave, onPrintAll, onPrintSingle, teacherSubjects }) {
@@ -13,6 +13,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
   const [remarks, setRemarks] = useState('');
   const [promotedTo, setPromotedTo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Set first student as default if none selected
   useEffect(() => {
@@ -61,6 +62,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
     
     await onSave(updatedStudent);
     setSelectedStudent(updatedStudent);
+    
+    // Only show success toast if explicitly called (not for auto-saves during typing)
+    if (Object.keys(updatedFields).length === 0) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
   };
 
   const handlePrevStudent = () => {
@@ -303,10 +310,24 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                   <button
                     type="button"
                     onClick={() => saveFormDirect()}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                    disabled={saveSuccess}
+                    className={`flex-1 text-white rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                      saveSuccess
+                        ? 'bg-emerald-500 hover:bg-emerald-600'
+                        : 'bg-emerald-ink hover:bg-emerald-900'
+                    } disabled:opacity-50`}
                   >
-                    <Save className="w-3.5 h-3.5" />
-                    Save Report
+                    {saveSuccess ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Saved!
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5" />
+                        Save Report
+                      </>
+                    )}
                   </button>
                   <button
                     type="button"

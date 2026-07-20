@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Save, School, Calendar, Users, Award, Percent } from 'lucide-react';
+import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
 
 export default function Dashboard({ metadata, onSave, students, computedResults }) {
   const [formData, setFormData] = useState({ ...metadata });
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -18,6 +19,8 @@ export default function Dashboard({ metadata, onSave, students, computedResults 
     setIsSaving(true);
     await onSave(formData);
     setIsSaving(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   // Calculate statistics
@@ -237,11 +240,24 @@ export default function Dashboard({ metadata, onSave, students, computedResults 
           <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <button
               type="submit"
-              disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-2 transition-colors shadow-sm"
+              disabled={isSaving || saveSuccess}
+              className={`text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-2 transition-all shadow-sm ${
+                saveSuccess 
+                  ? 'bg-emerald-500 hover:bg-emerald-600'
+                  : 'bg-emerald-ink hover:bg-emerald-900'
+              } disabled:opacity-50`}
             >
-              <Save className="w-4 h-4" />
-              {isSaving ? "Saving..." : "Save Settings"}
+              {saveSuccess ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {isSaving ? "Saving..." : "Save Settings"}
+                </>
+              )}
             </button>
           </div>
         </form>
