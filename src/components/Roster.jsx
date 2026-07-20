@@ -198,7 +198,7 @@ export default function Roster({ students, onSave, onImport }) {
             </div>
 
             {uploadError && (
-              <div className="mt-3 bg-red-500/10 border border-red-500/30 text-red-500 text-xs rounded-lg p-3 flex gap-2 items-start">
+              <div className="mt-3 bg-red-500/10 border border-red-500/30 text-black dark:text-red-500 text-xs rounded-lg p-3 flex gap-2 items-start">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{uploadError}</span>
               </div>

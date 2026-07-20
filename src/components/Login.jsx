@@ -123,7 +123,7 @@ export default function Login({ onLoginSuccess }) {
         </div>
 
         {error && (
-          <div className="bg-rose-950/20 border border-rose-800/40 text-rose-300 rounded-lg p-3.5 text-xs flex gap-2.5 mb-6 animate-pulse">
+          <div className="bg-rose-950/20 border border-rose-800/40 text-black dark:text-rose-300 rounded-lg p-3.5 text-xs flex gap-2.5 mb-6 animate-pulse">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <p className="leading-relaxed">{error}</p>
           </div>
