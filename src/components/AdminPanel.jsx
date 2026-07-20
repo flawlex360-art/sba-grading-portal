@@ -408,16 +408,16 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
             </div>
 
             {successMsg && (
-              <div className="bg-emerald-950/20 border border-emerald-800/40 text-black dark:text-emerald-300 rounded-lg p-3 text-xs flex gap-2 mb-4 animate-fade-in">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{successMsg}</p>
+              <div className="bg-emerald-ink border border-emerald-900 text-white rounded-lg p-3 text-xs flex gap-2 mb-4 animate-fade-in shadow-md">
+                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" />
+                <p className="font-medium">{successMsg}</p>
               </div>
             )}
 
             {errorMsg && (
-              <div className="bg-rose-950/20 border border-rose-800/40 text-black dark:text-rose-300 rounded-lg p-3 text-xs flex gap-2 mb-4">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>{errorMsg}</p>
+              <div className="bg-zinc-900 border border-zinc-800 text-white rounded-lg p-3 text-xs flex gap-2 mb-4 shadow-md">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-500" />
+                <p className="font-medium">{errorMsg}</p>
               </div>
             )}
 
@@ -740,15 +740,15 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
             ) : (
               <form onSubmit={handleSaveEdit} className="space-y-4 text-xs font-semibold text-zinc-650 dark:text-zinc-300">
                 {editSuccess && (
-                  <div className="bg-emerald-950/20 border border-emerald-800/40 text-black dark:text-emerald-300 rounded-lg p-2.5 text-[11px] flex gap-2">
-                    <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                    <p>{editSuccess}</p>
+                  <div className="bg-emerald-ink border border-emerald-900 text-white rounded-lg p-2.5 text-[11px] flex gap-2 shadow-sm">
+                    <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-emerald-400" />
+                    <p className="font-medium">{editSuccess}</p>
                   </div>
                 )}
                 {editError && (
-                  <div className="bg-rose-950/20 border border-rose-800/40 text-black dark:text-rose-300 rounded-lg p-2.5 text-[11px] flex gap-2">
-                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                    <p>{editError}</p>
+                  <div className="bg-zinc-900 border border-zinc-800 text-white rounded-lg p-2.5 text-[11px] flex gap-2 shadow-sm">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-rose-500" />
+                    <p className="font-medium">{editError}</p>
                   </div>
                 )}
 
