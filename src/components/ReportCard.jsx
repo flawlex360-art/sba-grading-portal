@@ -46,7 +46,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
   const maxScore = (teacherSubjects?.length || 10) * 100;
   
   return (
-    <div className="print-page bg-white text-zinc-950 p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-4 font-sans">
+    <div className="print-page bg-white text-zinc-950 p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
       
       {/* 1. Header block */}
       <div className="text-center border-b-2 border-zinc-950 pb-4 relative px-20 min-h-[90px] flex flex-col justify-center">
@@ -198,7 +198,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* 6. Signatures */}
-      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-6">
+      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-16">
         <div className="space-y-1">
           <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
           <div>Class Teacher's Signature</div>
@@ -210,7 +210,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* Subtle footer */}
-      <div className="text-center text-[9px] text-zinc-400 mt-4 border-t border-zinc-100 pt-2 italic">
+      <div className="text-center text-[9px] text-zinc-400 mt-12 border-t border-zinc-100 pt-2 italic">
         Flawlex Technologies (0592664865)
       </div>
 
