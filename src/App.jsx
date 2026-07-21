@@ -436,6 +436,7 @@ export default function App() {
             students={students}
             computedResults={computedResults}
             onSave={handleSaveMetadata}
+            teacherSubjects={teacherSubjects}
           />
         )}
         {activeTab === 'roster' && (

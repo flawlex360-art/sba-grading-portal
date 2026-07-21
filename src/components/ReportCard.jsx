@@ -43,6 +43,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
   };
 
   const overallMax = metadata.timesOpen || 100; // attendance max
+  const maxScore = (teacherSubjects?.length || 10) * 100;
   
   return (
     <div className="print-page bg-white text-zinc-950 p-8 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
@@ -163,7 +164,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
         <div className="flex gap-2">
           <span className="text-zinc-500 uppercase">Overall score:</span>
           <span className="font-bold border-b border-zinc-400 flex-1">
-            {result.overallTotal.toFixed(1)} <span className="font-normal text-zinc-400">OUT OF 1000</span>
+            {result.overallTotal.toFixed(1)} <span className="font-normal text-zinc-400">OUT OF {maxScore}</span>
           </span>
         </div>
         <div className="flex gap-2">

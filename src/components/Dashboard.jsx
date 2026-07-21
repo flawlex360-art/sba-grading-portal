@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
 
-export default function Dashboard({ metadata, onSave, students, computedResults }) {
+export default function Dashboard({ metadata, onSave, students, computedResults, teacherSubjects }) {
   const [formData, setFormData] = useState({ ...metadata });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -25,13 +25,16 @@ export default function Dashboard({ metadata, onSave, students, computedResults 
 
   // Calculate statistics
   const totalStudents = students.length;
+  const maxScore = (teacherSubjects?.length || 10) * 100;
   
   const classAverage = totalStudents > 0 
     ? (computedResults.reduce((acc, s) => acc + s.overallTotal, 0) / totalStudents).toFixed(2)
     : 0;
 
+  const subjectCount = teacherSubjects?.length || 10;
+
   const passingStudents = computedResults.filter(s => {
-    const avg = s.overallTotal / 10;
+    const avg = s.overallTotal / subjectCount;
     return avg >= 40; 
   }).length;
 
@@ -79,9 +82,9 @@ export default function Dashboard({ metadata, onSave, students, computedResults 
           <div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Class Average Total</div>
             <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {classAverage} <span className="text-xs font-normal text-zinc-400">/ 1000</span>
+              {classAverage} <span className="text-xs font-normal text-zinc-400">/ {maxScore}</span>
             </div>
-            <div className="text-xs text-zinc-400">Avg. per subject: {totalStudents > 0 ? (classAverage / 10).toFixed(1) : 0}%</div>
+            <div className="text-xs text-zinc-400">Avg. per subject: {totalStudents > 0 ? (classAverage / subjectCount).toFixed(1) : 0}%</div>
           </div>
         </div>
 

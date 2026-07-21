@@ -17,6 +17,7 @@ export default function ConsolidatedView({ computedResults, teacherSubjects }) {
   const SUBJECT_HEADERS = teacherSubjects && teacherSubjects.length > 0 
     ? teacherSubjects.map(sub => ({ name: sub.key, key: sub.name }))
     : DEFAULT_JHS_HEADERS;
+  const maxScore = (teacherSubjects?.length || 10) * 100;
   const [hoverRow, setHoverRow] = useState(null);
 
   const handlePrint = () => {
@@ -69,7 +70,7 @@ export default function ConsolidatedView({ computedResults, teacherSubjects }) {
               POSITIONS — Class Overview
             </h3>
             <p className="text-[10px] text-zinc-400">
-              Sorted by overall ranking. Displays totals out of 1000 and subject breakdowns.
+              Sorted by overall ranking. Displays totals out of {maxScore} and subject breakdowns.
             </p>
           </div>
           <div className="flex gap-2">
@@ -98,7 +99,7 @@ export default function ConsolidatedView({ computedResults, teacherSubjects }) {
               <tr>
                 <th className="px-3 py-3 w-12 text-center">Pos</th>
                 <th className="px-3 py-3 text-left min-w-[180px]">Student Name</th>
-                <th className="px-3 py-3 w-24">Overall Total<br/>(1000)</th>
+                <th className="px-3 py-3 w-24">Overall Total<br/>({maxScore})</th>
                 {SUBJECT_HEADERS.map(sub => (
                   <th key={sub.key} className="px-2 py-3 w-20 font-mono text-[10px]">{sub.name}</th>
                 ))}
@@ -107,7 +108,8 @@ export default function ConsolidatedView({ computedResults, teacherSubjects }) {
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
               {rankedResults.map((row, idx) => {
                 const isSelected = hoverRow === row.sn;
-                const overallAvg = row.overallTotal / 10;
+                const subjectCount = teacherSubjects?.length || 10;
+                const overallAvg = row.overallTotal / subjectCount;
                 
                 // Styling ranks
                 const rankNum = idx + 1;
