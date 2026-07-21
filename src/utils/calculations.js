@@ -17,11 +17,11 @@ export function getOrdinalSuffix(rank) {
  */
 export function calculateGrade(total) {
   const t = parseFloat(total) || 0;
-  if (t > 79) return { grade: "HP", remark: "HIGHLY PROFICIENT" };
-  if (t > 67) return { grade: "P", remark: "PROFICIENT" };
-  if (t > 53) return { grade: "AP", remark: "APPROACHING PROFICIENCY" };
-  if (t > 39) return { grade: "D", remark: "DEVELOPING" };
-  return { grade: "E", remark: "EMERGING" };
+  if (t >= 80) return { grade: "A", remark: "Highly Proficient (HP)" };
+  if (t >= 68) return { grade: "B", remark: "Proficient (P)" };
+  if (t >= 54) return { grade: "C", remark: "Approaching Proficient (AP)" };
+  if (t >= 40) return { grade: "D", remark: "Developing (D)" };
+  return { grade: "E", remark: "Emerging (E)" };
 }
 
 /**

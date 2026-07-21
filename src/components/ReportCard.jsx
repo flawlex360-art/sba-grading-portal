@@ -197,6 +197,47 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
         )}
       </div>
 
+      {/* Grading Interpretation Table */}
+      <div className="pt-4 border-t border-zinc-200">
+        <span className="text-[10px] font-bold uppercase text-zinc-500 block mb-2">Grading Interpretation</span>
+        <table className="w-full text-left text-[9px] border-collapse border border-zinc-200">
+          <thead className="bg-zinc-100 text-zinc-600 font-semibold">
+            <tr>
+              <th className="border border-zinc-200 px-2 py-1">Score Range</th>
+              <th className="border border-zinc-200 px-2 py-1 text-center">Grade</th>
+              <th className="border border-zinc-200 px-2 py-1">Interpretation</th>
+            </tr>
+          </thead>
+          <tbody className="text-zinc-500">
+            <tr>
+              <td className="border border-zinc-200 px-2 py-1">80 - 100</td>
+              <td className="border border-zinc-200 px-2 py-1 text-center font-bold text-zinc-700">A</td>
+              <td className="border border-zinc-200 px-2 py-1 font-semibold text-emerald-700">Highly Proficient (HP)</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-200 px-2 py-1">68 - 79</td>
+              <td className="border border-zinc-200 px-2 py-1 text-center font-bold text-zinc-700">B</td>
+              <td className="border border-zinc-200 px-2 py-1 font-semibold text-blue-700">Proficient (P)</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-200 px-2 py-1">54 - 67</td>
+              <td className="border border-zinc-200 px-2 py-1 text-center font-bold text-zinc-700">C</td>
+              <td className="border border-zinc-200 px-2 py-1 font-semibold text-amber-600">Approaching Proficient (AP)</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-200 px-2 py-1">40 - 53</td>
+              <td className="border border-zinc-200 px-2 py-1 text-center font-bold text-zinc-700">D</td>
+              <td className="border border-zinc-200 px-2 py-1 font-semibold text-orange-600">Developing (D)</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-200 px-2 py-1">0 - 39</td>
+              <td className="border border-zinc-200 px-2 py-1 text-center font-bold text-zinc-700">E</td>
+              <td className="border border-zinc-200 px-2 py-1 font-semibold text-rose-600">Emerging (E)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       {/* 6. Signatures */}
       <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-12">
         <div className="space-y-1">
