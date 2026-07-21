@@ -198,7 +198,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* 6. Signatures */}
-      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-16">
+      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-10">
         <div className="space-y-1">
           <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
           <div>Class Teacher's Signature</div>
@@ -210,7 +210,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* Subtle footer */}
-      <div className="text-center text-[9px] text-zinc-400 mt-12 border-t border-zinc-100 pt-2 italic">
+      <div className="text-center text-[9px] text-zinc-400 mt-6 border-t border-zinc-100 pt-2 italic">
         Flawlex Technologies (0592664865)
       </div>
 
