@@ -124,6 +124,25 @@ export default function App() {
     }, 250);
   };
 
+  // Hide document title during printing so it doesn't show in the browser print header
+  useEffect(() => {
+    const originalTitle = document.title;
+    const handleBeforePrint = () => {
+      document.title = '\u200B'; // zero-width space
+    };
+    const handleAfterPrint = () => {
+      document.title = originalTitle;
+    };
+    
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
+
   // Auth Subscription Listener
   useEffect(() => {
     if (!auth) {
