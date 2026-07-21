@@ -356,7 +356,7 @@ export default function App() {
           <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
           <div>
             <h1 className="text-md font-black tracking-wider text-zinc-900 dark:text-white">
-              Flawlex Technologies SBA Portal
+              SBA Portal
             </h1>
             <p className="text-[10px] text-zinc-400 font-bold uppercase">
               {metadata.schoolName} — {metadata.classLevel}

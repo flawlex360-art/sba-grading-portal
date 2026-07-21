@@ -107,9 +107,9 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* 3. Subjects Table */}
-      <table className="w-full border-collapse border border-zinc-950 text-xs">
+      <table className="w-full border-collapse border border-zinc-950 text-sm">
         <thead>
-          <tr className="bg-zinc-100 font-bold uppercase text-[10px] text-center border-b border-zinc-950">
+          <tr className="bg-zinc-100 font-bold uppercase text-xs text-center border-b border-zinc-950">
             <th className="border border-zinc-950 px-3 py-2 text-left min-w-[150px]">Subject</th>
             <th className="border border-zinc-950 px-2 py-2 w-24">SBA Score (50%)</th>
             <th className="border border-zinc-950 px-2 py-2 w-24">Exams Score (50%)</th>
@@ -197,6 +197,23 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
         )}
       </div>
 
+      {/* 6. Signatures */}
+      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-12">
+        <div className="space-y-1">
+          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
+          <div>Class Teacher's Signature</div>
+        </div>
+        <div className="space-y-1">
+          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
+          <div>Headteacher's Signature</div>
+        </div>
+      </div>
+
+      {/* Subtle footer */}
+      <div className="text-center text-[9px] text-zinc-400 mt-8 border-t border-zinc-100 pt-2 italic">
+        Flawlex Technologies (0592664865)
+      </div>
+
       {/* Grading Interpretation Table */}
       <div className="mt-8 pt-8 border-t border-zinc-200 break-before-page">
         <span className="text-sm font-bold uppercase text-zinc-800 block mb-3">Grading Interpretation</span>
@@ -236,23 +253,6 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
             </tr>
           </tbody>
         </table>
-      </div>
-
-      {/* 6. Signatures */}
-      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-12">
-        <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
-          <div>Class Teacher's Signature</div>
-        </div>
-        <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
-          <div>Headteacher's Signature</div>
-        </div>
-      </div>
-
-      {/* Subtle footer */}
-      <div className="text-center text-[9px] text-zinc-400 mt-8 border-t border-zinc-100 pt-2 italic">
-        Flawlex Technologies (0592664865)
       </div>
 
     </div>
