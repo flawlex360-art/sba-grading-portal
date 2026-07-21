@@ -62,7 +62,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           <img 
             src="/anglican-crest.png" 
             alt="School Crest" 
-            className="absolute right-0 -top-1 w-20 h-20 object-contain"
+            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.8] origin-center"
           />
         )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
