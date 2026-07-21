@@ -532,6 +532,7 @@ export default function App() {
                 metadata={metadata}
                 calculatedScores={computedResults}
                 teacherSubjects={teacherSubjects}
+                currentUser={currentUser}
               />
             ))
           ) : (
@@ -540,6 +541,7 @@ export default function App() {
               metadata={metadata}
               calculatedScores={computedResults}
               teacherSubjects={teacherSubjects}
+              currentUser={currentUser}
             />
           )}
         </div>

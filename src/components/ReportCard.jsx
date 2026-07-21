@@ -26,7 +26,7 @@ const DEFAULT_JHS_SUBJECTS = [
   { name: "Creative Arts & Design", key: "Creative Arts & Design" }
 ];
 
-export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects }) {
+export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser }) {
   if (!student) return null;
 
   const subjects = teacherSubjects && teacherSubjects.length > 0 
@@ -44,6 +44,9 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
   const overallMax = metadata.timesOpen || 100; // attendance max
   const maxScore = (teacherSubjects?.length || 10) * 100;
+
+  // Check if current user is an anglican.com account
+  const isAnglican = currentUser?.email?.toLowerCase().endsWith('@anglican.com') || false;
   
   return (
     <div className="print-page bg-white text-zinc-950 p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
@@ -55,6 +58,13 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           alt="Ghana Coat of Arms" 
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
+        {isAnglican && (
+          <img 
+            src="/anglican-crest.png" 
+            alt="School Crest" 
+            className="absolute right-0 top-1 w-16 h-16 object-contain"
+          />
+        )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
         <h2 className="text-sm font-semibold uppercase text-zinc-600 tracking-wider mt-0.5">
           {metadata.district}
