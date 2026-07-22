@@ -201,7 +201,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                   <input
                     type="number"
                     value={attendance}
-                    onChange={(e) => setAttendance(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    onChange={(e) => setAttendance(e.target.value)}
                     onBlur={(e) => saveFormDirect({ attendance: e.target.value })}
                     min={0}
                     max={metadata.timesOpen || 100}
