@@ -214,21 +214,46 @@ export default function App() {
               "Disciplined and focused",
               "Regular and punctual",
               "Shows leadership potential",
-              "Needs to improve focus"
+              "Needs to improve focus",
+              "Well-behaved and attentive",
+              "Polite and hardworking",
+              "Demonstrates excellent behavior",
+              "Quiet but observant",
+              "Easily distracted in class",
+              "Needs to be more respectful",
+              "Playful but intelligent",
+              "Participates actively in class",
+              "Always eager to help others",
+              "Needs constant supervision"
             ],
             interest: [
               "Reading and research",
               "Sports and athletics",
               "Creative Arts and music",
               "Gardening and agriculture",
-              "Information Technology"
+              "Information Technology",
+              "Drawing and painting",
+              "Public speaking and debate",
+              "Science and experiments",
+              "Mathematics and problem solving",
+              "Cultural dancing and drama",
+              "Handiwork and crafts",
+              "Helping peers and teaching",
+              "Writing and storytelling"
             ],
             remarks: [
               "Excellent performance. Keep it up!",
               "A very good student. Well done.",
               "Good progress made. Work harder.",
               "Fair performance. Needs more effort.",
-              "Can do better with regular study."
+              "Can do better with regular study.",
+              "Outstanding academic performance.",
+              "Shows great potential for improvement.",
+              "Satisfactory performance, but capable of more.",
+              "Needs to pay more attention in class.",
+              "Must improve upon current academic standing.",
+              "Highly motivated and dedicated learner.",
+              "A promising student with a bright future."
             ],
             classes: ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]
           }

@@ -222,7 +222,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Conduct --</option>
-                    {dropLists.conduct.map((opt, idx) => (
+                    {Array.from(new Set([
+                      "Respectful and cooperative", "Disciplined and focused", "Regular and punctual", "Shows leadership potential", "Needs to improve focus",
+                      "Well-behaved and attentive", "Polite and hardworking", "Demonstrates excellent behavior", "Quiet but observant", "Easily distracted in class",
+                      "Needs to be more respectful", "Playful but intelligent", "Participates actively in class", "Always eager to help others", "Needs constant supervision",
+                      ...(dropLists.conduct || [])
+                    ])).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -248,7 +253,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Interest --</option>
-                    {dropLists.interest.map((opt, idx) => (
+                    {Array.from(new Set([
+                      "Reading and research", "Sports and athletics", "Creative Arts and music", "Gardening and agriculture", "Information Technology",
+                      "Drawing and painting", "Public speaking and debate", "Science and experiments", "Mathematics and problem solving", "Cultural dancing and drama",
+                      "Handiwork and crafts", "Helping peers and teaching", "Writing and storytelling",
+                      ...(dropLists.interest || [])
+                    ])).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -274,7 +284,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Remarks --</option>
-                    {dropLists.remarks.map((opt, idx) => (
+                    {Array.from(new Set([
+                      "Excellent performance. Keep it up!", "A very good student. Well done.", "Good progress made. Work harder.", "Fair performance. Needs more effort.", "Can do better with regular study.",
+                      "Outstanding academic performance.", "Shows great potential for improvement.", "Satisfactory performance, but capable of more.", "Needs to pay more attention in class.", "Must improve upon current academic standing.",
+                      "Highly motivated and dedicated learner.", "A promising student with a bright future.",
+                      ...(dropLists.remarks || [])
+                    ])).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
