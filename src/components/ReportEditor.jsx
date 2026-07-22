@@ -300,7 +300,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- None --</option>
-                    {dropLists.classes.map((opt, idx) => (
+                    {Array.from(new Set(["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9", ...(dropLists.classes || [])])).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>

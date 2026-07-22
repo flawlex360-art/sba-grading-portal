@@ -230,7 +230,7 @@ export default function App() {
               "Fair performance. Needs more effort.",
               "Can do better with regular study."
             ],
-            classes: ["BS. 7", "BS. 8", "BS. 9"]
+            classes: ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]
           }
         };
         await setDoc(docRef, template);
