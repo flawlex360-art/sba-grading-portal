@@ -49,7 +49,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
   const isAnglican = currentUser?.email?.toLowerCase().endsWith('@anglican.com') || false;
   
   return (
-    <div className="print-page bg-white text-zinc-950 p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
+    <div className="print-page bg-white text-black p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
       
       {/* 1. Header block */}
       <div className="text-center border-b-2 border-zinc-950 pb-4 relative px-20 min-h-[90px] flex flex-col justify-center">
@@ -66,13 +66,13 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           />
         )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
-        <h2 className="text-sm font-semibold uppercase text-zinc-600 tracking-wider mt-0.5">
+        <h2 className="text-sm font-semibold uppercase text-black tracking-wider mt-0.5">
           {metadata.district}
         </h2>
-        <h3 className="text-lg font-bold uppercase text-zinc-800 tracking-wide mt-1">
+        <h3 className="text-lg font-bold uppercase text-black tracking-wide mt-1">
           {metadata.schoolName}
         </h3>
-        <h4 className="text-md font-bold text-zinc-500 uppercase tracking-widest mt-2 border-t border-zinc-200 pt-2">
+        <h4 className="text-md font-bold text-black uppercase tracking-widest mt-2 border-t border-zinc-200 pt-2">
           Learner's Report Card
         </h4>
       </div>
@@ -80,38 +80,38 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* 2. Metadata Grid */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs font-semibold pb-4 border-b border-zinc-200">
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-28 flex-shrink-0">Name:</span>
+          <span className="text-black uppercase w-28 flex-shrink-0">Name:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{student.name}</span>
         </div>
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-36 flex-shrink-0">Class Position:</span>
-          <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5 text-blue-700">{result.overallRank}</span>
+          <span className="text-black uppercase w-36 flex-shrink-0">Class Position:</span>
+          <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5 text-black">{result.overallRank}</span>
         </div>
         
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-28 flex-shrink-0">Class:</span>
+          <span className="text-black uppercase w-28 flex-shrink-0">Class:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{metadata.classLevel}</span>
         </div>
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-36 flex-shrink-0">No. On Roll:</span>
+          <span className="text-black uppercase w-36 flex-shrink-0">No. On Roll:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{rollCount}</span>
         </div>
 
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-28 flex-shrink-0">Academic Year:</span>
+          <span className="text-black uppercase w-28 flex-shrink-0">Academic Year:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{metadata.academicYear}</span>
         </div>
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-36 flex-shrink-0">Term:</span>
+          <span className="text-black uppercase w-36 flex-shrink-0">Term:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{metadata.term}</span>
         </div>
 
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-28 flex-shrink-0">Date:</span>
+          <span className="text-black uppercase w-28 flex-shrink-0">Date:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{formatDate(metadata.date)}</span>
         </div>
         <div className="flex gap-2 items-end">
-          <span className="text-zinc-500 uppercase w-36 flex-shrink-0">Next Term Begins:</span>
+          <span className="text-black uppercase w-36 flex-shrink-0">Next Term Begins:</span>
           <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{formatDate(metadata.nextTermBegins)}</span>
         </div>
       </div>
@@ -142,25 +142,25 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
             return (
               <tr key={idx} className="border-b border-zinc-300">
-                <td className="border border-zinc-950 px-3 py-1.5 text-left font-semibold text-zinc-900">
+                <td className="border border-zinc-950 px-3 py-1.5 text-left font-semibold text-black">
                   {sub.name}
                 </td>
-                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-zinc-700">
+                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-black">
                   {subRes.scaledSba.toFixed(1)}
                 </td>
-                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-zinc-700">
+                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-black">
                   {subRes.scaledExam.toFixed(1)}
                 </td>
-                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono font-bold text-zinc-950">
+                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono font-bold text-black">
                   {subRes.total.toFixed(1)}
                 </td>
-                <td className="border border-zinc-950 px-2 py-1.5 text-center font-bold text-blue-600">
+                <td className="border border-zinc-950 px-2 py-1.5 text-center font-bold text-black">
                   {subRes.grade}
                 </td>
-                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-zinc-500">
+                <td className="border border-zinc-950 px-2 py-1.5 text-center font-mono text-black">
                   {subRes.rank}
                 </td>
-                <td className="border border-zinc-950 px-3 py-1.5 text-left font-medium text-zinc-600">
+                <td className="border border-zinc-950 px-3 py-1.5 text-left font-medium text-black">
                   {subRes.remark}
                 </td>
               </tr>
@@ -172,15 +172,15 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* 4. Totals Block */}
       <div className="grid grid-cols-2 gap-4 text-xs font-semibold pt-2">
         <div className="flex gap-2">
-          <span className="text-zinc-500 uppercase">Overall score:</span>
+          <span className="text-black uppercase">Overall score:</span>
           <span className="font-bold border-b border-zinc-400 flex-1">
-            {result.overallTotal.toFixed(1)} <span className="font-normal text-zinc-400">OUT OF {maxScore}</span>
+            {result.overallTotal.toFixed(1)} <span className="font-normal text-black">OUT OF {maxScore}</span>
           </span>
         </div>
         <div className="flex gap-2">
-          <span className="text-zinc-500 uppercase w-20">Attendance:</span>
+          <span className="text-black uppercase w-20">Attendance:</span>
           <span className="font-bold border-b border-zinc-400 flex-1">
-            {student.attendance || 0} <span className="font-normal text-zinc-400">OUT OF {overallMax}</span>
+            {student.attendance || 0} <span className="font-normal text-black">OUT OF {overallMax}</span>
           </span>
         </div>
       </div>
@@ -188,21 +188,21 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* 5. Teachers Remarks Block */}
       <div className="grid grid-cols-1 gap-y-3 text-xs pt-4 border-t border-zinc-200">
         <div className="flex gap-2 items-center">
-          <span className="text-zinc-500 font-bold uppercase w-40">Conduct:</span>
+          <span className="text-black font-bold uppercase w-40">Conduct:</span>
           <span className="font-semibold border-b border-zinc-400 flex-1 pb-0.5">{student.conduct || "N/A"}</span>
         </div>
         <div className="flex gap-2 items-center">
-          <span className="text-zinc-500 font-bold uppercase w-40">Interest:</span>
+          <span className="text-black font-bold uppercase w-40">Interest:</span>
           <span className="font-semibold border-b border-zinc-400 flex-1 pb-0.5">{student.interest || "N/A"}</span>
         </div>
         <div className="flex gap-2 items-center">
-          <span className="text-zinc-500 font-bold uppercase w-40">Class Teacher's Remarks:</span>
+          <span className="text-black font-bold uppercase w-40">Class Teacher's Remarks:</span>
           <span className="font-semibold border-b border-zinc-400 flex-1 pb-0.5">{student.remarks || "N/A"}</span>
         </div>
         {student.promotedTo && (
           <div className="flex gap-2 items-center">
-            <span className="text-zinc-500 font-bold uppercase w-40">Promoted to:</span>
-            <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5 text-blue-700">{student.promotedTo}</span>
+            <span className="text-black font-bold uppercase w-40">Promoted to:</span>
+            <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5 text-black">{student.promotedTo}</span>
           </div>
         )}
       </div>
@@ -220,22 +220,22 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* Subtle footer */}
-      <div className="text-center text-[9px] text-zinc-400 mt-4 border-t border-zinc-100 pt-1 italic">
+      <div className="text-center text-[9px] text-black mt-4 border-t border-zinc-100 pt-1 italic">
         Flawlex Technologies (0592664865)
       </div>
 
       {/* Grading Interpretation Table */}
       <div className="mt-8 pt-8 border-t border-zinc-200 break-before-page">
-        <span className="text-sm font-bold uppercase text-zinc-800 block mb-3">Grading Interpretation</span>
+        <span className="text-sm font-bold uppercase text-black block mb-3">Grading Interpretation</span>
         <table className="w-full text-left text-xs border-collapse border border-zinc-300">
-          <thead className="bg-zinc-100 text-zinc-800 font-bold">
+          <thead className="bg-zinc-100 text-black font-bold">
             <tr>
               <th className="border border-zinc-300 px-3 py-2">Score Range</th>
               <th className="border border-zinc-300 px-3 py-2 text-center">Grade</th>
               <th className="border border-zinc-300 px-3 py-2">Interpretation</th>
             </tr>
           </thead>
-          <tbody className="text-zinc-800 font-medium">
+          <tbody className="text-black font-medium">
             <tr>
               <td className="border border-zinc-300 px-3 py-2">80 - 100</td>
               <td className="border border-zinc-300 px-3 py-2 text-center font-bold">A</td>
