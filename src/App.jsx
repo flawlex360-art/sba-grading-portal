@@ -306,11 +306,15 @@ export default function App() {
   };
 
   const handleSaveStudentReport = async (updatedStudent) => {
-    const updatedRoster = students.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
-    setStudents(updatedRoster);
+    let latestRoster;
+    setStudents(prev => {
+      latestRoster = prev.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
+      return latestRoster;
+    });
+    
     if (currentUser) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { students: updatedRoster }, { merge: true });
+        await setDoc(doc(db, "schools", currentUser.uid), { students: latestRoster }, { merge: true });
       } catch (e) {
         console.error("Report comments sync error:", e);
       }

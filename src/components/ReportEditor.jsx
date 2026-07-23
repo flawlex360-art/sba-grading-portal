@@ -61,7 +61,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
     };
     
     await onSave(updatedStudent);
-    setSelectedStudent(updatedStudent);
+    setSelectedStudent(prev => prev?.sn === updatedStudent.sn ? updatedStudent : prev);
     
     // Only show success toast if explicitly called (not for auto-saves during typing)
     if (Object.keys(updatedFields).length === 0) {
