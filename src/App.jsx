@@ -306,11 +306,10 @@ export default function App() {
   };
 
   const handleSaveStudentReport = async (updatedStudent) => {
-    let latestRoster;
-    setStudents(prev => {
-      latestRoster = prev.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
-      return latestRoster;
-    });
+    const latestRoster = students.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
+    
+    // Update UI safely
+    setStudents(prev => prev.map(s => s.sn === updatedStudent.sn ? updatedStudent : s));
     
     if (currentUser) {
       try {
