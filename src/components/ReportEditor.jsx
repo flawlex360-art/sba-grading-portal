@@ -41,15 +41,16 @@ export default function ReportEditor({ students, metadata, computedResults, drop
     
     const maxAttendance = metadata.timesOpen || 100;
     
-    const attendanceVal = updatedFields.hasOwnProperty('attendance') 
-      ? updatedFields.attendance 
+    // Always read attendance from the live local state — this is the source of truth.
+    // If caller passes attendance explicitly (e.g. from onBlur), use that instead.
+    const attendanceVal = updatedFields.hasOwnProperty('attendance')
+      ? updatedFields.attendance
       : attendance;
-      
-    const parsedAttendance = parseInt(attendanceVal, 10) || 0;
-    if (parsedAttendance < 0 || parsedAttendance > maxAttendance) {
-      // Clamped attendance value silently for frictionless auto-saving
-      return;
-    }
+    
+    // Clamp attendance instead of blocking the whole save
+    let parsedAttendance = parseInt(attendanceVal, 10);
+    if (isNaN(parsedAttendance) || parsedAttendance < 0) parsedAttendance = 0;
+    if (parsedAttendance > maxAttendance) parsedAttendance = maxAttendance;
 
     const updatedStudent = {
       ...selectedStudent,
@@ -62,8 +63,10 @@ export default function ReportEditor({ students, metadata, computedResults, drop
     
     await onSave(updatedStudent);
     setSelectedStudent(prev => prev?.sn === updatedStudent.sn ? updatedStudent : prev);
+    // Sync local attendance state so next save also has the clamped value
+    setAttendance(parsedAttendance);
     
-    // Only show success toast if explicitly called (not for auto-saves during typing)
+    // Only show success toast when explicitly triggered (Save button)
     if (Object.keys(updatedFields).length === 0) {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -217,17 +220,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     onChange={(e) => {
                       const val = e.target.value;
                       setConduct(val);
-                      saveFormDirect({ conduct: val });
+                      saveFormDirect({ conduct: val, attendance });
                     }}
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Conduct --</option>
-                    {Array.from(new Set([
-                      "Respectful and cooperative", "Disciplined and focused", "Regular and punctual", "Shows leadership potential", "Needs to improve focus",
-                      "Well-behaved and attentive", "Polite and hardworking", "Demonstrates excellent behavior", "Quiet but observant", "Easily distracted in class",
-                      "Needs to be more respectful", "Playful but intelligent", "Participates actively in class", "Always eager to help others", "Needs constant supervision",
-                      ...(dropLists.conduct || [])
-                    ])).map((opt, idx) => (
+                    {(dropLists.conduct || []).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -235,7 +233,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     type="text"
                     value={conduct}
                     onChange={(e) => setConduct(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ conduct: e.target.value })}
+                    onBlur={(e) => saveFormDirect({ conduct: e.target.value, attendance })}
                     placeholder="Or type custom conduct..."
                     className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -248,17 +246,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     onChange={(e) => {
                       const val = e.target.value;
                       setInterest(val);
-                      saveFormDirect({ interest: val });
+                      saveFormDirect({ interest: val, attendance });
                     }}
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Interest --</option>
-                    {Array.from(new Set([
-                      "Reading and research", "Sports and athletics", "Creative Arts and music", "Gardening and agriculture", "Information Technology",
-                      "Drawing and painting", "Public speaking and debate", "Science and experiments", "Mathematics and problem solving", "Cultural dancing and drama",
-                      "Handiwork and crafts", "Helping peers and teaching", "Writing and storytelling",
-                      ...(dropLists.interest || [])
-                    ])).map((opt, idx) => (
+                    {(dropLists.interest || []).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -266,7 +259,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     type="text"
                     value={interest}
                     onChange={(e) => setInterest(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ interest: e.target.value })}
+                    onBlur={(e) => saveFormDirect({ interest: e.target.value, attendance })}
                     placeholder="Or type custom interest..."
                     className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -279,17 +272,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     onChange={(e) => {
                       const val = e.target.value;
                       setRemarks(val);
-                      saveFormDirect({ remarks: val });
+                      saveFormDirect({ remarks: val, attendance });
                     }}
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Select Remarks --</option>
-                    {Array.from(new Set([
-                      "Excellent performance. Keep it up!", "A very good student. Well done.", "Good progress made. Work harder.", "Fair performance. Needs more effort.", "Can do better with regular study.",
-                      "Outstanding academic performance.", "Shows great potential for improvement.", "Satisfactory performance, but capable of more.", "Needs to pay more attention in class.", "Must improve upon current academic standing.",
-                      "Highly motivated and dedicated learner.", "A promising student with a bright future.",
-                      ...(dropLists.remarks || [])
-                    ])).map((opt, idx) => (
+                    {(dropLists.remarks || []).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -297,7 +285,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     type="text"
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ remarks: e.target.value })}
+                    onBlur={(e) => saveFormDirect({ remarks: e.target.value, attendance })}
                     placeholder="Or type custom remarks..."
                     className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -310,12 +298,12 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     onChange={(e) => {
                       const val = e.target.value;
                       setPromotedTo(val);
-                      saveFormDirect({ promotedTo: val });
+                      saveFormDirect({ promotedTo: val, attendance });
                     }}
                     className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- None --</option>
-                    {Array.from(new Set(["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9", ...(dropLists.classes || [])])).map((opt, idx) => (
+                    {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
                       <option key={idx} value={opt}>{opt}</option>
                     ))}
                   </select>
