@@ -205,7 +205,7 @@ export default function App() {
               "Handiwork", "Crafts", "Helping peers", "Teaching", "Writing", "Storytelling"
             ];
             // Fire-and-forget save the migrated droplists to Firestore
-            setDoc(doc(db, "schools", user.uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+            setDoc(doc(db, "schools", uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
         }
         setDropLists(loadedDropLists);
       } else {
