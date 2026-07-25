@@ -195,7 +195,19 @@ export default function App() {
         setStudents(data.students || []);
         studentsRef.current = data.students || [];
         setGrades(data.grades || {});
-        setDropLists(data.dropLists);
+        let loadedDropLists = data.dropLists;
+        // Migration: If the user has old compound activities, migrate them automatically
+        if (loadedDropLists?.interest?.includes("Reading and research")) {
+            loadedDropLists.interest = [
+              "Reading novels", "Researching topics", "Sports", "Creative Arts", "Music", "Gardening",
+              "Information Technology", "Drawing", "Painting", "Public speaking", "Debating", 
+              "Science experiments", "Solving mathematics problems", "Cultural dancing", "Drama",
+              "Handiwork", "Crafts", "Helping peers", "Teaching", "Writing", "Storytelling"
+            ];
+            // Fire-and-forget save the migrated droplists to Firestore
+            setDoc(doc(db, "schools", user.uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+        }
+        setDropLists(loadedDropLists);
       } else {
         // Fallback default templates initialized for this teacher
         const template = {
@@ -230,19 +242,27 @@ export default function App() {
               "Needs constant supervision"
             ],
             interest: [
-              "Reading and research",
-              "Sports and athletics",
-              "Creative Arts and music",
-              "Gardening and agriculture",
+              "Reading novels",
+              "Researching topics",
+              "Sports",
+              "Creative Arts",
+              "Music",
+              "Gardening",
               "Information Technology",
-              "Drawing and painting",
-              "Public speaking and debate",
-              "Science and experiments",
-              "Mathematics and problem solving",
-              "Cultural dancing and drama",
-              "Handiwork and crafts",
-              "Helping peers and teaching",
-              "Writing and storytelling"
+              "Drawing",
+              "Painting",
+              "Public speaking",
+              "Debating",
+              "Science experiments",
+              "Solving mathematics problems",
+              "Cultural dancing",
+              "Drama",
+              "Handiwork",
+              "Crafts",
+              "Helping peers",
+              "Teaching",
+              "Writing",
+              "Storytelling"
             ],
             remarks: [
               "Excellent performance. Keep it up!",
