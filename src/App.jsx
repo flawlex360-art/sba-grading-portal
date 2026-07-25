@@ -67,6 +67,7 @@ export default function App() {
   // Database States
   const [metadata, setMetadata] = useState(null);
   const [students, setStudents] = useState([]);
+  const studentsRef = useRef([]);
   const [grades, setGrades] = useState({});
   const [dropLists, setDropLists] = useState(null);
 
@@ -174,6 +175,7 @@ export default function App() {
         setUserProfile(null);
         setMetadata(null);
         setStudents([]);
+        studentsRef.current = [];
         setGrades({});
         setDropLists(null);
         setIsLoading(false);
@@ -191,6 +193,7 @@ export default function App() {
         const data = docSnap.data();
         setMetadata(data.metadata);
         setStudents(data.students || []);
+        studentsRef.current = data.students || [];
         setGrades(data.grades || {});
         setDropLists(data.dropLists);
       } else {
@@ -261,6 +264,7 @@ export default function App() {
         await setDoc(docRef, template);
         setMetadata(template.metadata);
         setStudents(template.students);
+        studentsRef.current = template.students;
         setGrades(template.grades);
         setDropLists(template.dropLists);
       }
@@ -284,6 +288,7 @@ export default function App() {
 
   const handleSaveRoster = async (newRoster) => {
     setStudents(newRoster);
+    studentsRef.current = newRoster;
     if (currentUser) {
       try {
         await setDoc(doc(db, "schools", currentUser.uid), { students: newRoster }, { merge: true });
@@ -306,11 +311,14 @@ export default function App() {
   };
 
   const handleSaveStudentReport = async (updatedStudent) => {
-    const latestRoster = students.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
+    // 1. Update the authoritative ref synchronously so concurrent calls see this change instantly
+    const latestRoster = studentsRef.current.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
+    studentsRef.current = latestRoster;
     
-    // Update UI safely
-    setStudents(prev => prev.map(s => s.sn === updatedStudent.sn ? updatedStudent : s));
+    // 2. Update React UI state
+    setStudents(latestRoster);
     
+    // 3. Send the authoritative latest roster to Firebase
     if (currentUser) {
       try {
         await setDoc(doc(db, "schools", currentUser.uid), { students: latestRoster }, { merge: true });
@@ -490,7 +498,10 @@ export default function App() {
           <Roster
             students={students}
             onSave={handleSaveRoster}
-            onImport={(newStudents) => setStudents(newStudents)}
+            onImport={(newStudents) => {
+              setStudents(newStudents);
+              studentsRef.current = newStudents;
+            }}
           />
         )}
         {activeTab === 'gradebook' && (
