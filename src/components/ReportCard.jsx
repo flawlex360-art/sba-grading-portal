@@ -206,18 +206,14 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* 6. Signatures */}
-      <div className="grid grid-cols-3 gap-4 text-center text-[10px] font-bold uppercase pt-8">
+      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-4">
         <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[160px]" />
-          <div>Rashida (Class Teacher)</div>
+          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
+          <div>Class Teacher's Signature</div>
         </div>
         <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[160px]" />
-          <div>Seth (Headteacher)</div>
-        </div>
-        <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[160px]" />
-          <div>Parent/Guardian</div>
+          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
+          <div>Headteacher's Signature</div>
         </div>
       </div>
 
