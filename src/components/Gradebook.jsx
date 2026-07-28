@@ -133,7 +133,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
     // Boundary check
     if (parsedVal !== '') {
       if (field === 'exams' && (parsedVal < 0 || parsedVal > 100)) return;
-      if (field !== 'exams' && (parsedVal < 0 || parsedVal > 15)) return;
+      if (field === 'gw1' && (parsedVal < 0 || parsedVal > 20)) return; // TEST 1
+      if (field === 'test' && (parsedVal < 0 || parsedVal > 30)) return; // GW
+      if (field === 'gw2' && (parsedVal < 0 || parsedVal > 20)) return; // TEST 2
+      if (field === 'proj' && (parsedVal < 0 || parsedVal > 30)) return; // PROJ
     }
 
     setLocalGrades(prev => ({
@@ -428,10 +431,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                       {Math.round(row.overallTotal * 10) / 10}
                     </td>
                     <td className={`px-3 py-2 font-bold ${
-                      grade === 'HP' ? 'text-emerald-600 dark:text-emerald-400' :
-                      grade === 'P' ? 'text-blue-500' :
-                      grade === 'AP' ? 'text-yellow-600 dark:text-yellow-400' :
-                      grade === 'D' ? 'text-orange-500' : 'text-rose-500'
+                      ['1', '2', '3'].includes(grade) ? 'text-emerald-600 dark:text-emerald-400' :
+                      ['4', '5'].includes(grade) ? 'text-blue-500' :
+                      grade === '6' ? 'text-yellow-600 dark:text-yellow-400' :
+                      ['7', '8'].includes(grade) ? 'text-orange-500' : 'text-rose-500'
                     }`}>
                       {grade}
                     </td>
