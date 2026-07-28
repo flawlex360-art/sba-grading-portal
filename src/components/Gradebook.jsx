@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, FileSpreadsheet, Camera, UploadCloud, Sparkles, Check } from 'lucide-react';
-import { calculateGrade, getOrdinalSuffix } from '../utils/calculations';
+import { calculateGrade, getOrdinalSuffix, calculateStudentSubjectScores } from '../utils/calculations';
 import { transcribeSheetImage } from '../utils/aiTranscriber';
 
 const DEFAULT_JHS_TABS = [
@@ -184,16 +184,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   const calculatedRows = students.map(s => {
     const g = localGrades[s.sn] || { gw1: '', test: '', gw2: '', proj: '', exams: '' };
     
-    const gw1 = parseFloat(g.gw1) || 0;
-    const test = parseFloat(g.test) || 0;
-    const gw2 = parseFloat(g.gw2) || 0;
-    const proj = parseFloat(g.proj) || 0;
-    const exams = parseFloat(g.exams) || 0;
-
-    const sbaTotal = gw1 + test + gw2 + proj;
-    const scaledSba = (sbaTotal / 100) * 50;
-    const scaledExam = exams * 0.5;
-    const overallTotal = scaledSba + scaledExam;
+    const scores = calculateStudentSubjectScores(g.gw1, g.test, g.gw2, g.proj, g.exams);
     
     return {
       sn: s.sn,
@@ -203,10 +194,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
       gw2: g.gw2,
       proj: g.proj,
       exams: g.exams,
-      sbaTotal,
-      scaledSba,
-      scaledExam,
-      overallTotal
+      sbaTotal: scores.sbaTotal,
+      scaledSba: scores.scaledSba,
+      scaledExam: scores.scaledExam,
+      overallTotal: scores.overallTotal
     };
   });
 
@@ -350,7 +341,9 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
               {calculatedRows.map((row) => {
-                const { grade, remark } = calculateGrade(row.overallTotal);
+                const { grade, remark } = calculateStudentSubjectScores(
+                  row.gw1, row.test, row.gw2, row.proj, row.exams
+                );
                 const rank = ranksMap[row.sn];
                 const isSelected = activeRow === row.sn;
 

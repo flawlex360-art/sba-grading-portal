@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter, FileSpreadsheet } from 'lucide-react';
-import { calculateGrade } from '../utils/calculations';
+import { calculateStudentSubjectScores } from '../utils/calculations';
 
 const DEFAULT_JHS_KEYS = [
   { name: "English Language", key: "ENG. LANG." },
@@ -48,18 +48,7 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
 
     students.forEach(s => {
       const sg = subGrades[s.sn] || { gw1: 0, test: 0, gw2: 0, proj: 0, exams: 0 };
-      const gw1 = parseFloat(sg.gw1) || 0;
-      const test = parseFloat(sg.test) || 0;
-      const gw2 = parseFloat(sg.gw2) || 0;
-      const proj = parseFloat(sg.proj) || 0;
-      const exams = parseFloat(sg.exams) || 0;
-
-      const sbaTotal = gw1 + test + gw2 + proj;
-      const scaledSba = (sbaTotal / 100) * 50;
-      const scaledExam = exams * 0.5;
-      const overallTotal = scaledSba + scaledExam;
-      
-      const { grade } = calculateGrade(overallTotal);
+      const scores = calculateStudentSubjectScores(sg.gw1, sg.test, sg.gw2, sg.proj, sg.exams);
 
       flatRecords.push({
         subjectName: sub.name,
@@ -70,12 +59,12 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
         test: sg.test || 0,
         gw2: sg.gw2 || 0,
         proj: sg.proj || 0,
-        sbaTotal: Math.round(sbaTotal * 10) / 10,
-        scaledSba: Math.round(scaledSba * 10) / 10,
+        sbaTotal: Math.round(scores.sbaTotal * 10) / 10,
+        scaledSba: Math.round(scores.scaledSba * 10) / 10,
         exams: sg.exams || 0,
-        scaledExam: Math.round(scaledExam * 10) / 10,
-        overallTotal: Math.round(overallTotal * 10) / 10,
-        grade,
+        scaledExam: Math.round(scores.scaledExam * 10) / 10,
+        overallTotal: Math.round(scores.overallTotal * 10) / 10,
+        grade: scores.grade,
         rank: ranks[s.sn]
       });
     });

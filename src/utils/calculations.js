@@ -29,6 +29,34 @@ export function calculateGrade(total) {
 }
 
 /**
+ * Centralized function to calculate a student's subject scores.
+ * Computes SBA totals, exams scaling, overall totals, and grades.
+ */
+export function calculateStudentSubjectScores(gw1, test, gw2, proj, exams) {
+  const pGw1 = parseFloat(gw1) || 0;
+  const pTest = parseFloat(test) || 0;
+  const pGw2 = parseFloat(gw2) || 0;
+  const pProj = parseFloat(proj) || 0;
+  const pExams = parseFloat(exams) || 0;
+
+  const sbaTotal = pGw1 + pTest + pGw2 + pProj;
+  const scaledSba = (sbaTotal / 100) * 50;
+  const scaledExam = pExams * 0.5;
+  const overallTotal = scaledSba + scaledExam;
+
+  const { grade, remark } = calculateGrade(overallTotal);
+
+  return {
+    sbaTotal,
+    scaledSba,
+    scaledExam,
+    overallTotal,
+    grade,
+    remark
+  };
+}
+
+/**
  * Computes individual subject totals, grades, ranks, overall totals,
  * and overall ranks for the entire class, matching the Excel formulas.
  */
@@ -59,22 +87,19 @@ export function computeClassResults(students, gradesStore, subjects, subjectMap)
     const subjectTotals = students.map(s => {
       const sg = subGrades[s.sn] || { gw1: 0, test: 0, gw2: 0, proj: 0, exams: 0 };
       
-      const gw1 = parseFloat(sg.gw1) || 0;
-      const test = parseFloat(sg.test) || 0;
-      const gw2 = parseFloat(sg.gw2) || 0;
-      const proj = parseFloat(sg.proj) || 0;
-      const exams = parseFloat(sg.exams) || 0;
+      const gw1 = sg.gw1;
+      const test = sg.test;
+      const gw2 = sg.gw2;
+      const proj = sg.proj;
+      const exams = sg.exams;
 
-      const sbaTotal = gw1 + test + gw2 + proj;
-      const scaledSba = (sbaTotal / 100) * 50;
-      const scaledExam = exams * 0.5;
-      const overallTotal = scaledSba + scaledExam;
+      const scores = calculateStudentSubjectScores(gw1, test, gw2, proj, exams);
 
       return {
         sn: s.sn,
-        scaledSba,
-        scaledExam,
-        overallTotal
+        scaledSba: scores.scaledSba,
+        scaledExam: scores.scaledExam,
+        overallTotal: scores.overallTotal
       };
     });
 
