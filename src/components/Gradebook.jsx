@@ -188,7 +188,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
     const exams = parseFloat(g.exams) || 0;
 
     const sbaTotal = gw1 + test + gw2 + proj;
-    const scaledSba = (sbaTotal / 60) * 50;
+    const scaledSba = (sbaTotal / 100) * 50;
     const scaledExam = exams * 0.5;
     const overallTotal = scaledSba + scaledExam;
     
@@ -329,7 +329,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                 <th className="px-3 py-2 w-12 text-center" rowSpan={2}>S/N</th>
                 <th className="px-3 py-2 text-left min-w-[200px]" rowSpan={2}>NAMES OF LEARNERS</th>
                 <th className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800" colSpan={4}>SCHOOL BASED ASSESSMENT (SBA)</th>
-                <th className="px-3 py-2 w-20" rowSpan={2}>SBA TOTAL<br/>(60)</th>
+                <th className="px-3 py-2 w-20" rowSpan={2}>SBA TOTAL<br/>(100)</th>
                 <th className="px-3 py-2 w-20" rowSpan={2}>SBA SCALED<br/>(50)</th>
                 <th className="px-3 py-2 w-20" rowSpan={2}>EXAMS<br/>(100)</th>
                 <th className="px-3 py-2 w-20" rowSpan={2}>EXAM SCALED<br/>(50)</th>
@@ -339,10 +339,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                 <th className="px-3 py-2 min-w-[120px] text-left" rowSpan={2}>REMARKS</th>
               </tr>
               <tr className="bg-zinc-50 dark:bg-zinc-900/60 text-[10px]">
-                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">GW 1 (15)</th>
-                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">TEST (15)</th>
-                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">GW 2 (15)</th>
-                <th className="px-2 py-1 w-16">PROJ (15)</th>
+                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">TEST 1 (20)</th>
+                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">GW (30)</th>
+                <th className="px-2 py-1 w-16 border-r border-zinc-200 dark:border-zinc-800">TEST 2 (20)</th>
+                <th className="px-2 py-1 w-16">PROJ (30)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">

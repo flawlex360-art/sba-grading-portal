@@ -237,29 +237,49 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           </thead>
           <tbody className="text-black font-medium">
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">80 - 100</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">A</td>
-              <td className="border border-zinc-300 px-3 py-2">Highly Proficient (HP)</td>
+              <td className="border border-zinc-300 px-3 py-2">90 - 100</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">1</td>
+              <td className="border border-zinc-300 px-3 py-2">Highest</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">68 - 79</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">B</td>
-              <td className="border border-zinc-300 px-3 py-2">Proficient (P)</td>
+              <td className="border border-zinc-300 px-3 py-2">80 - 89</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">2</td>
+              <td className="border border-zinc-300 px-3 py-2">Higher</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">54 - 67</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">C</td>
-              <td className="border border-zinc-300 px-3 py-2">Approaching Proficient (AP)</td>
+              <td className="border border-zinc-300 px-3 py-2">70 - 79</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">3</td>
+              <td className="border border-zinc-300 px-3 py-2">High</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">40 - 53</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">D</td>
-              <td className="border border-zinc-300 px-3 py-2">Developing (D)</td>
+              <td className="border border-zinc-300 px-3 py-2">60 - 69</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">4</td>
+              <td className="border border-zinc-300 px-3 py-2">High Average</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">0 - 39</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">E</td>
-              <td className="border border-zinc-300 px-3 py-2">Emerging (E)</td>
+              <td className="border border-zinc-300 px-3 py-2">55 - 59</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">5</td>
+              <td className="border border-zinc-300 px-3 py-2">Average</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-300 px-3 py-2">50 - 54</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">6</td>
+              <td className="border border-zinc-300 px-3 py-2">Low Average</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-300 px-3 py-2">40 - 49</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">7</td>
+              <td className="border border-zinc-300 px-3 py-2">Low</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-300 px-3 py-2">35 - 39</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">8</td>
+              <td className="border border-zinc-300 px-3 py-2">Lower</td>
+            </tr>
+            <tr>
+              <td className="border border-zinc-300 px-3 py-2">0 - 34</td>
+              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">9</td>
+              <td className="border border-zinc-300 px-3 py-2">Lowest</td>
             </tr>
           </tbody>
         </table>

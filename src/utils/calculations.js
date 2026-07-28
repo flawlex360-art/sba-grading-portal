@@ -17,11 +17,15 @@ export function getOrdinalSuffix(rank) {
  */
 export function calculateGrade(total) {
   const t = parseFloat(total) || 0;
-  if (t >= 80) return { grade: "A", remark: "Highly Proficient (HP)" };
-  if (t >= 68) return { grade: "B", remark: "Proficient (P)" };
-  if (t >= 54) return { grade: "C", remark: "Approaching Proficient (AP)" };
-  if (t >= 40) return { grade: "D", remark: "Developing (D)" };
-  return { grade: "E", remark: "Emerging (E)" };
+  if (t >= 90) return { grade: "1", remark: "Highest" };
+  if (t >= 80) return { grade: "2", remark: "Higher" };
+  if (t >= 70) return { grade: "3", remark: "High" };
+  if (t >= 60) return { grade: "4", remark: "High Average" };
+  if (t >= 55) return { grade: "5", remark: "Average" };
+  if (t >= 50) return { grade: "6", remark: "Low Average" };
+  if (t >= 40) return { grade: "7", remark: "Low" };
+  if (t >= 35) return { grade: "8", remark: "Lower" };
+  return { grade: "9", remark: "Lowest" };
 }
 
 /**
@@ -62,7 +66,7 @@ export function computeClassResults(students, gradesStore, subjects, subjectMap)
       const exams = parseFloat(sg.exams) || 0;
 
       const sbaTotal = gw1 + test + gw2 + proj;
-      const scaledSba = (sbaTotal / 60) * 50;
+      const scaledSba = (sbaTotal / 100) * 50;
       const scaledExam = exams * 0.5;
       const overallTotal = scaledSba + scaledExam;
 
