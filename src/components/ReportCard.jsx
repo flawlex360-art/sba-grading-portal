@@ -58,13 +58,11 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           alt="Ghana Coat of Arms" 
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
-        {isAnglican && (
-          <img 
-            src="/anglican-crest.png" 
-            alt="School Crest" 
-            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.8] origin-center"
-          />
-        )}
+        <img 
+          src="/anglican-crest.png" 
+          alt="School Crest" 
+          className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.8] origin-center"
+        />
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
         <h2 className="text-sm font-semibold uppercase text-black tracking-wider mt-0.5">
           {metadata.district}
@@ -225,64 +223,66 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* Grading Interpretation Table */}
-      <div className="mt-8 pt-8 border-t border-zinc-200 break-before-page">
-        <span className="text-sm font-bold uppercase text-black block mb-3">Grading Interpretation</span>
-        <table className="w-full text-left text-xs border-collapse border border-zinc-300">
-          <thead className="bg-zinc-100 text-black font-bold">
-            <tr>
-              <th className="border border-zinc-300 px-3 py-2">Score Range</th>
-              <th className="border border-zinc-300 px-3 py-2 text-center">Grade</th>
-              <th className="border border-zinc-300 px-3 py-2">Interpretation</th>
-            </tr>
-          </thead>
+      <div className="mt-4 pt-4 border-t border-zinc-200 break-inside-avoid">
+        <span className="text-xs font-bold uppercase text-black block mb-2">Grading Interpretation</span>
+        <div className="max-w-md">
+          <table className="w-full text-left text-[10px] border-collapse border border-zinc-300">
+            <thead className="bg-zinc-100 text-black font-bold">
+              <tr>
+                <th className="border border-zinc-300 px-2 py-1">Score Range</th>
+                <th className="border border-zinc-300 px-2 py-1 text-center">Grade</th>
+                <th className="border border-zinc-300 px-2 py-1">Interpretation</th>
+              </tr>
+            </thead>
           <tbody className="text-black font-medium">
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">90 - 100</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">1</td>
-              <td className="border border-zinc-300 px-3 py-2">Highest</td>
+              <td className="border border-zinc-300 px-2 py-1">90 - 100</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">1</td>
+              <td className="border border-zinc-300 px-2 py-1">Highest</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">80 - 89</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">2</td>
-              <td className="border border-zinc-300 px-3 py-2">Higher</td>
+              <td className="border border-zinc-300 px-2 py-1">80 - 89</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">2</td>
+              <td className="border border-zinc-300 px-2 py-1">Higher</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">70 - 79</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">3</td>
-              <td className="border border-zinc-300 px-3 py-2">High</td>
+              <td className="border border-zinc-300 px-2 py-1">70 - 79</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">3</td>
+              <td className="border border-zinc-300 px-2 py-1">High</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">60 - 69</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">4</td>
-              <td className="border border-zinc-300 px-3 py-2">High Average</td>
+              <td className="border border-zinc-300 px-2 py-1">60 - 69</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">4</td>
+              <td className="border border-zinc-300 px-2 py-1">High Average</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">55 - 59</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">5</td>
-              <td className="border border-zinc-300 px-3 py-2">Average</td>
+              <td className="border border-zinc-300 px-2 py-1">55 - 59</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">5</td>
+              <td className="border border-zinc-300 px-2 py-1">Average</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">50 - 54</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">6</td>
-              <td className="border border-zinc-300 px-3 py-2">Low Average</td>
+              <td className="border border-zinc-300 px-2 py-1">50 - 54</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">6</td>
+              <td className="border border-zinc-300 px-2 py-1">Low Average</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">40 - 49</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">7</td>
-              <td className="border border-zinc-300 px-3 py-2">Low</td>
+              <td className="border border-zinc-300 px-2 py-1">40 - 49</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">7</td>
+              <td className="border border-zinc-300 px-2 py-1">Low</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">35 - 39</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">8</td>
-              <td className="border border-zinc-300 px-3 py-2">Lower</td>
+              <td className="border border-zinc-300 px-2 py-1">35 - 39</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">8</td>
+              <td className="border border-zinc-300 px-2 py-1">Lower</td>
             </tr>
             <tr>
-              <td className="border border-zinc-300 px-3 py-2">0 - 34</td>
-              <td className="border border-zinc-300 px-3 py-2 text-center font-bold">9</td>
-              <td className="border border-zinc-300 px-3 py-2">Lowest</td>
+              <td className="border border-zinc-300 px-2 py-1">0 - 34</td>
+              <td className="border border-zinc-300 px-2 py-1 text-center font-bold">9</td>
+              <td className="border border-zinc-300 px-2 py-1">Lowest</td>
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
     </div>
