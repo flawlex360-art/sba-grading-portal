@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter, FileSpreadsheet } from 'lucide-react';
+import { calculateGrade } from '../utils/calculations';
 
 const DEFAULT_JHS_KEYS = [
   { name: "English Language", key: "ENG. LANG." },
@@ -54,16 +55,11 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
       const exams = parseFloat(sg.exams) || 0;
 
       const sbaTotal = gw1 + test + gw2 + proj;
-      const scaledSba = (sbaTotal / 60) * 50;
+      const scaledSba = (sbaTotal / 100) * 50;
       const scaledExam = exams * 0.5;
       const overallTotal = scaledSba + scaledExam;
       
-      // Calculate grade
-      let grade = "E";
-      if (overallTotal > 79) grade = "HP";
-      else if (overallTotal > 67) grade = "P";
-      else if (overallTotal > 53) grade = "AP";
-      else if (overallTotal > 39) grade = "D";
+      const { grade } = calculateGrade(overallTotal);
 
       flatRecords.push({
         subjectName: sub.name,
@@ -131,11 +127,15 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
             className="flex-1 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
           >
             <option value="ALL">All Grades</option>
-            <option value="HP">HP (Highly Proficient)</option>
-            <option value="P">P (Proficient)</option>
-            <option value="AP">AP (Approaching Proficiency)</option>
-            <option value="D">D (Developing)</option>
-            <option value="E">E (Emerging)</option>
+            <option value="1">1 (Highest)</option>
+            <option value="2">2 (Higher)</option>
+            <option value="3">3 (High)</option>
+            <option value="4">4 (High Average)</option>
+            <option value="5">5 (Average)</option>
+            <option value="6">6 (Low Average)</option>
+            <option value="7">7 (Low)</option>
+            <option value="8">8 (Lower)</option>
+            <option value="9">9 (Lowest)</option>
           </select>
         </div>
       </div>
@@ -164,10 +164,10 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
                 <th className="px-3 py-2.5 w-12">S/N</th>
                 <th className="px-3 py-2.5 text-left w-36">Subject</th>
                 <th className="px-3 py-2.5 text-left min-w-[150px]">Student Name</th>
-                <th className="px-2 py-2.5 w-16">GW 1 (15)</th>
-                <th className="px-2 py-2.5 w-16">Test (15)</th>
-                <th className="px-2 py-2.5 w-16">GW 2 (15)</th>
-                <th className="px-2 py-2.5 w-16">Proj (15)</th>
+                <th className="px-2 py-2.5 w-16">Test 1 (20)</th>
+                <th className="px-2 py-2.5 w-16">GW (30)</th>
+                <th className="px-2 py-2.5 w-16">Test 2 (20)</th>
+                <th className="px-2 py-2.5 w-16">Proj (30)</th>
                 <th className="px-3 py-2.5 w-16">SBA Total</th>
                 <th className="px-3 py-2.5 w-16">SBA (50)</th>
                 <th className="px-3 py-2.5 w-16">Exam (100)</th>
@@ -194,10 +194,10 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
                   <td className="px-3 py-2.5 font-mono font-bold text-zinc-900 dark:text-zinc-100">{row.overallTotal}</td>
                   <td className="px-3 py-2.5">
                     <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
-                      row.grade === 'HP' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                      row.grade === 'P' ? 'bg-blue-500/10 text-blue-500' :
-                      row.grade === 'AP' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
-                      row.grade === 'D' ? 'bg-orange-500/10 text-orange-600' : 'bg-red-500/10 text-red-500'
+                      ['1', '2', '3'].includes(row.grade) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                      ['4', '5'].includes(row.grade) ? 'bg-blue-500/10 text-blue-500' :
+                      row.grade === '6' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
+                      ['7', '8'].includes(row.grade) ? 'bg-orange-500/10 text-orange-500' : 'bg-red-500/10 text-red-500'
                     }`}>
                       {row.grade}
                     </span>
