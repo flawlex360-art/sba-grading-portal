@@ -175,7 +175,7 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
               Class Administration (Editable by Teacher)
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">TEACHER'S NAME</label>
                 <input
@@ -185,6 +185,17 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   onChange={handleChange}
                   placeholder="Enter your name"
                   required
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">HEADTEACHER'S NAME</label>
+                <input
+                  type="text"
+                  name="headTeacherName"
+                  value={formData.headTeacherName || ''}
+                  onChange={handleChange}
+                  placeholder="Enter headteacher's name"
                   className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
                 />
               </div>

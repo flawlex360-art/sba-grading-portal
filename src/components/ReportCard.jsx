@@ -206,14 +206,20 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       </div>
 
       {/* 6. Signatures */}
-      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-4">
+      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-8">
         <div className="space-y-1">
           <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
           <div>Class Teacher's Signature</div>
+          {metadata.teacherName && (
+            <div className="text-zinc-600 dark:text-zinc-400 capitalize font-medium">{metadata.teacherName}</div>
+          )}
         </div>
         <div className="space-y-1">
           <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
           <div>Headteacher's Signature</div>
+          {metadata.headTeacherName && (
+            <div className="text-zinc-600 dark:text-zinc-400 capitalize font-medium">{metadata.headTeacherName}</div>
+          )}
         </div>
       </div>
 
