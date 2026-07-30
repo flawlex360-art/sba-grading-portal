@@ -401,7 +401,23 @@ export default function App() {
 
   // 3. Admin Routing: If user is Admin, show the Admin Dashboard
   if (userProfile?.isAdmin) {
-    return <AdminPanel adminUser={currentUser} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />;
+    return (
+      <>
+        <AdminPanel adminUser={currentUser} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
+        <Toaster 
+          position="top-center" 
+          toastOptions={{
+            style: {
+              background: '#18181b',
+              color: '#fff',
+              fontSize: '14px',
+              borderRadius: '12px',
+              border: '1px solid #27272a'
+            }
+          }} 
+        />
+      </>
+    );
   }
 
   // 4. Default Database Guard for Teachers (prevents crashes before metadata loads)
