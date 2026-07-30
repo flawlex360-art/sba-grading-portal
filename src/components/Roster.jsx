@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Plus, Trash2, Edit2, Check, X, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { parseDocxRoster } from '../utils/docxParser';
 
 export default function Roster({ students, onSave, onImport }) {
@@ -65,13 +66,34 @@ export default function Roster({ students, onSave, onImport }) {
     setIsSaving(false);
   };
 
-  const handleClear = async () => {
-    if (window.confirm("Are you sure you want to clear the entire roster? All grades will be preserved, but student links will be reset.")) {
-      setList([]);
-      setIsSaving(true);
-      await onSave([]);
-      setIsSaving(false);
-    }
+  const handleClear = () => {
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Are you sure you want to clear the entire roster?</p>
+        <p className="text-xs text-zinc-500">All grades will be preserved, but student links will be reset.</p>
+        <div className="flex justify-end gap-2 mt-2">
+          <button 
+            className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white rounded-md text-xs font-semibold hover:bg-zinc-300 dark:hover:bg-zinc-700"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 bg-rose-600 text-white rounded-md text-xs font-semibold hover:bg-rose-700"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              setList([]);
+              setIsSaving(true);
+              await onSave([]);
+              setIsSaving(false);
+              toast.success("Roster cleared!");
+            }}
+          >
+            Clear Roster
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   // Drag and Drop File Handlers

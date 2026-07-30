@@ -5,6 +5,7 @@ import {
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff 
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const JHS_SUBJECTS_LIST = [
   { name: "English Language", key: "ENG. LANG." },
@@ -262,34 +263,52 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
     }
   };
 
-  const handleDeleteTeacher = async (teacher) => {
-    if (!window.confirm(`Are you sure you want to permanently delete the teacher "${teacher.name}"? This will erase their authentication account and all student roster/grades data. This action is irreversible.`)) {
-      return;
-    }
+  const handleDeleteTeacher = (teacher) => {
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Are you sure you want to permanently delete "{teacher.name}"?</p>
+        <p className="text-xs text-zinc-500">This erases their account and all student data. This action is irreversible.</p>
+        <div className="flex justify-end gap-2 mt-2">
+          <button 
+            className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white rounded-md text-xs font-semibold hover:bg-zinc-300 dark:hover:bg-zinc-700"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 bg-rose-600 text-white rounded-md text-xs font-semibold hover:bg-rose-700"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              setFetching(true);
+              try {
+                // 1. Try deleting user account in Firebase Auth
+                try {
+                  const authPass = teacher.password || 'password123';
+                  await deleteTeacherAccount(teacher.email, authPass);
+                } catch (authErr) {
+                  console.warn("Auth deletion failed or user already deleted. Cleaning Firestore anyway.", authErr);
+                }
 
-    setFetching(true);
-    try {
-      // 1. Try deleting user account in Firebase Auth
-      try {
-        const authPass = teacher.password || 'password123';
-        await deleteTeacherAccount(teacher.email, authPass);
-      } catch (authErr) {
-        console.warn("Auth deletion failed or user already deleted. Cleaning Firestore anyway.", authErr);
-      }
+                // 2. Delete teacher document in Firestore teachers/{uid}
+                await deleteDoc(doc(db, "teachers", teacher.uid));
 
-      // 2. Delete teacher document in Firestore teachers/{uid}
-      await deleteDoc(doc(db, "teachers", teacher.uid));
+                // 3. Delete school sheet data document in Firestore schools/{uid}
+                await deleteDoc(doc(db, "schools", teacher.uid));
 
-      // 3. Delete school sheet data document in Firestore schools/{uid}
-      await deleteDoc(doc(db, "schools", teacher.uid));
-
-      alert("Teacher account and data successfully deleted!");
-      fetchTeachersList();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Failed to delete teacher database record.");
-      setFetching(false);
-    }
+                toast.success("Teacher account and data successfully deleted!");
+                fetchTeachersList();
+              } catch (err) {
+                console.error(err);
+                toast.error(err.message || "Failed to delete teacher database record.");
+                setFetching(false);
+              }
+            }}
+          >
+            Delete Permanently
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   const handleGenerateAccount = async (e) => {
@@ -552,15 +571,14 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     value={level}
                     disabled
                     onChange={(e) => {
-                      const selectedVal = e.target.value;
-                      setLevel(selectedVal);
-                      if (selectedVal === 'Primary') {
+                      setLevel(e.target.value);
+                      if (e.target.value === 'Primary') {
                         setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
                       } else {
                         setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                       }
                     }}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink appearance-none"
                   >
                     <option value="JHS">Junior High School (JHS)</option>
                     <option value="Primary">Primary School</option>
@@ -868,7 +886,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                           setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
                         }
                       }}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink appearance-none"
                     >
                       <option value="JHS">Junior High School (JHS)</option>
                       <option value="Primary">Primary School</option>

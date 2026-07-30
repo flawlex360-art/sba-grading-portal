@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, FileSpreadsheet, Camera, UploadCloud, Sparkles, Check } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { calculateGrade, getOrdinalSuffix, calculateStudentSubjectScores } from '../utils/calculations';
 import { transcribeSheetImage } from '../utils/aiTranscriber';
 
@@ -41,7 +42,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
     if (!file) return;
 
     if (!apiKey) {
-      alert("Gemini API Key is not configured! Please set VITE_GEMINI_API_KEY in your environment variables.");
+      toast.error("Gemini API Key is not configured! Please set VITE_GEMINI_API_KEY in your environment variables.");
       return;
     }
 
@@ -55,7 +56,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
       const records = await transcribeSheetImage(base64Data, mimeType, apiKey);
 
       if (!records || records.length === 0) {
-        alert("AI scan finished, but no student records could be parsed. Ensure the columns and values are clear.");
+        toast.error("AI scan finished, but no student records could be parsed. Ensure the columns and values are clear.");
         return;
       }
 
@@ -86,10 +87,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
       });
 
       setLocalGrades(updatedGrades);
-      alert(`AI scan complete! Successfully filled marks for ${records.length} students. Verify the cells and click 'Save Changes' to finalize.`);
+      toast.success(`AI scan complete! Successfully filled marks for ${records.length} students. Verify the cells and click 'Save Changes' to finalize.`);
     } catch (err) {
       console.error(err);
-      alert(`AI scan failed: ${err.message}`);
+      toast.error(`AI scan failed: ${err.message}`);
     } finally {
       setIsTranscribing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

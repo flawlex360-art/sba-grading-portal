@@ -15,6 +15,7 @@ import { computeClassResults } from './utils/calculations';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { Toaster } from 'react-hot-toast';
 
 const MAIN_TABS = [
   { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
@@ -604,6 +605,18 @@ export default function App() {
           )}
         </div>
       )}
+      <Toaster 
+        position="top-center" 
+        toastOptions={{
+          style: {
+            background: '#18181b',
+            color: '#fff',
+            fontSize: '14px',
+            borderRadius: '12px',
+            border: '1px solid #27272a'
+          }
+        }} 
+      />
     </>
   );
 }
