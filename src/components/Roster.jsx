@@ -67,19 +67,19 @@ export default function Roster({ students, onSave, onImport }) {
   };
 
   const handleClear = () => {
-    toast((t) => (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium">Are you sure you want to clear the entire roster?</p>
-        <p className="text-xs text-zinc-500">All grades will be preserved, but student links will be reset.</p>
-        <div className="flex justify-end gap-2 mt-2">
+    toast.custom((t) => (
+      <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-zinc-900 shadow-2xl rounded-xl pointer-events-auto flex flex-col p-5 border border-zinc-200 dark:border-zinc-800`}>
+        <p className="text-sm font-bold text-zinc-900 dark:text-white mb-1">Clear Roster?</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Are you sure you want to clear the entire roster? All grades will be preserved, but student links will be reset.</p>
+        <div className="flex justify-end gap-2 mt-4">
           <button 
-            className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white rounded-md text-xs font-semibold hover:bg-zinc-300 dark:hover:bg-zinc-700"
+            className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg text-xs font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => toast.dismiss(t.id)}
           >
             Cancel
           </button>
           <button 
-            className="px-3 py-1.5 bg-rose-600 text-white rounded-md text-xs font-semibold hover:bg-rose-700"
+            className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors"
             onClick={async () => {
               toast.dismiss(t.id);
               setList([]);
