@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db, isConfigValid, getFirebaseConfig } from '../utils/firebase';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { LogIn, Key, Mail, Lock, ShieldAlert, AlertCircle, HelpCircle, Save, Settings, Eye, EyeOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, isConfigValid, getFirebaseConfig } from '../utils/firebase';
+import { Key, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -10,47 +9,9 @@ export default function Login({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [adminExists, setAdminExists] = useState(false);
-
-  useEffect(() => {
-    const checkAdminExists = async () => {
-      try {
-        const q = query(collection(db, "teachers"), where("isAdmin", "==", true));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          setAdminExists(true);
-        }
-      } catch (e) {
-        console.error("Error checking admin status:", e);
-      }
-    };
-    checkAdminExists();
-  }, []);
 
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
-
-  const handleRegisterAdmin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, 'admin@school.com', password);
-      const teacherDocRef = doc(db, "teachers", userCredential.user.uid);
-      await setDoc(teacherDocRef, {
-        name: "School Admin",
-        email: "admin@school.com",
-        assignedClass: "Admin",
-        createdDate: new Date().toISOString(),
-        isAdmin: true
-      });
-      onLoginSuccess(userCredential.user);
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to register Admin account.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -68,27 +29,8 @@ export default function Login({ onLoginSuccess }) {
     } catch (err) {
       console.error(err);
       let errMsg = "Invalid email or password. Please try again.";
-      if (email.trim().toLowerCase() === 'admin@school.com') {
-        if (adminExists) {
-          setError("Incorrect password for Administrator account.");
-        } else {
-          setError(
-            <div className="flex flex-col gap-2">
-              <span>Admin account not registered yet.</span>
-              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Administrator login for this database:</span>
-              <button
-                type="button"
-                onClick={handleRegisterAdmin}
-                className="bg-emerald-ink hover:bg-emerald-900 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
-              >
-                Register Admin Account
-              </button>
-            </div>
-          );
-        }
-        setLoading(false);
-        return;
-      }
+      // ✅ SECURITY IMPROVEMENT: Removed client-side admin registration backdoor.
+      // Administrative accounts must only be provisioned securely via `register_admin.js` CLI.
       if (err.code === 'auth/invalid-credential') {
         errMsg = "Incorrect email address or password.";
       } else if (err.code === 'auth/user-not-found') {
