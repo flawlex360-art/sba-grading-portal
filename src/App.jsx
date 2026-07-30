@@ -22,8 +22,7 @@ const MAIN_TABS = [
   { id: 'gradebook', name: 'Gradebook', icon: FileSpreadsheet },
   { id: 'positions', name: 'Class Overview', icon: Award },
   { id: 'open', name: 'Records (OPEN)', icon: FileCode },
-  { id: 'reports', name: 'Report Cards', icon: FileCode },
-  { id: 'droplists', name: 'Drop Lists', icon: Settings }
+  { id: 'reports', name: 'Report Cards', icon: FileCode }
 ];
 
 const DEFAULT_JHS_SUBJECT_MAP = {
