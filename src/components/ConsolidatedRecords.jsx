@@ -138,7 +138,7 @@ export default function ConsolidatedRecords({ students, gradesStore, teacherSubj
               OPEN — Consolidated Subject Records
             </h3>
             <p className="text-[10px] text-zinc-400">
-              A complete vertical stack of all subject scores, mimicking the layout of the Excel "OPEN" sheet.
+              A complete vertical stack of all subject scores.
             </p>
           </div>
           <span className="text-xs text-zinc-400 no-print">
