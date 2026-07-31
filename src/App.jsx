@@ -323,9 +323,10 @@ export default function App() {
             const qInst = query(collection(db, "institutions"), where("adminEmail", "==", userEmail));
             const qSnap = await getDocs(qInst);
             if (!qSnap.empty) {
-              const instDoc = qSnap.docs[0];
-              instData = { id: instDoc.id, ...instDoc.data() };
-              userInstId = instDoc.id;
+              const instDocs = qSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              instDocs.sort((a,b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
+              instData = instDocs[0];
+              userInstId = instData.id;
             } else if (isAdminUser) {
               // Self-heal: Create default institution document for legacy admin
               const newInstId = "kpando-anglican-basic-school-1785516603580";

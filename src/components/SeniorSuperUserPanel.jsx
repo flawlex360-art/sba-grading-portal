@@ -260,14 +260,30 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   };
 
   const deleteInstitution = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${name}? This will NOT delete the teachers, but will orphan them.`)) return;
+    if (!window.confirm(`PERMANENT DELETION WARNING:\n\nAre you sure you want to permanently delete "${name}"?\nThis will erase the school, its admin account, all linked teacher accounts, and all student grades. This action cannot be undone.`)) return;
     try {
+      toast.loading(`Deleting ${name} and all linked accounts...`, { id: "del-inst" });
+      
+      // 1. Find and delete all teacher & admin documents linked to this institution
+      const qTeachers = query(collection(db, "teachers"), where("institutionId", "==", id));
+      const snapTeachers = await getDocs(qTeachers);
+      
+      for (const tDoc of snapTeachers.docs) {
+        const teacherUid = tDoc.id;
+        // Delete grade sheets
+        await deleteDoc(doc(db, "schools", teacherUid)).catch(() => {});
+        // Delete teacher document
+        await deleteDoc(doc(db, "teachers", teacherUid)).catch(() => {});
+      }
+      
+      // 2. Delete institution document
       await deleteDoc(doc(db, "institutions", id));
-      toast.success("School deleted.");
+      
+      toast.success(`School "${name}" and linked accounts permanently deleted.`, { id: "del-inst" });
       setInstitutions(prev => prev.filter(inst => inst.id !== id));
     } catch (e) {
-      console.error(e);
-      toast.error("Failed to delete school.");
+      console.error("Error deleting institution:", e);
+      toast.error("Failed to delete school.", { id: "del-inst" });
     }
   };
 

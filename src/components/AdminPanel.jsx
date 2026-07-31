@@ -29,8 +29,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
           const q = query(collection(db, "institutions"), where("adminEmail", "==", adminUser.email.toLowerCase().trim()));
           const snap = await getDocs(q);
           if (!snap.empty) {
-            const instDoc = snap.docs[0];
-            setInstitution({ id: instDoc.id, ...instDoc.data() });
+            const instDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            instDocs.sort((a,b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
+            setInstitution(instDocs[0]);
           }
         } catch(e) {
           console.error(e);
