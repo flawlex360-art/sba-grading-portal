@@ -449,7 +449,12 @@ export default function App() {
 
         const activeTermData = loadedTerms[currentViewTerm] || { grades: {}, students: [] };
         
-        setMetadata(data.metadata);
+        const effectiveInst = instData || institution;
+        const mergedMetadata = {
+          ...(data.metadata || {}),
+          schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name"
+        };
+        setMetadata(mergedMetadata);
         setStudents(activeTermData.students || []);
         studentsRef.current = activeTermData.students || [];
         setGrades(activeTermData.grades || {});
