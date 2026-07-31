@@ -53,7 +53,14 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       const list = [];
       snap.forEach(doc => {
         const data = doc.data();
-        if (!data.isAdmin && data.email !== 'admin@school.com') {
+        const isNotTeacher = data.isAdmin || 
+                             data.isSeniorSuperUser || 
+                             data.email === 'admin@school.com' || 
+                             data.email === 'system@flawlex.com' || 
+                             data.email === institution?.adminEmail || 
+                             data.assignedClass === 'System';
+
+        if (!isNotTeacher) {
           list.push({ uid: doc.id, ...data });
         }
       });
