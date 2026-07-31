@@ -134,7 +134,17 @@ export default function ReportEditor({
           <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Report Card Batch Manager</h2>
           <p className="text-[10px] text-zinc-400">All changes are saved automatically. Batch print all report cards here.</p>
         </div>
-        <div>
+        <div className="flex items-center gap-2">
+          {selectedStudent && (
+            <button
+              type="button"
+              onClick={handlePrintSingle}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print Current Report
+            </button>
+          )}
           <button
             type="button"
             onClick={handlePrintAll}
@@ -165,7 +175,7 @@ export default function ReportEditor({
               />
             </div>
             
-            <div className="max-h-[160px] overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+            <div className="max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar divide-y divide-zinc-100 dark:divide-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg">
               {filteredStudents.map(s => {
                 const isCurrent = selectedStudent && selectedStudent.sn === s.sn;
                 return (
@@ -194,6 +204,11 @@ export default function ReportEditor({
             </div>
           </div>
 
+          </div>
+        </div>
+
+        {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
+        <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print">
           {/* Direct Input Card */}
           {selectedStudent && (
             <div className="glass-card p-6 space-y-4">
@@ -209,150 +224,145 @@ export default function ReportEditor({
 
               <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-semibold">
                 <fieldset disabled={isReadOnly} className="space-y-4 text-xs font-semibold">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
+                        ATTENDANCE (Max: {metadata.timesOpen || 100})
+                      </label>
+                      <input
+                        type="number"
+                        value={attendance}
+                        onChange={(e) => setAttendance(e.target.value)}
+                        onBlur={(e) => saveFormDirect({ attendance: e.target.value })}
+                        min={0}
+                        max={metadata.timesOpen || 100}
+                        required
+                        className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">PROMOTED TO</label>
+                      <select
+                        value={promotedTo}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPromotedTo(val);
+                          saveFormDirect({ promotedTo: val, attendance });
+                        }}
+                        className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">-- None --</option>
+                        {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">CONDUCT REMARKS</label>
+                      <select
+                        value={conduct}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setConduct(val);
+                          saveFormDirect({ conduct: val, attendance });
+                        }}
+                        className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">-- Select Conduct --</option>
+                        {(dropLists.conduct || []).map((opt, idx) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={conduct}
+                        onChange={(e) => setConduct(e.target.value)}
+                        onBlur={(e) => saveFormDirect({ conduct: e.target.value, attendance })}
+                        placeholder="Or type custom conduct..."
+                        className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">INTEREST ACTIVITIES</label>
+                      <select
+                        value={interest}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInterest(val);
+                          saveFormDirect({ interest: val, attendance });
+                        }}
+                        className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">-- Select Interest --</option>
+                        {(dropLists.interest || []).map((opt, idx) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={interest}
+                        onChange={(e) => setInterest(e.target.value)}
+                        onBlur={(e) => saveFormDirect({ interest: e.target.value, attendance })}
+                        placeholder="Or type custom interest..."
+                        className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
-                      ATTENDANCE (DAYS PRESENT — Max: {metadata.timesOpen || 100})
-                    </label>
-                  <input
-                    type="number"
-                    value={attendance}
-                    onChange={(e) => setAttendance(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ attendance: e.target.value })}
-                    min={0}
-                    max={metadata.timesOpen || 100}
-                    required
-                    className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
-                </div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">CLASS TEACHER'S REMARKS</label>
+                    <select
+                      value={remarks}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRemarks(val);
+                        saveFormDirect({ remarks: val, attendance });
+                      }}
+                      className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">-- Select Remarks --</option>
+                      {(dropLists.remarks || []).map((opt, idx) => (
+                        <option key={idx} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      onBlur={(e) => saveFormDirect({ remarks: e.target.value, attendance })}
+                      placeholder="Or type custom remarks..."
+                      className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">CONDUCT REMARKS</label>
-                  <select
-                    value={conduct}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setConduct(val);
-                      saveFormDirect({ conduct: val, attendance });
-                    }}
-                    className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">-- Select Conduct --</option>
-                    {(dropLists.conduct || []).map((opt, idx) => (
-                      <option key={idx} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={conduct}
-                    onChange={(e) => setConduct(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ conduct: e.target.value, attendance })}
-                    placeholder="Or type custom conduct..."
-                    className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">STUDENT INTEREST ACTIVITIES</label>
-                  <select
-                    value={interest}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setInterest(val);
-                      saveFormDirect({ interest: val, attendance });
-                    }}
-                    className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">-- Select Interest --</option>
-                    {(dropLists.interest || []).map((opt, idx) => (
-                      <option key={idx} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={interest}
-                    onChange={(e) => setInterest(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ interest: e.target.value, attendance })}
-                    placeholder="Or type custom interest..."
-                    className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">CLASS TEACHER'S REMARKS</label>
-                  <select
-                    value={remarks}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setRemarks(val);
-                      saveFormDirect({ remarks: val, attendance });
-                    }}
-                    className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">-- Select Remarks --</option>
-                    {(dropLists.remarks || []).map((opt, idx) => (
-                      <option key={idx} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    onBlur={(e) => saveFormDirect({ remarks: e.target.value, attendance })}
-                    placeholder="Or type custom remarks..."
-                    className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">PROMOTED TO (IF APPLICABLE)</label>
-                  <select
-                    value={promotedTo}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPromotedTo(val);
-                      saveFormDirect({ promotedTo: val, attendance });
-                    }}
-                    className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">-- None --</option>
-                    {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
-                      <option key={idx} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => saveFormDirect()}
-                    disabled={saveSuccess}
-                    className={`flex-1 text-white rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
-                      saveSuccess
-                        ? 'bg-emerald-500 hover:bg-emerald-600'
-                        : 'bg-emerald-ink hover:bg-emerald-900'
-                    } disabled:opacity-50`}
-                  >
-                    {saveSuccess ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        Saved!
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-3.5 h-3.5" />
-                        Save Report
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePrintSingle}
-                    className="bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-lg px-3 py-2 text-xs font-semibold border border-zinc-200 dark:border-zinc-800 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Print
-                  </button>
-                </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => saveFormDirect()}
+                      disabled={saveSuccess}
+                      className={`flex-1 text-white rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                        saveSuccess
+                          ? 'bg-emerald-500 hover:bg-emerald-600'
+                          : 'bg-emerald-ink hover:bg-emerald-900'
+                      } disabled:opacity-50`}
+                    >
+                      {saveSuccess ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Saved!
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          Save Report
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </fieldset>
 
                 <div className="flex justify-between items-center pt-3 border-t border-zinc-100 dark:border-zinc-800 mt-2 select-none">
@@ -379,10 +389,6 @@ export default function ReportEditor({
               </form>
             </div>
           )}
-        </div>
-
-        {/* Right 7 Columns: Live HTML Report Card Preview (which becomes print output) */}
-        <div className="lg:col-span-7 flex flex-col justify-start no-print">
           {previewStudent ? (
             <ReportCard
               student={previewStudent}

@@ -1175,7 +1175,7 @@ function AdminOverviewTab({ teachers }) {
   const [classData, setClassData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState(null);
-  const [viewMode, setViewMode] = useState('trends'); // 'trends' or 'positions'
+  const [viewMode, setViewMode] = useState('positions'); // 'trends' or 'positions'
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
 
   useEffect(() => {
@@ -1254,16 +1254,16 @@ function AdminOverviewTab({ teachers }) {
 
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <button
-            onClick={() => setViewMode('trends')}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'trends' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
-          >
-            Performance Trends
-          </button>
-          <button
             onClick={() => setViewMode('positions')}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'positions' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
           >
             Class Positions
+          </button>
+          <button
+            onClick={() => setViewMode('trends')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'trends' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
+          >
+            Performance Trends
           </button>
 
           {viewMode === 'positions' && availableTerms.length > 0 && (
