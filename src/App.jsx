@@ -404,15 +404,16 @@ export default function App() {
     try {
       let activeInstTerm = null;
       let instCrestUrl = null;
+      let fetchedInstData = null;
 
       if (instId && instId !== 'unknown') {
         const instRef = doc(db, "institutions", instId);
         const instSnap = await getDoc(instRef);
         if (instSnap.exists()) {
-           const instData = instSnap.data();
-           setInstitution({ id: instSnap.id, ...instData });
-           activeInstTerm = instData.activeTerm;
-           instCrestUrl = instData.schoolCrestUrl;
+           fetchedInstData = { id: instSnap.id, ...instSnap.data() };
+           setInstitution(fetchedInstData);
+           activeInstTerm = fetchedInstData.activeTerm;
+           instCrestUrl = fetchedInstData.schoolCrestUrl;
         }
       }
 
@@ -449,7 +450,7 @@ export default function App() {
 
         const activeTermData = loadedTerms[currentViewTerm] || { grades: {}, students: [] };
         
-        const effectiveInst = instData || institution;
+        const effectiveInst = fetchedInstData || institution;
         const mergedMetadata = {
           ...(data.metadata || {}),
           schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name"
