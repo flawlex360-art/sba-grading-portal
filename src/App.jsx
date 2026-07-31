@@ -361,23 +361,27 @@ export default function App() {
               ...profileData
             });
 
-            // Self-healing task: Repair any Anglican / legacy teachers belonging to this admin
-            if (userInstId) {
-              try {
-                const anglicanEmails = ["sirfrank@anglican.com", "eli@anglican.com", "frank@anglican.com", "dayi@anglican.com", "microroot1@gmail.com"];
-                for (const aEmail of anglicanEmails) {
-                  const qT = query(collection(db, "teachers"), where("email", "==", aEmail));
-                  const snapT = await getDocs(qT);
-                  snapT.forEach(async (tDoc) => {
-                    if (tDoc.data().institutionId !== userInstId) {
-                      await setDoc(doc(db, "teachers", tDoc.id), { institutionId: userInstId }, { merge: true });
-                    }
-                  });
-                }
-              } catch (_) {}
-            }
-
+            // Unblock UI immediately so Admin dashboard renders with zero delay
             setIsLoading(false);
+
+            // Fire-and-forget background migration without blocking login
+            if (userInstId) {
+              (async () => {
+                try {
+                  const anglicanEmails = ["sirfrank@anglican.com", "eli@anglican.com", "frank@anglican.com", "dayi@anglican.com", "microroot1@gmail.com"];
+                  for (const aEmail of anglicanEmails) {
+                    const qT = query(collection(db, "teachers"), where("email", "==", aEmail));
+                    const snapT = await getDocs(qT);
+                    snapT.forEach((tDoc) => {
+                      if (tDoc.data().institutionId !== userInstId) {
+                        setDoc(doc(db, "teachers", tDoc.id), { institutionId: userInstId }, { merge: true }).catch(() => {});
+                      }
+                    });
+                  }
+                } catch (_) {}
+              })();
+            }
+            return;
           } else {
             const currentProf = profileData || { name: "Teacher", assignedClass: "BS. 7", institutionId: userInstId };
             setUserProfile(currentProf);

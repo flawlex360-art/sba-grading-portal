@@ -360,7 +360,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editSchoolName || !editDistrict || !editAcademicYear || !editPassword) {
+    if (!editDistrict || !editAcademicYear || !editPassword) {
       setEditError("All fields except Teacher's Name are required.");
       return;
     }
@@ -845,7 +845,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                 No teacher accounts found. Use the creator form to register a new teacher.
               </div>
             ) : (
-              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-x-auto no-scrollbar">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 font-semibold select-none text-center">
@@ -1009,17 +1009,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">School Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={institution ? institution.schoolName : editSchoolName}
-                      onChange={(e) => setEditSchoolName(e.target.value)}
-                      readOnly={!!institution}
-                      className={`w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 ${institution ? 'text-zinc-500 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/50' : 'text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink'}`}
-                    />
-                  </div>
-                  <div>
                     <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">District</label>
                     <input
                       type="text"
@@ -1029,17 +1018,16 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Academic Year</label>
-                  <input
-                    type="text"
-                    required
-                    value={editAcademicYear}
-                    onChange={(e) => setEditAcademicYear(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
-                  />
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Academic Year</label>
+                    <input
+                      type="text"
+                      required
+                      value={editAcademicYear}
+                      onChange={(e) => setEditAcademicYear(e.target.value)}
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                    />
+                  </div>
                 </div>
 
                 {/* Edit Level Selector */}
