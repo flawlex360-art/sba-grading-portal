@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser } from '../utils/firebase';
-import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database } from 'lucide-react';
+import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [institutions, setInstitutions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  
+  const [expandedInstId, setExpandedInstId] = useState(null);
+  const [editingInstId, setEditingInstId] = useState(null);
+  const [editSchoolName, setEditSchoolName] = useState('');
+  const [editCrestUrl, setEditCrestUrl] = useState('');
   // Form State
   const [schoolName, setSchoolName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -21,7 +24,17 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     try {
       const snap = await getDocs(collection(db, "institutions"));
       const list = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      
+      const teacherSnap = await getDocs(collection(db, "teachers"));
+      const allTeachers = [];
+      teacherSnap.forEach(d => allTeachers.push({ uid: d.id, ...d.data() }));
+
+      snap.forEach(d => {
+        const instData = { id: d.id, ...d.data() };
+        instData.teachers = allTeachers.filter(t => t.institutionId === d.id && !t.isAdmin && !t.isSeniorSuperUser);
+        instData.adminProfile = allTeachers.find(t => t.institutionId === d.id && t.isAdmin);
+        list.push(instData);
+      });
       list.sort((a,b) => a.schoolName.localeCompare(b.schoolName));
       setInstitutions(list);
     } catch (e) {
@@ -259,6 +272,29 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     }
   };
 
+  const saveSchoolChanges = async (id) => {
+    if (!editSchoolName.trim()) {
+      toast.error("School Name cannot be empty");
+      return;
+    }
+    const toastId = toast.loading("Saving changes...");
+    try {
+      await setDoc(doc(db, "institutions", id), { 
+        schoolName: editSchoolName.trim(), 
+        schoolCrestUrl: editCrestUrl.trim() 
+      }, { merge: true });
+      
+      setInstitutions(prev => prev.map(inst => 
+        inst.id === id ? { ...inst, schoolName: editSchoolName.trim(), schoolCrestUrl: editCrestUrl.trim() } : inst
+      ));
+      toast.success("Changes saved successfully", { id: toastId });
+      setEditingInstId(null);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save changes", { id: toastId });
+    }
+  };
+
   const deleteInstitution = (id, name) => {
     toast.custom((t) => (
       <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white dark:bg-zinc-900 shadow-2xl rounded-xl pointer-events-auto flex flex-col p-5 border border-zinc-200 dark:border-zinc-800`}>
@@ -412,40 +448,151 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                 </tr>
               ) : (
                 institutions.map(inst => (
-                  <tr key={inst.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/35 transition-colors">
-                    <td className="px-4 py-3 font-bold text-zinc-900 dark:text-white">
-                      {inst.schoolName}
-                      <div className="text-[9px] font-mono text-zinc-400 font-normal mt-0.5">ID: {inst.id}</div>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{inst.adminEmail}</td>
-                    <td className="px-4 py-3">
-                      {inst.schoolCrestUrl ? (
-                        <img src={inst.schoolCrestUrl} alt="crest" className="w-6 h-6 object-contain rounded bg-white" />
-                      ) : (
-                        <span className="text-[10px] text-zinc-500">None</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select 
-                        value={inst.activeTerm}
-                        onChange={(e) => updateInstitutionTerm(inst.id, e.target.value)}
-                        className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded focus:ring-violet-500 focus:border-violet-500 w-full font-bold text-violet-700 dark:text-violet-400"
-                      >
-                        <option value="Term 1">Term 1</option>
-                        <option value="Term 2">Term 2</option>
-                        <option value="Term 3">Term 3</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button 
-                        onClick={() => deleteInstitution(inst.id, inst.schoolName)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors"
-                        title="Delete School"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={inst.id}>
+                    <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-900/35 transition-colors cursor-pointer group" onClick={() => setExpandedInstId(expandedInstId === inst.id ? null : inst.id)}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button 
+                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedInstId(expandedInstId === inst.id ? null : inst.id);
+                            }}
+                          >
+                            {expandedInstId === inst.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          {editingInstId === inst.id ? (
+                            <input 
+                              type="text" 
+                              value={editSchoolName} 
+                              onChange={(e) => setEditSchoolName(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full font-bold focus:ring-violet-500 focus:border-violet-500"
+                            />
+                          ) : (
+                            <div>
+                              <div className="font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                                {inst.schoolName}
+                              </div>
+                              <div className="text-[9px] font-mono text-zinc-400 font-normal mt-0.5">ID: {inst.id}</div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-zinc-600 dark:text-zinc-400 font-semibold">{inst.adminEmail}</div>
+                        {inst.adminProfile && (
+                          <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1">
+                            <Key className="w-3 h-3 text-emerald-500" />
+                            Pass: <span className="font-mono text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-1 rounded">{inst.adminProfile.password}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {editingInstId === inst.id ? (
+                          <input 
+                            type="text" 
+                            value={editCrestUrl} 
+                            onChange={(e) => setEditCrestUrl(e.target.value)}
+                            placeholder="Crest URL"
+                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full focus:ring-violet-500 focus:border-violet-500"
+                          />
+                        ) : (
+                          inst.schoolCrestUrl ? (
+                            <img src={inst.schoolCrestUrl} alt="crest" className="w-6 h-6 object-contain rounded bg-white" />
+                          ) : (
+                            <span className="text-[10px] text-zinc-500">None</span>
+                          )
+                        )}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <select 
+                          value={inst.activeTerm}
+                          onChange={(e) => updateInstitutionTerm(inst.id, e.target.value)}
+                          className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded focus:ring-violet-500 focus:border-violet-500 w-full font-bold text-violet-700 dark:text-violet-400"
+                        >
+                          <option value="Term 1">Term 1</option>
+                          <option value="Term 2">Term 2</option>
+                          <option value="Term 3">Term 3</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          {editingInstId === inst.id ? (
+                            <>
+                              <button 
+                                onClick={() => saveSchoolChanges(inst.id)}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded transition-colors"
+                                title="Save Changes"
+                              >
+                                <Save className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => setEditingInstId(null)}
+                                className="p-1.5 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                setEditSchoolName(inst.schoolName);
+                                setEditCrestUrl(inst.schoolCrestUrl || '');
+                                setEditingInstId(inst.id);
+                              }}
+                              className="p-1.5 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"
+                              title="Edit School"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => deleteInstitution(inst.id, inst.schoolName)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            title="Delete School"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded Content: Teacher Accounts */}
+                    {expandedInstId === inst.id && (
+                      <tr className="bg-zinc-50/50 dark:bg-zinc-900/20 border-b border-zinc-200 dark:border-zinc-800/50">
+                        <td colSpan="5" className="p-0">
+                          <div className="px-10 py-4">
+                            <h4 className="text-[11px] uppercase tracking-wider font-bold text-zinc-500 mb-3 flex items-center gap-2">
+                              Enrolled Teachers / Admins ({inst.teachers?.length || 0})
+                            </h4>
+                            {inst.teachers && inst.teachers.length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {inst.teachers.map(t => (
+                                  <div key={t.uid} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 rounded-lg shadow-sm flex flex-col">
+                                    <div className="font-bold text-zinc-900 dark:text-white text-xs">{t.name}</div>
+                                    <div className="text-[10px] text-zinc-500">{t.email}</div>
+                                    <div className="mt-2 flex items-center justify-between text-[10px]">
+                                      <span className="bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded font-semibold">
+                                        {t.assignedClass}
+                                      </span>
+                                      <div className="flex items-center gap-1 text-zinc-500">
+                                        <Key className="w-3 h-3" />
+                                        <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">{t.password}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-zinc-500 italic">No teachers enrolled in this school yet.</div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
