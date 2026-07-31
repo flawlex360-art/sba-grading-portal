@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Plus, Trash2, Edit2, Check, X, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { parseDocxRoster } from '../utils/docxParser';
+import { generateGradingSheetDocx } from '../utils/docxGenerator';
 
-export default function Roster({ students, onSave, onImport, isReadOnly }) {
+export default function Roster({ students, metadata, onSave, onImport, isReadOnly }) {
   const [list, setList] = useState([...students]);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentGender, setNewStudentGender] = useState('U'); // U=Unspecified, M=Male, F=Female
@@ -177,8 +178,19 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
       setIsSaving(false);
     } catch (err) {
       console.error(err);
-      setUploadError(err.message || 'An error occurred during Word document import.');
+      setUploadError(err.message || 'Failed to parse file. Make sure it is a valid .docx file.');
+      toast.error('Failed to import roster');
       setIsSaving(false);
+    }
+  };
+
+  const handleDownloadSheet = async () => {
+    try {
+      await generateGradingSheetDocx(list, metadata);
+      toast.success('Grading sheet generated successfully');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate document');
     }
   };
 
@@ -282,6 +294,15 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
             <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
               <span className="text-sm font-bold uppercase tracking-wider text-zinc-500">Student Roster ({list.length})</span>
               <div className="flex gap-2">
+                <button
+                  onClick={handleDownloadSheet}
+                  disabled={list.length === 0}
+                  className="bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  title="Generate a blank Word grading sheet with student names"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Print Sheet
+                </button>
                 <button
                   onClick={handleClear}
                   disabled={list.length === 0 || isSaving || isReadOnly}

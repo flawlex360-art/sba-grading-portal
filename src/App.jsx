@@ -775,6 +775,7 @@ export default function App() {
         {activeTab === 'roster' && (
           <Roster
             students={students}
+            metadata={metadata}
             onSave={handleSaveRoster}
             onImport={(newStudents, snMap) => {
               handleSaveRoster(newStudents, snMap);
