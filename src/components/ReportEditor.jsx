@@ -208,7 +208,7 @@ export default function ReportEditor({
         {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
         <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print">
           {/* Direct Input Card */}
-          {selectedStudent && (
+          {selectedStudent && !isReadOnly && (
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3 mb-4">
                 <FileCheck className="w-5 h-5 text-indigo-500" />
