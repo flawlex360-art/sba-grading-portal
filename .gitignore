@@ -42,3 +42,4 @@ data/*.json
 # Test/Debug scripts
 list_models.*
 test_chat.py
+register_admin.js
