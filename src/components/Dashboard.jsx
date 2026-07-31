@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
 
-export default function Dashboard({ metadata, onSave, students, computedResults, teacherSubjects }) {
+export default function Dashboard({ metadata, onSave, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
   const [formData, setFormData] = useState({ ...metadata });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    setFormData({ ...metadata });
+  }, [metadata]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -104,7 +108,12 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
 
       {/* Main Settings Panel */}
       <div className="glass-card p-6 max-w-3xl mx-auto border border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-4 mb-6">
+        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-4 mb-6 relative">
+          {isReadOnly && (
+            <div className="absolute top-0 right-0">
+              <span className="bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-400 px-3 py-1 text-xs font-bold rounded-lg border border-amber-300 dark:border-amber-700">Archived Term: {viewingTerm} (Read-Only)</span>
+            </div>
+          )}
           <Calendar className="w-5 h-5 text-blue-500" />
           <h2 className="text-lg font-bold tracking-tight">Class Metadata & Configuration</h2>
         </div>
@@ -153,7 +162,12 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                 <input
                   type="text"
                   disabled
-                  value={formData.term}
+                  value={
+                    viewingTerm === "Term 1" ? "ONE" :
+                    viewingTerm === "Term 2" ? "TWO" :
+                    viewingTerm === "Term 3" ? "THREE" :
+                    (viewingTerm || formData.term || "")
+                  }
                   className="w-full bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 cursor-not-allowed font-medium"
                 />
               </div>
@@ -184,8 +198,9 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   value={formData.teacherName || ''}
                   onChange={handleChange}
                   placeholder="Enter your name"
+                  disabled={isReadOnly}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
               <div>
@@ -196,7 +211,8 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   value={formData.headTeacherName || ''}
                   onChange={handleChange}
                   placeholder="Enter headteacher's name"
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  disabled={isReadOnly}
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
               <div>
@@ -208,7 +224,8 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   onChange={handleChange}
                   min={0}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  disabled={isReadOnly}
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
             </div>
@@ -223,7 +240,8 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   onChange={handleChange}
                   min={1}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  disabled={isReadOnly}
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
               <div>
@@ -234,7 +252,8 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   value={formData.date}
                   onChange={handleChange}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  disabled={isReadOnly}
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
               <div>
@@ -245,20 +264,21 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
                   value={formData.nextTermBegins}
                   onChange={handleChange}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium"
+                  disabled={isReadOnly}
+                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
             <button
               type="submit"
-              disabled={isSaving || saveSuccess}
-              className={`text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-2 transition-all shadow-sm ${
-                saveSuccess 
+              disabled={isSaving || saveSuccess || isReadOnly}
+              className={`text-white rounded-lg px-6 py-2.5 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm ${
+                saveSuccess
                   ? 'bg-emerald-500 hover:bg-emerald-600'
-                  : 'bg-emerald-ink hover:bg-emerald-900'
+                  : 'bg-blue-600 hover:bg-blue-700'
               } disabled:opacity-50`}
             >
               {saveSuccess ? (

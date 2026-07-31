@@ -3,11 +3,13 @@ import { Upload, Plus, Trash2, Edit2, Check, X, FileSpreadsheet, AlertCircle } f
 import toast from 'react-hot-toast';
 import { parseDocxRoster } from '../utils/docxParser';
 
-export default function Roster({ students, onSave, onImport }) {
+export default function Roster({ students, onSave, onImport, isReadOnly }) {
   const [list, setList] = useState([...students]);
   const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentGender, setNewStudentGender] = useState('U'); // U=Unspecified, M=Male, F=Female
   const [editingSn, setEditingSn] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [editingGender, setEditingGender] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -24,6 +26,7 @@ export default function Roster({ students, onSave, onImport }) {
     const updatedList = [...list, {
       sn: newSn,
       name: newStudentName.trim().toUpperCase(),
+      gender: newStudentGender,
       attendance: 0,
       conduct: '',
       interest: '',
@@ -32,6 +35,7 @@ export default function Roster({ students, onSave, onImport }) {
     }];
     setList(updatedList);
     setNewStudentName('');
+    setNewStudentGender('U');
     setIsSaving(true);
     await onSave(updatedList);
     setIsSaving(false);
@@ -48,19 +52,22 @@ export default function Roster({ students, onSave, onImport }) {
   const startEdit = (student) => {
     setEditingSn(student.sn);
     setEditingName(student.name);
+    setEditingGender(student.gender || 'U');
   };
 
   const cancelEdit = () => {
     setEditingSn(null);
     setEditingName('');
+    setEditingGender('');
   };
 
   const saveEdit = async (sn) => {
     if (!editingName.trim()) return;
-    const updatedList = list.map(s => s.sn === sn ? { ...s, name: editingName.trim().toUpperCase() } : s);
+    const updatedList = list.map(s => s.sn === sn ? { ...s, name: editingName.trim().toUpperCase(), gender: editingGender } : s);
     setList(updatedList);
     setEditingSn(null);
     setEditingName('');
+    setEditingGender('');
     setIsSaving(true);
     await onSave(updatedList);
     setIsSaving(false);
@@ -140,6 +147,7 @@ export default function Roster({ students, onSave, onImport }) {
       const importedStudents = names.map((name, i) => ({
         sn: i + 1,
         name: name.toUpperCase(),
+        gender: "U",
         attendance: 0,
         conduct: "",
         interest: "",
@@ -163,28 +171,50 @@ export default function Roster({ students, onSave, onImport }) {
         
         {/* Left Side: Add Student & Excel Roster Upload */}
         <div className="space-y-6 lg:col-span-1">
-          {/* Add Student Card */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 mb-4">Add Single Student</h3>
-            <form onSubmit={handleAdd} className="flex gap-2">
-              <input
-                type="text"
-                value={newStudentName}
-                onChange={(e) => setNewStudentName(e.target.value)}
-                placeholder="SURNAME FIRSTNAME"
-                className="flex-1 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-              />
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-2 transition-colors shadow-sm"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+          {/* Add New Student Form */}
+          <div className="glass-card p-6 relative">
+            {isReadOnly && (
+              <div className="absolute inset-0 bg-white/50 dark:bg-zinc-950/50 z-10 flex items-center justify-center backdrop-blur-[1px] rounded-2xl">
+                <span className="bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-400 px-3 py-1 text-[10px] font-bold rounded-lg border border-amber-300 dark:border-amber-700">Archived Term (Read-Only)</span>
+              </div>
+            )}
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 mb-4 flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-blue-500" />
+              Quick Add
+            </h3>
+            <form onSubmit={handleAdd} className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newStudentName}
+                  onChange={(e) => setNewStudentName(e.target.value)}
+                  placeholder="SURNAME FIRSTNAME"
+                  disabled={isReadOnly}
+                  className="flex-1 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
+                />
+                <select 
+                  value={newStudentGender}
+                  onChange={(e) => setNewStudentGender(e.target.value)}
+                  disabled={isReadOnly}
+                  className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50"
+                >
+                  <option value="U">Gen</option>
+                  <option value="M">M</option>
+                  <option value="F">F</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={isReadOnly || !newStudentName.trim()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-2 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
             </form>
           </div>
 
           {/* Roster Import Card */}
-          <div className="glass-card p-6">
+          <div className="glass-card p-6 relative">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 mb-4 flex items-center gap-1.5">
               <Upload className="w-4 h-4 text-emerald-500" />
               Import Roster (Word)
@@ -193,7 +223,7 @@ export default function Roster({ students, onSave, onImport }) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${!isReadOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${
                 isDragging 
                   ? 'border-blue-500 bg-blue-50/10' 
                   : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
@@ -204,9 +234,10 @@ export default function Roster({ students, onSave, onImport }) {
                 id="roster-file"
                 onChange={handleFileSelect}
                 accept=".docx"
+                disabled={isReadOnly}
                 className="hidden"
               />
-              <label htmlFor="roster-file" className="cursor-pointer space-y-2 block">
+              <label htmlFor={isReadOnly ? "" : "roster-file"} className={`${!isReadOnly ? 'cursor-pointer' : 'cursor-not-allowed'} space-y-2 block`}>
                 <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
                   <Upload className="w-5 h-5" />
                 </div>
@@ -236,8 +267,8 @@ export default function Roster({ students, onSave, onImport }) {
               <div className="flex gap-2">
                 <button
                   onClick={handleClear}
-                  disabled={list.length === 0 || isSaving}
-                  className="bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg px-3 py-1.5 text-xs font-semibold border border-zinc-200 dark:border-zinc-800 transition-colors"
+                  disabled={list.length === 0 || isSaving || isReadOnly}
+                  className="bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg px-3 py-1.5 text-xs font-semibold border border-zinc-200 dark:border-zinc-800 transition-colors disabled:opacity-50"
                 >
                   Clear All
                 </button>
@@ -255,6 +286,7 @@ export default function Roster({ students, onSave, onImport }) {
                   <tr>
                     <th className="px-4 py-2.5 w-16 text-center">S/N</th>
                     <th className="px-4 py-2.5">Student Name (Surname First)</th>
+                    <th className="px-2 py-2.5 w-16 text-center">Gender</th>
                     <th className="px-4 py-2.5 w-24 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -276,40 +308,57 @@ export default function Roster({ students, onSave, onImport }) {
                           <span className="font-semibold tracking-tight">{student.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {editingSn === student.sn ? (
-                            <>
-                              <button
-                                onClick={() => saveEdit(student.sn)}
-                                className="p-1 text-emerald-500 hover:bg-emerald-500/10 rounded transition-colors"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                className="p-1 text-rose-500 hover:bg-rose-500/10 rounded transition-colors"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => startEdit(student)}
-                                className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleRemove(student.sn)}
-                                className="p-1 text-zinc-400 hover:text-rose-600 hover:bg-rose-500/10 rounded transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
+                      <td className="px-2 py-3 text-center">
+                        {editingSn === student.sn ? (
+                          <select 
+                            value={editingGender}
+                            onChange={(e) => setEditingGender(e.target.value)}
+                            className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="U">-</option>
+                            <option value="M">M</option>
+                            <option value="F">F</option>
+                          </select>
+                        ) : (
+                          <span className={`text-xs font-bold px-2 py-1 rounded ${
+                            student.gender === 'M' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            student.gender === 'F' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
+                            'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'
+                          }`}>
+                            {student.gender === 'M' ? 'M' : student.gender === 'F' ? 'F' : 'U'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 flex justify-end gap-1.5 min-w-[70px]">
+                        {editingSn === student.sn ? (
+                          <>
+                            <button onClick={() => saveEdit(student.sn)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={cancelEdit} className="p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => startEdit(student)} 
+                              disabled={isReadOnly}
+                              className="p-1 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors disabled:opacity-50"
+                              title="Edit Student Name"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleRemove(student.sn)} 
+                              disabled={isReadOnly}
+                              className="p-1 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded transition-colors disabled:opacity-50"
+                              title="Remove Student"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

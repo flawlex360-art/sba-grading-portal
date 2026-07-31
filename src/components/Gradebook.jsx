@@ -16,7 +16,7 @@ const DEFAULT_JHS_TABS = [
   { name: "Creative Arts & Design", key: "C. ARTS" }
 ];
 
-export default function Gradebook({ students, gradesStore, onSave, teacherSubjects, apiKey }) {
+export default function Gradebook({ students, gradesStore, onSave, teacherSubjects, apiKey, isReadOnly }) {
   const SUBJECT_TABS = teacherSubjects && teacherSubjects.length > 0 ? teacherSubjects : DEFAULT_JHS_TABS;
   const [activeTab, setActiveTab] = useState(SUBJECT_TABS[0]);
   const [localGrades, setLocalGrades] = useState({});
@@ -240,10 +240,10 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
         <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500">
-              Gradebook — {activeTab.name}
+              Gradebook — {activeTab.name} {isReadOnly && <span className="text-amber-500">(Read-Only: Archived Term)</span>}
             </h3>
             <p className="text-[10px] text-zinc-400">
-              Calculations update in real time. Hover / click fields to input scores.
+              {isReadOnly ? "This term is archived and cannot be edited." : "Calculations update in real time. Hover / click fields to input scores."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -273,8 +273,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                 <button
                   type="button"
                   onClick={() => cameraInputRef.current?.click()}
-                  disabled={students.length === 0}
-                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  disabled={students.length === 0 || isReadOnly}
+                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
                   title="Snap photo of grading sheet"
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -283,8 +283,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={students.length === 0}
-                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  disabled={students.length === 0 || isReadOnly}
+                  className="bg-zinc-105 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
                   title="Upload grading sheet image"
                 >
                   <UploadCloud className="w-3.5 h-3.5" />
@@ -295,7 +295,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
 
             <button
               onClick={handleSave}
-              disabled={isSaving || students.length === 0 || isTranscribing || saveSuccess}
+              disabled={isSaving || students.length === 0 || isTranscribing || saveSuccess || isReadOnly}
               className={`text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm animate-none ${
                 saveSuccess
                   ? 'bg-emerald-500 hover:bg-emerald-600'
@@ -371,7 +371,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                         value={row.gw1}
                         onChange={(e) => handleInputChange(row.sn, 'gw1', e.target.value)}
                         onBlur={handleBlur}
-                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono"
+                        disabled={isReadOnly}
+                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono disabled:opacity-50"
                       />
                     </td>
                     <td className="px-1 py-1 border-r border-zinc-100 dark:border-zinc-800/30">
@@ -380,7 +381,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                         value={row.test}
                         onChange={(e) => handleInputChange(row.sn, 'test', e.target.value)}
                         onBlur={handleBlur}
-                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono"
+                        disabled={isReadOnly}
+                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono disabled:opacity-50"
                       />
                     </td>
                     <td className="px-1 py-1 border-r border-zinc-100 dark:border-zinc-800/30">
@@ -389,7 +391,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                         value={row.gw2}
                         onChange={(e) => handleInputChange(row.sn, 'gw2', e.target.value)}
                         onBlur={handleBlur}
-                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono"
+                        disabled={isReadOnly}
+                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono disabled:opacity-50"
                       />
                     </td>
                     <td className="px-1 py-1">
@@ -398,7 +401,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                         value={row.proj}
                         onChange={(e) => handleInputChange(row.sn, 'proj', e.target.value)}
                         onBlur={handleBlur}
-                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono"
+                        disabled={isReadOnly}
+                        className="w-12 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono disabled:opacity-50"
                       />
                     </td>
                     
@@ -415,7 +419,8 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
                         value={row.exams}
                         onChange={(e) => handleInputChange(row.sn, 'exams', e.target.value)}
                         onBlur={handleBlur}
-                        className="w-14 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono font-semibold"
+                        disabled={isReadOnly}
+                        className="w-14 text-center bg-transparent border-0 focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 rounded p-1 font-mono font-bold text-blue-600 dark:text-blue-400 disabled:opacity-50"
                       />
                     </td>
                     <td className="px-3 py-2 font-mono text-zinc-600 dark:text-zinc-400">

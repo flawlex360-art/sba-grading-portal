@@ -34,3 +34,11 @@ backup.log
 .system_generated/
 /scratch/
 /brain/
+
+# Local data (student PII)
+data/db.json
+data/*.json
+
+# Test/Debug scripts
+list_models.*
+test_chat.py

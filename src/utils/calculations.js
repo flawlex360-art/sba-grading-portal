@@ -68,6 +68,7 @@ export function computeClassResults(students, gradesStore, subjects, subjectMap)
     acc[s.sn] = {
       sn: s.sn,
       name: s.name,
+      gender: s.gender || "U",
       attendance: s.attendance || 0,
       conduct: s.conduct || "",
       interest: s.interest || "",

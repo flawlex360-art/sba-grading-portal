@@ -56,7 +56,8 @@
 
   /* Prevent first blank page by positioning print container absolutely to top-left of page 1 */
   .print-all-container {
-    position: absolute !important;
+    position: relative !important;
+    display: block !important;
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;

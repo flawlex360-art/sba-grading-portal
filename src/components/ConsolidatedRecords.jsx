@@ -14,7 +14,7 @@ const DEFAULT_JHS_KEYS = [
   { name: "Creative Arts & Design", key: "C. ARTS" }
 ];
 
-export default function ConsolidatedRecords({ students, gradesStore, teacherSubjects }) {
+export default function ConsolidatedRecords({ students, gradesStore, teacherSubjects, viewingTerm }) {
   const SUBJECT_KEYS = teacherSubjects && teacherSubjects.length > 0 ? teacherSubjects : DEFAULT_JHS_KEYS;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('ALL');

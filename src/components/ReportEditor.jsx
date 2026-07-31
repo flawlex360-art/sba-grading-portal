@@ -2,7 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Save, Printer, User, Search, ChevronRight, FileCheck, Check } from 'lucide-react';
 import ReportCard from './ReportCard';
 
-export default function ReportEditor({ students, metadata, computedResults, dropLists, onSave, onPrintAll, onPrintSingle, teacherSubjects }) {
+export default function ReportEditor({ 
+  students, 
+  metadata, 
+  computedResults, 
+  dropLists, 
+  onSave, 
+  onPrintAll, 
+  onPrintSingle, 
+  teacherSubjects, 
+  viewingTerm, 
+  isReadOnly 
+}) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -197,10 +208,11 @@ export default function ReportEditor({ students, metadata, computedResults, drop
               </div>
 
               <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-semibold">
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    ATTENDANCE (DAYS PRESENT — Max: {metadata.timesOpen || 100})
-                  </label>
+                <fieldset disabled={isReadOnly} className="space-y-4 text-xs font-semibold">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
+                      ATTENDANCE (DAYS PRESENT — Max: {metadata.timesOpen || 100})
+                    </label>
                   <input
                     type="number"
                     value={attendance}
@@ -341,6 +353,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
                     Print
                   </button>
                 </div>
+                </fieldset>
 
                 <div className="flex justify-between items-center pt-3 border-t border-zinc-100 dark:border-zinc-800 mt-2 select-none">
                   <button
@@ -376,6 +389,7 @@ export default function ReportEditor({ students, metadata, computedResults, drop
               metadata={metadata}
               calculatedScores={computedResults}
               teacherSubjects={teacherSubjects}
+              viewingTerm={viewingTerm}
             />
           ) : (
             <div className="glass-card p-12 text-center text-zinc-400 no-print">

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Component } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Bot, User, Loader2, BrainCircuit, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, BrainCircuit, ChevronDown, ChevronRight, X, Printer } from 'lucide-react';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -61,6 +61,50 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
       e.preventDefault();
       handleSend(e);
     }
+  };
+
+  const handlePrintChat = () => {
+    const printContent = document.getElementById('chat-messages-area');
+    if (!printContent) return;
+    
+    const WindowPrt = window.open('', '', 'left=0,top=0,width=800,height=900,toolbar=0,scrollbars=0,status=0');
+    // Strip out the SVG icons and input box, just print the text. We will clone it and clean it.
+    const clone = printContent.cloneNode(true);
+    // Remove thought blocks from print to keep it clean
+    clone.querySelectorAll('.bg-zinc-100\\/80, .dark\\:bg-zinc-900').forEach(el => el.remove());
+    
+    WindowPrt.document.write(`
+      <html>
+        <head>
+          <title>Gemini SBA Assistant Log</title>
+          <style>
+            body { font-family: system-ui, sans-serif; line-height: 1.6; color: #18181b; padding: 2rem; max-width: 800px; margin: 0 auto; }
+            h1 { font-size: 24px; margin-bottom: 24px; border-bottom: 2px solid #e4e4e7; padding-bottom: 8px; }
+            .flex { display: flex; margin-bottom: 1rem; }
+            .flex-row-reverse { flex-direction: row-reverse; }
+            .gap-3 { gap: 0.75rem; }
+            .bg-blue-600 { background-color: #f4f4f5; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.5rem; }
+            .bg-white { padding: 0.5rem 1rem; border-radius: 0.5rem; }
+            h3 { font-size: 18px; color: #111; margin-top: 16px; margin-bottom: 8px; }
+            p { margin-bottom: 12px; font-size: 14px; }
+            ul { margin-bottom: 12px; padding-left: 24px; }
+            li { margin-bottom: 4px; font-size: 14px; }
+            strong { font-weight: 600; color: #000; }
+            .text-xs { font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <h1>Gemini SBA Assistant - Chat Log</h1>
+          ${clone.innerHTML}
+        </body>
+      </html>
+    `);
+    WindowPrt.document.close();
+    WindowPrt.focus();
+    setTimeout(() => {
+      WindowPrt.print();
+      WindowPrt.close();
+    }, 250);
   };
 
   const handleSend = async (e, overrideText = null) => {
@@ -157,13 +201,18 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
           <Bot className="w-5 h-5 text-emerald-ink" />
           <span className="font-bold text-sm uppercase tracking-wider">Gemini SBA Assistant</span>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded">
-          <X className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handlePrintChat} title="Print Chat Log" className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-500 hover:text-emerald-ink transition-colors">
+            <Printer className="w-4 h-4" />
+          </button>
+          <button onClick={onClose} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded">
+            <X className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+          </button>
+        </div>
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-zinc-50/50 dark:bg-zinc-900/10">
+      <div id="chat-messages-area" className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-zinc-50/50 dark:bg-zinc-900/10">
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${

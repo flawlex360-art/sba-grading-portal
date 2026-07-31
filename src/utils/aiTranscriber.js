@@ -1,5 +1,5 @@
 export async function transcribeSheetImage(base64Image, mimeType, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
   
   const prompt = `You are an expert grading OCR assistant. Extract student grades from this handwritten or printed SBA grading sheet.
   Return a structured JSON array of student rows. 
@@ -40,7 +40,28 @@ export async function transcribeSheetImage(base64Image, mimeType, apiKey) {
         }
       ],
       generationConfig: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            records: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  sn: { type: "INTEGER" },
+                  name: { type: "STRING" },
+                  gw1: { type: "NUMBER" },
+                  test: { type: "NUMBER" },
+                  gw2: { type: "NUMBER" },
+                  proj: { type: "NUMBER" },
+                  exams: { type: "NUMBER" }
+                },
+                required: ["name"]
+              }
+            }
+          }
+        }
       }
     })
   });

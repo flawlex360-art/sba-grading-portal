@@ -26,7 +26,7 @@ const DEFAULT_JHS_SUBJECTS = [
   { name: "Creative Arts & Design", key: "Creative Arts & Design" }
 ];
 
-export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser }) {
+export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser, viewingTerm }) {
   if (!student) return null;
 
   const subjects = teacherSubjects && teacherSubjects.length > 0 
@@ -47,6 +47,9 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
   // Check if current user is an anglican.com account
   const isAnglican = currentUser?.email?.toLowerCase().endsWith('@anglican.com') || false;
+  
+  const termDisplayMap = { "Term 1": "ONE", "Term 2": "TWO", "Term 3": "THREE" };
+  const displayTerm = termDisplayMap[viewingTerm] || viewingTerm || metadata.term || "";
   
   return (
     <div className="print-page bg-white text-black p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
@@ -71,7 +74,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           {metadata.schoolName}
         </h3>
         <h4 className="text-md font-bold text-black uppercase tracking-widest mt-2 border-t border-zinc-200 pt-2">
-          Learner's Report Card
+          Learner's Report Card - {displayTerm}
         </h4>
       </div>
 
@@ -101,7 +104,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
         </div>
         <div className="flex gap-2 items-end">
           <span className="text-black uppercase w-36 flex-shrink-0">Term:</span>
-          <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{metadata.term}</span>
+          <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5">{displayTerm}</span>
         </div>
 
         <div className="flex gap-2 items-end">

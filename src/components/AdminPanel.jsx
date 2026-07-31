@@ -3,7 +3,7 @@ import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } fr
 import { collection, doc, setDoc, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
-  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff 
+  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -76,21 +76,32 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
 
 
   // Default initial school template for newly registered teachers
-  const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr) => ({
-    metadata: {
-      schoolName: sName,
-      district: dist,
-      classLevel: cName,
-      term: trm,
-      academicYear: acadYr,
-      teacherName: tName,
-      date: new Date().toISOString().split('T')[0],
-      nextTermBegins: "",
-      timesOpen: 57
-    },
-    students: [],
-    grades: {},
-    dropLists: {
+  const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr) => {
+    const termMap = { "ONE": "Term 1", "TWO": "Term 2", "THREE": "Term 3" };
+    const mappedActiveTerm = termMap[trm] || "Term 1";
+    
+    return {
+      metadata: {
+        schoolName: sName,
+        district: dist,
+        classLevel: cName,
+        term: trm,
+        academicYear: acadYr,
+        teacherName: tName,
+        date: new Date().toISOString().split('T')[0],
+        nextTermBegins: "",
+        timesOpen: 57
+      },
+      students: [],
+      grades: {},
+      activeTerm: mappedActiveTerm,
+      terms: {
+        [mappedActiveTerm]: {
+          grades: {},
+          students: []
+        }
+      },
+      dropLists: {
       conduct: [
         "Respectful and cooperative",
         "Disciplined and focused",
@@ -114,7 +125,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       ],
       classes: ["BS. 7", "BS. 8", "BS. 9"]
     }
-  });
+  };
+};
+
 
   const fetchTeachersList = async () => {
     setFetching(true);
@@ -128,7 +141,22 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
           list.push({ uid: docSnap.id, ...data });
         }
       });
-      setTeachers(list);
+      
+      // Also fetch the active terms from schools collection
+      const schoolsSnapshot = await getDocs(collection(db, "schools"));
+      const schoolTerms = {};
+      schoolsSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        schoolTerms[docSnap.id] = data.activeTerm || "Term 1";
+      });
+
+      // Inject activeTerm into list
+      const enrichedList = list.map(t => ({
+        ...t,
+        activeTerm: schoolTerms[t.uid] || "Term 1"
+      }));
+
+      setTeachers(enrichedList);
     } catch (e) {
       console.error("Failed fetching teachers:", e);
     } finally {
@@ -176,6 +204,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
     }
   };
 
+
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editSchoolName || !editDistrict || !editAcademicYear || !editPassword) {
@@ -221,8 +250,37 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       let updatedSchoolData = {};
       if (schoolDocSnap.exists()) {
         const currentData = schoolDocSnap.data();
+        const oldTerm = currentData.metadata?.term || "ONE";
+        const newTerm = editTerm;
+        
+        let newActiveTerm = currentData.activeTerm || "Term 1";
+        let newTerms = currentData.terms || { [newActiveTerm]: { grades: currentData.grades || {}, students: currentData.students || [] } };
+        
+        // Handle term change (promotion/switching)
+        if (oldTerm !== newTerm) {
+           const mapTerm = { "ONE": "Term 1", "TWO": "Term 2", "THREE": "Term 3" };
+           newActiveTerm = mapTerm[newTerm] || "Term 1";
+           
+           if (!newTerms[newActiveTerm]) {
+              // Create the new term, copying students from the previous active term
+              let currentRoster = newTerms[currentData.activeTerm]?.students || currentData.students || [];
+              const cleanRoster = currentRoster.map(s => {
+                  const newStudent = { ...s };
+                  delete newStudent.headTeacherRemark;
+                  delete newStudent.classTeacherRemark;
+                  return newStudent;
+              });
+              newTerms[newActiveTerm] = {
+                  grades: {},
+                  students: cleanRoster
+              };
+           }
+        }
+
         updatedSchoolData = {
           ...currentData,
+          activeTerm: newActiveTerm,
+          terms: newTerms,
           metadata: {
             ...(currentData.metadata || {}),
             schoolName: editSchoolName.trim(),
@@ -684,8 +742,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                       <th className="px-4 py-3 text-left">Email Address</th>
                       <th className="px-4 py-3 w-20">Class</th>
                       <th className="px-4 py-3 w-20">Level</th>
+                      <th className="px-4 py-3 w-20">Term</th>
                       <th className="px-4 py-3 text-left">Subjects</th>
-                      <th className="px-4 py-3 w-20">Actions</th>
+                      <th className="px-4 py-3 w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-medium">
@@ -700,6 +759,11 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                         </td>
                         <td className="px-4 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
                           {teacher.level || 'JHS'}
+                        </td>
+                        <td className="px-4 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
+                          <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded">
+                            {teacher.activeTerm || 'Term 1'}
+                          </span>
                         </td>
                         <td className="px-4 py-2.5 text-left text-zinc-500 dark:text-zinc-400 text-[10px] max-w-[150px] truncate" title={teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'All standard JHS'}>
                           {teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'Default JHS'}

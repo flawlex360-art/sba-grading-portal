@@ -231,7 +231,7 @@ async def chat_endpoint(request: ChatRequest):
             
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content_stream(
-                model='gemini-1.5-flash',
+                model='gemini-3.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
@@ -253,7 +253,13 @@ async def chat_endpoint(request: ChatRequest):
                 # Check for thought tags
                 while True:
                     if not in_thought:
+                        # Look for either <thought> or <thought\n or <thought 
                         start_idx = buffer.find("<thought>")
+                        if start_idx == -1:
+                            start_idx = buffer.find("<thought\n")
+                        if start_idx == -1:
+                            start_idx = buffer.find("<thought ")
+                            
                         if start_idx != -1:
                             # Send any text before <thought> as final response
                             pre_text = buffer[:start_idx]
@@ -261,26 +267,40 @@ async def chat_endpoint(request: ChatRequest):
                                 yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': pre_text})}\n\n"
                             
                             in_thought = True
-                            buffer = buffer[start_idx + len("<thought>"):]
+                            # advance past the opening tag
+                            close_bracket = buffer.find(">", start_idx)
+                            if close_bracket != -1 and close_bracket < start_idx + 15:
+                                buffer = buffer[close_bracket + 1:]
+                            else:
+                                # if no > found close by, just skip the 8 chars "<thought"
+                                buffer = buffer[start_idx + 8:]
                         else:
                             # Yield what we can of final response, leaving a small buffer at end to avoid slicing tags
-                            if len(buffer) > 15:
-                                send_text = buffer[:-15]
+                            if len(buffer) > 25:
+                                send_text = buffer[:-25]
                                 yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': send_text})}\n\n"
-                                buffer = buffer[-15:]
+                                buffer = buffer[-25:]
                             break
                     else:
                         end_idx = buffer.find("</thought>")
+                        if end_idx == -1:
+                            end_idx = buffer.find("</thought\n")
+                            
                         if end_idx != -1:
                             thought_text = buffer[:end_idx]
                             yield f"data: {json.dumps({'type': 'THOUGHT', 'content': thought_text})}\n\n"
                             in_thought = False
-                            buffer = buffer[end_idx + len("</thought>"):]
+                            
+                            close_bracket = buffer.find(">", end_idx)
+                            if close_bracket != -1 and close_bracket < end_idx + 15:
+                                buffer = buffer[close_bracket + 1:]
+                            else:
+                                buffer = buffer[end_idx + 9:]
                         else:
-                            if len(buffer) > 15:
-                                send_thought = buffer[:-15]
+                            if len(buffer) > 25:
+                                send_thought = buffer[:-25]
                                 yield f"data: {json.dumps({'type': 'THOUGHT', 'content': send_thought})}\n\n"
-                                buffer = buffer[-15:]
+                                buffer = buffer[-25:]
                             break
                 # Yield to let event loop run
                 await asyncio.sleep(0.01)

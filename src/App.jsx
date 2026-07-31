@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Users, FileSpreadsheet, Award, FileCode, Settings, Sun, Moon, Bot, Key, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, FileSpreadsheet, Award, FileCode, Settings, Sun, Moon, Bot, Key, LogOut, Shield, ChevronDown, TrendingUp } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Roster from './components/Roster';
 import Gradebook from './components/Gradebook';
@@ -11,6 +11,7 @@ import ChatPanel from './components/ChatPanel';
 import ReportCard from './components/ReportCard';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -23,7 +24,8 @@ const MAIN_TABS = [
   { id: 'gradebook', name: 'Gradebook', icon: FileSpreadsheet },
   { id: 'positions', name: 'Class Overview', icon: Award },
   { id: 'open', name: 'Records (OPEN)', icon: FileCode },
-  { id: 'reports', name: 'Report Cards', icon: FileCode }
+  { id: 'reports', name: 'Report Cards', icon: FileCode },
+  { id: 'trends', name: 'Progress & Trends', icon: TrendingUp }
 ];
 
 const DEFAULT_JHS_SUBJECT_MAP = {
@@ -63,6 +65,11 @@ export default function App() {
   // Auth States
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  
+  // Multi-term states
+  const [activeTerm, setActiveTerm] = useState('Term 1');
+  const [viewingTerm, setViewingTerm] = useState('Term 1');
+  const [termData, setTermData] = useState({});
 
   // Database States
   const [metadata, setMetadata] = useState(null);
@@ -105,7 +112,6 @@ export default function App() {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  // Printing states (Root level to bypass parent spacing layout issues)
   const [printAll, setPrintAll] = useState(false);
   const [printSingleStudent, setPrintSingleStudent] = useState(null);
 
@@ -122,7 +128,118 @@ export default function App() {
     setTimeout(() => {
       window.print();
       setPrintSingleStudent(null);
-    }, 250);
+    }, 500);
+  };
+
+  const handlePrintAnalytics = (aiSummaryText) => {
+    const subjectCount = teacherSubjects?.length || 9;
+    const totalStudents = computedResults.length;
+    const classAvg = totalStudents > 0 
+      ? (computedResults.reduce((sum, s) => sum + (s.overallTotal || 0), 0) / (totalStudents * subjectCount)).toFixed(1)
+      : '0';
+    const passCount = computedResults.filter(s => (s.overallTotal / subjectCount) >= 40).length;
+    const passRate = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : '0';
+
+    const sorted = [...computedResults].sort((a, b) => b.overallTotal - a.overallTotal);
+    const top5 = sorted.slice(0, 5);
+    const bottom5 = sorted.slice(-5);
+
+    const topRows = top5.map((s, i) => `<tr><td style="padding:8px;border:1px solid #ccc;font-weight:bold">${i+1}</td><td style="padding:8px;border:1px solid #ccc">${s.name}</td><td style="padding:8px;border:1px solid #ccc;text-align:right">${(s.overallTotal / subjectCount).toFixed(1)}%</td></tr>`).join('');
+    const bottomRows = bottom5.map((s, i) => `<tr><td style="padding:8px;border:1px solid #ccc;font-weight:bold">${totalStudents - 4 + i}</td><td style="padding:8px;border:1px solid #ccc">${s.name}</td><td style="padding:8px;border:1px solid #ccc;text-align:right">${(s.overallTotal / subjectCount).toFixed(1)}%</td></tr>`).join('');
+
+    // Convert AI summary markdown to simple HTML
+    let summaryHtml = '<p style="color:#888;font-style:italic">AI Summary not generated. Please generate the AI summary on the dashboard before exporting.</p>';
+    if (aiSummaryText) {
+      summaryHtml = aiSummaryText
+        .replace(/^### (.*$)/gm, '<h3 style="margin-top:20px;margin-bottom:8px;font-size:16px;color:#111">$1</h3>')
+        .replace(/^## (.*$)/gm, '<h2 style="margin-top:24px;margin-bottom:12px;font-size:20px;color:#111">$1</h2>')
+        .replace(/^# (.*$)/gm, '<h1 style="margin-top:20px;margin-bottom:16px;font-size:24px;border-bottom:2px solid #e4e4e7;padding-bottom:8px;color:#111">$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^- (.*$)/gm, '<li style="margin-left:16px;margin-bottom:4px">$1</li>')
+        .replace(/\n\n/g, '</p><p style="margin-bottom:12px;font-size:14px;line-height:1.7">')
+        .replace(/\n/g, '<br/>');
+      summaryHtml = '<p style="margin-bottom:12px;font-size:14px;line-height:1.7">' + summaryHtml + '</p>';
+    }
+
+    const html = `<html>
+      <head>
+        <title>Analytics Report - ${metadata?.classLevel || 'Class'}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: system-ui, -apple-system, sans-serif; color: #18181b; line-height: 1.6; }
+          .page { padding: 40px; page-break-after: always; }
+          .page:last-child { page-break-after: auto; }
+          h1 { font-size: 24px; margin-bottom: 8px; }
+          h2 { font-size: 20px; margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          th { padding: 8px; border: 1px solid #ccc; background: #f4f4f5; text-align: left; font-size: 12px; }
+          td { padding: 8px; border: 1px solid #ccc; }
+          .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
+          .kpi-card { border: 1px solid #d4d4d8; border-radius: 8px; padding: 16px; text-align: center; }
+          .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #71717a; margin-bottom: 4px; }
+          .kpi-value { font-size: 28px; font-weight: 800; }
+          .sig-row { display: flex; justify-content: space-between; margin-top: 80px; padding: 0 40px; }
+          .sig-block { text-align: center; width: 240px; }
+          .sig-line { border-bottom: 1px solid #000; height: 48px; margin-bottom: 4px; }
+          .sig-title { font-weight: bold; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }
+          .sig-sub { font-size: 11px; color: #71717a; }
+          @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:16px;margin-bottom:24px">
+            <h1 style="font-size:28px;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px">${metadata?.schoolName || 'School Name'}</h1>
+            <div style="font-size:16px;font-weight:600;color:#555;text-transform:uppercase">${metadata?.district || ''}</div>
+            <div style="margin-top:12px;display:flex;justify-content:center;gap:32px;font-size:13px;font-weight:600">
+              <span>CLASS: ${metadata?.classLevel || 'N/A'}</span>
+              <span>TERM: ${metadata?.term || 'N/A'}</span>
+              <span>ACADEMIC YEAR: ${metadata?.academicYear || 'N/A'}</span>
+            </div>
+          </div>
+
+          <div style="text-align:center;background:#f4f4f5;padding:20px;border-radius:8px;border:1px solid #d4d4d8;margin-bottom:28px">
+            <h2 style="font-size:22px;font-weight:700;border:none;margin-bottom:12px">Class Performance Analytics Report</h2>
+            <div class="kpi-grid">
+              <div class="kpi-card"><div class="kpi-label">Class Average</div><div class="kpi-value" style="color:#059669">${classAvg}%</div></div>
+              <div class="kpi-card"><div class="kpi-label">Pass Rate</div><div class="kpi-value" style="color:#2563eb">${passRate}%</div></div>
+              <div class="kpi-card"><div class="kpi-label">Enrolment</div><div class="kpi-value">${totalStudents}</div></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px">${summaryHtml}</div>
+        </div>
+
+        <div class="page">
+          <h2>Top 5 Students</h2>
+          <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${topRows}</tbody></table>
+
+          <h2>Bottom 5 Students</h2>
+          <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${bottomRows}</tbody></table>
+
+          <div class="sig-row">
+            <div class="sig-block">
+              <div class="sig-line"></div>
+              <div class="sig-title">Class Teacher</div>
+              <div class="sig-sub">${metadata?.teacherName || ''}</div>
+              <div class="sig-sub">Signature & Date</div>
+            </div>
+            <div class="sig-block">
+              <div class="sig-line"></div>
+              <div class="sig-title">Headmaster</div>
+              <div class="sig-sub">${metadata?.headTeacherName || ''}</div>
+              <div class="sig-sub">Signature, Date & Stamp</div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>`;
+
+    const win = window.open('', '', 'left=0,top=0,width=800,height=900,toolbar=0,scrollbars=1,status=0');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 300);
   };
 
   // Hide document title during printing so it doesn't show in the browser print header
@@ -191,10 +308,34 @@ export default function App() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
+        
+        let loadedTerms = data.terms;
+        let loadedActiveTerm = data.activeTerm;
+
+        // Auto-migrate legacy structure
+        if (!loadedTerms) {
+          loadedTerms = {
+            "Term 1": {
+              grades: data.grades || {},
+              students: data.students || []
+            }
+          };
+          loadedActiveTerm = "Term 1";
+          // Fire-and-forget migration save
+          setDoc(doc(db, "schools", uid), { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
+        }
+
+        const currentViewTerm = loadedActiveTerm || "Term 1";
+        setTermData(loadedTerms);
+        setActiveTerm(currentViewTerm);
+        setViewingTerm(currentViewTerm);
+
+        const activeTermData = loadedTerms[currentViewTerm] || { grades: {}, students: [] };
+        
         setMetadata(data.metadata);
-        setStudents(data.students || []);
-        studentsRef.current = data.students || [];
-        setGrades(data.grades || {});
+        setStudents(activeTermData.students || []);
+        studentsRef.current = activeTermData.students || [];
+        setGrades(activeTermData.grades || {});
         let loadedDropLists = data.dropLists;
         // Migration: If the user has old compound activities, migrate them automatically
         if (loadedDropLists?.interest?.includes("Reading and research")) {
@@ -223,6 +364,13 @@ export default function App() {
           },
           students: [],
           grades: {},
+          terms: {
+            "Term 1": {
+              grades: {},
+              students: []
+            }
+          },
+          activeTerm: "Term 1",
           dropLists: {
             conduct: [
               "Respectful and cooperative",
@@ -287,6 +435,7 @@ export default function App() {
         studentsRef.current = template.students;
         setGrades(template.grades);
         setDropLists(template.dropLists);
+        // End of fetchTeacherData
       }
     } catch (e) {
       console.error("Error loading school document:", e);
@@ -294,6 +443,16 @@ export default function App() {
       setIsLoading(false);
     }
   };
+
+  // Sync data when viewingTerm changes
+  useEffect(() => {
+    if (Object.keys(termData).length > 0) {
+      const activeTermData = termData[viewingTerm] || { grades: {}, students: [] };
+      setGrades(activeTermData.grades || {});
+      setStudents(activeTermData.students || []);
+      studentsRef.current = activeTermData.students || [];
+    }
+  }, [viewingTerm, termData]);
 
   const handleSaveMetadata = async (newMeta) => {
     setMetadata(newMeta);
@@ -309,9 +468,20 @@ export default function App() {
   const handleSaveRoster = async (newRoster) => {
     setStudents(newRoster);
     studentsRef.current = newRoster;
+
+    setTermData(prev => ({
+      ...prev,
+      [activeTerm]: {
+        ...(prev[activeTerm] || {}),
+        students: newRoster
+      }
+    }));
+
     if (currentUser) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { students: newRoster }, { merge: true });
+        await setDoc(doc(db, "schools", currentUser.uid), { 
+          [`terms.${activeTerm}.students`]: newRoster 
+        }, { merge: true });
       } catch (e) {
         console.error("Roster sync error:", e);
       }
@@ -321,9 +491,20 @@ export default function App() {
   const handleSaveGrades = async (subjectKey, subjectGrades) => {
     const updatedGrades = { ...grades, [subjectKey]: subjectGrades };
     setGrades(updatedGrades);
+
+    setTermData(prev => ({
+      ...prev,
+      [activeTerm]: {
+        ...(prev[activeTerm] || {}),
+        grades: updatedGrades
+      }
+    }));
+
     if (currentUser) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { grades: updatedGrades }, { merge: true });
+        await setDoc(doc(db, "schools", currentUser.uid), { 
+          [`terms.${activeTerm}.grades`]: updatedGrades 
+        }, { merge: true });
       } catch (e) {
         console.error("Grades sync error:", e);
       }
@@ -338,10 +519,20 @@ export default function App() {
     // 2. Update React UI state
     setStudents(latestRoster);
     
+    setTermData(prev => ({
+      ...prev,
+      [activeTerm]: {
+        ...(prev[activeTerm] || {}),
+        students: latestRoster
+      }
+    }));
+
     // 3. Send the authoritative latest roster to Firebase
     if (currentUser) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { students: latestRoster }, { merge: true });
+        await setDoc(doc(db, "schools", currentUser.uid), { 
+          [`terms.${activeTerm}.students`]: latestRoster 
+        }, { merge: true });
       } catch (e) {
         console.error("Report comments sync error:", e);
       }
@@ -436,6 +627,7 @@ export default function App() {
   const computedResults = computeClassResults(students, grades, subjectsList, subjectMap);
 
   const isPrinting = printAll || !!printSingleStudent;
+  const isReadOnly = viewingTerm !== activeTerm;
 
   return (
     <>
@@ -467,9 +659,33 @@ export default function App() {
             </span>
           </div>
 
-
-
-          {/* Theme Switcher */}
+          {/* Term Switcher */}
+          <div className="relative group">
+            <select 
+              value={viewingTerm}
+              onChange={(e) => setViewingTerm(e.target.value)}
+              className={`appearance-none outline-none text-xs font-black tracking-wider pl-4 pr-10 py-2 rounded-xl transition-all cursor-pointer shadow-sm ${
+                isReadOnly 
+                  ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
+                  : 'bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg focus:ring-2 focus:ring-emerald-500/20'
+              }`}
+            >
+              {Object.keys(termData).sort().map(term => (
+                <option key={term} value={term} className="font-semibold">{term}</option>
+              ))}
+            </select>
+            <div className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-300 group-hover:translate-y-[-40%] ${
+              isReadOnly ? 'text-amber-600 dark:text-amber-500' : 'text-zinc-400 dark:text-zinc-500'
+            }`}>
+              <ChevronDown className="w-4 h-4" />
+            </div>
+            {isReadOnly && (
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+              </span>
+            )}
+          </div>          {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -528,6 +744,8 @@ export default function App() {
             computedResults={computedResults}
             onSave={handleSaveMetadata}
             teacherSubjects={teacherSubjects}
+            isReadOnly={isReadOnly}
+            viewingTerm={viewingTerm}
           />
         )}
         {activeTab === 'roster' && (
@@ -538,6 +756,7 @@ export default function App() {
               setStudents(newStudents);
               studentsRef.current = newStudents;
             }}
+            isReadOnly={isReadOnly}
           />
         )}
         {activeTab === 'gradebook' && (
@@ -547,11 +766,22 @@ export default function App() {
             onSave={handleSaveGrades}
             teacherSubjects={teacherSubjects}
             apiKey={apiKey}
+            isReadOnly={isReadOnly}
           />
         )}
         {activeTab === 'positions' && (
           <ConsolidatedView
             computedResults={computedResults}
+            teacherSubjects={teacherSubjects}
+            onPrintAnalytics={handlePrintAnalytics}
+            metadata={metadata}
+          />
+        )}
+        {activeTab === 'trends' && (
+          <TrendAnalysis
+            termData={termData}
+            students={students}
+            metadata={metadata}
             teacherSubjects={teacherSubjects}
           />
         )}
@@ -560,6 +790,7 @@ export default function App() {
             students={students}
             gradesStore={grades}
             teacherSubjects={teacherSubjects}
+            viewingTerm={viewingTerm}
           />
         )}
         {activeTab === 'reports' && (
@@ -572,6 +803,8 @@ export default function App() {
             onPrintAll={handlePrintAll}
             onPrintSingle={handlePrintSingle}
             teacherSubjects={teacherSubjects}
+            viewingTerm={viewingTerm}
+            isReadOnly={isReadOnly}
           />
         )}
         {activeTab === 'droplists' && (
