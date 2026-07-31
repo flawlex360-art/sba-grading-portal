@@ -465,23 +465,47 @@ export default function App() {
     }
   };
 
-  const handleSaveRoster = async (newRoster) => {
+  const handleSaveRoster = async (newRoster, snMap = null) => {
     setStudents(newRoster);
     studentsRef.current = newRoster;
+
+    let updatedGrades = { ...grades };
+    let gradesChanged = false;
+
+    if (snMap) {
+      const newGrades = {};
+      Object.keys(updatedGrades).forEach(subject => {
+        newGrades[subject] = {};
+        Object.keys(updatedGrades[subject]).forEach(oldSn => {
+          const newSn = snMap[oldSn];
+          if (newSn) {
+            newGrades[subject][newSn] = updatedGrades[subject][oldSn];
+          }
+        });
+      });
+      updatedGrades = newGrades;
+      gradesChanged = true;
+      setGrades(updatedGrades);
+    }
 
     setTermData(prev => ({
       ...prev,
       [activeTerm]: {
         ...(prev[activeTerm] || {}),
-        students: newRoster
+        students: newRoster,
+        ...(gradesChanged ? { grades: updatedGrades } : {})
       }
     }));
 
     if (currentUser) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { 
-          [`terms.${activeTerm}.students`]: newRoster 
-        }, { merge: true });
+        const payload = {
+          [`terms.${activeTerm}.students`]: newRoster
+        };
+        if (gradesChanged) {
+          payload[`terms.${activeTerm}.grades`] = updatedGrades;
+        }
+        await setDoc(doc(db, "schools", currentUser.uid), payload, { merge: true });
       } catch (e) {
         console.error("Roster sync error:", e);
       }
@@ -752,9 +776,8 @@ export default function App() {
           <Roster
             students={students}
             onSave={handleSaveRoster}
-            onImport={(newStudents) => {
-              setStudents(newStudents);
-              studentsRef.current = newStudents;
+            onImport={(newStudents, snMap) => {
+              handleSaveRoster(newStudents, snMap);
             }}
             isReadOnly={isReadOnly}
           />

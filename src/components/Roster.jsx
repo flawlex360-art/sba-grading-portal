@@ -19,12 +19,24 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
     setList(students);
   }, [students]);
 
+  const sortAndReindex = (rosterList) => {
+    const sorted = [...rosterList].sort((a, b) => a.name.localeCompare(b.name));
+    const snMap = {};
+    const reindexed = sorted.map((student, index) => {
+      const newSn = index + 1;
+      if (student.sn && student.sn < 1000000) {
+        snMap[student.sn] = newSn;
+      }
+      return { ...student, sn: newSn };
+    });
+    return { reindexed, snMap };
+  };
+
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!newStudentName.trim()) return;
-    const newSn = list.length > 0 ? Math.max(...list.map(s => s.sn)) + 1 : 1;
-    const updatedList = [...list, {
-      sn: newSn,
+    const rawList = [...list, {
+      sn: 9999999, // Temporary dummy ID for new students
       name: newStudentName.trim().toUpperCase(),
       gender: newStudentGender,
       attendance: 0,
@@ -33,19 +45,22 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
       remarks: '',
       promotedTo: ''
     }];
-    setList(updatedList);
+    
+    const { reindexed, snMap } = sortAndReindex(rawList);
+    setList(reindexed);
     setNewStudentName('');
     setNewStudentGender('U');
     setIsSaving(true);
-    await onSave(updatedList);
+    await onSave(reindexed, snMap);
     setIsSaving(false);
   };
 
   const handleRemove = async (sn) => {
-    const updatedList = list.filter(s => s.sn !== sn).map((s, idx) => ({ ...s, sn: idx + 1 }));
-    setList(updatedList);
+    const rawList = list.filter(s => s.sn !== sn);
+    const { reindexed, snMap } = sortAndReindex(rawList);
+    setList(reindexed);
     setIsSaving(true);
-    await onSave(updatedList);
+    await onSave(reindexed, snMap);
     setIsSaving(false);
   };
 
@@ -63,13 +78,14 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
 
   const saveEdit = async (sn) => {
     if (!editingName.trim()) return;
-    const updatedList = list.map(s => s.sn === sn ? { ...s, name: editingName.trim().toUpperCase(), gender: editingGender } : s);
-    setList(updatedList);
+    const rawList = list.map(s => s.sn === sn ? { ...s, name: editingName.trim().toUpperCase(), gender: editingGender } : s);
+    const { reindexed, snMap } = sortAndReindex(rawList);
+    setList(reindexed);
     setEditingSn(null);
     setEditingName('');
     setEditingGender('');
     setIsSaving(true);
-    await onSave(updatedList);
+    await onSave(reindexed, snMap);
     setIsSaving(false);
   };
 
@@ -144,8 +160,8 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
 
     try {
       const names = await parseDocxRoster(file);
-      const importedStudents = names.map((name, i) => ({
-        sn: i + 1,
+      const rawList = names.map((name, i) => ({
+        sn: 9999999 + i, // Temporary dummy ID
         name: name.toUpperCase(),
         gender: "U",
         attendance: 0,
@@ -155,8 +171,9 @@ export default function Roster({ students, onSave, onImport, isReadOnly }) {
         promotedTo: ""
       }));
 
-      setList(importedStudents);
-      await onImport(importedStudents);
+      const { reindexed, snMap } = sortAndReindex(rawList);
+      setList(reindexed);
+      await onImport(reindexed, snMap);
       setIsSaving(false);
     } catch (err) {
       console.error(err);
