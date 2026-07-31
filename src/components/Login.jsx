@@ -10,43 +10,43 @@ export default function Login({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [adminExists, setAdminExists] = useState(false);
+  const [systemExists, setSystemExists] = useState(false);
 
   useEffect(() => {
-    const checkAdminExists = async () => {
+    const checkSystemExists = async () => {
       try {
-        const q = query(collection(db, "teachers"), where("isAdmin", "==", true));
+        const q = query(collection(db, "teachers"), where("isSeniorSuperUser", "==", true));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          setAdminExists(true);
+          setSystemExists(true);
         }
       } catch (e) {
         console.error("Error checking admin status:", e);
       }
     };
-    checkAdminExists();
+    checkSystemExists();
   }, []);
 
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
 
-  const handleRegisterAdmin = async () => {
+  const handleRegisterSystem = async () => {
     setLoading(true);
     setError('');
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, 'admin@school.com', password);
+      const userCredential = await createUserWithEmailAndPassword(auth, 'system@flawlex.com', password);
       const teacherDocRef = doc(db, "teachers", userCredential.user.uid);
       await setDoc(teacherDocRef, {
-        name: "School Admin",
-        email: "admin@school.com",
-        assignedClass: "Admin",
+        name: "Senior Super User",
+        email: "system@flawlex.com",
+        assignedClass: "System",
         createdDate: new Date().toISOString(),
-        isAdmin: true
+        isSeniorSuperUser: true
       });
       onLoginSuccess(userCredential.user);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to register Admin account.");
+      setError(err.message || "Failed to register System account.");
     } finally {
       setLoading(false);
     }
@@ -68,20 +68,20 @@ export default function Login({ onLoginSuccess }) {
     } catch (err) {
       console.error(err);
       let errMsg = "Invalid email or password. Please try again.";
-      if (email.trim().toLowerCase() === 'admin@school.com') {
-        if (adminExists) {
-          setError("Incorrect password for Administrator account.");
+      if (email.trim().toLowerCase() === 'system@flawlex.com') {
+        if (systemExists) {
+          setError("Incorrect password for System account.");
         } else {
           setError(
             <div className="flex flex-col gap-2">
-              <span>Admin account not registered yet.</span>
-              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Administrator login for this database:</span>
+              <span>System account not registered yet.</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Senior Super User login for this database:</span>
               <button
                 type="button"
-                onClick={handleRegisterAdmin}
+                onClick={handleRegisterSystem}
                 className="bg-emerald-ink hover:bg-emerald-900 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
               >
-                Register Admin Account
+                Register System Account
               </button>
             </div>
           );

@@ -26,6 +26,15 @@
   @apply bg-zinc-400 dark:bg-zinc-700;
 }
 
+/* Hide scrollbar for clean tab scrolling on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Glassmorphism Styles */
 .glass-panel {
   @apply bg-white/70 dark:bg-[#0c0c0f]/70 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50;

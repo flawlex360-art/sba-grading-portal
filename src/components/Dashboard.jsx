@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
 
-export default function Dashboard({ metadata, onSave, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
+export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYearlyData, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
   const [formData, setFormData] = useState({ ...metadata });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetInput, setResetInput] = useState('');
+  const [newYearInput, setNewYearInput] = useState('');
 
   useEffect(() => {
     setFormData({ ...metadata });
@@ -25,6 +28,15 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
     setIsSaving(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  const handleResetConfirm = async () => {
+    if (resetInput === 'CONFIRM' && newYearInput) {
+      await onStartNewYear(newYearInput);
+      setShowResetConfirm(false);
+      setResetInput('');
+      setNewYearInput('');
+    }
   };
 
   // Calculate statistics
@@ -295,6 +307,78 @@ export default function Dashboard({ metadata, onSave, students, computedResults,
             </button>
           </div>
         </form>
+
+        {!isReadOnly && (
+          <div className="mt-8 pt-8 border-t border-rose-500/20">
+            <h3 className="text-sm font-bold text-rose-500 uppercase tracking-wider mb-4">Data Management & Archive</h3>
+            <div className="glass-card bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/50 dark:border-rose-900/50 p-6 rounded-xl">
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                <div>
+                  <h4 className="font-semibold text-rose-700 dark:text-rose-400 mb-1">End of Year Rollover</h4>
+                  <p className="text-xs text-rose-600/70 dark:text-rose-400/70 max-w-lg">
+                    This will safely archive all grades and students for the current academic year to the cloud, and wipe your dashboard clean to start a fresh academic year.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={onExportYearlyData}
+                    className="px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+                  >
+                    Export Full Year (Excel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirm(true)}
+                    className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    Reset For New Year
+                  </button>
+                </div>
+              </div>
+
+              {showResetConfirm && (
+                <div className="mt-6 p-4 bg-white dark:bg-[#121214] border border-rose-200 dark:border-rose-900/50 rounded-lg shadow-sm">
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-4">
+                    Type <strong className="text-rose-500">CONFIRM</strong> below to archive the current data and wipe the gradebook for the new year.
+                  </p>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input
+                      type="text"
+                      placeholder="Type CONFIRM"
+                      value={resetInput}
+                      onChange={(e) => setResetInput(e.target.value)}
+                      className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                    />
+                    <input
+                      type="text"
+                      placeholder="New Academic Year (e.g. 2026/2027)"
+                      value={newYearInput}
+                      onChange={(e) => setNewYearInput(e.target.value)}
+                      className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex-1"
+                    />
+                    <button
+                      type="button"
+                      disabled={resetInput !== 'CONFIRM' || !newYearInput}
+                      onClick={handleResetConfirm}
+                      className="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-bold disabled:opacity-50 transition-colors"
+                    >
+                      Execute Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowResetConfirm(false); setResetInput(''); setNewYearInput(''); }}
+                      className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

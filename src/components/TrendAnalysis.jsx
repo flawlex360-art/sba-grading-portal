@@ -23,13 +23,22 @@ export default function TrendAnalysis({ termData, students, metadata, teacherSub
       const termGrades = termSpecificData.grades || {};
       
       // Default subjects mapping for calculations
-      const defaultSubjects = Object.keys(teacherSubjects || {}).length > 0 
-        ? teacherSubjects 
-        : metadata.classLevel?.startsWith('BS. 7') || metadata.classLevel?.startsWith('BS. 8') || metadata.classLevel?.startsWith('BS. 9')
+      let subjectMap = {};
+      let subjectsList = [];
+      
+      if (teacherSubjects && Array.isArray(teacherSubjects) && teacherSubjects.length > 0) {
+        teacherSubjects.forEach(sub => {
+          subjectMap[sub.name] = sub.key;
+          subjectsList.push(sub.name);
+        });
+      } else {
+        subjectMap = metadata.classLevel?.startsWith('BS. 7') || metadata.classLevel?.startsWith('BS. 8') || metadata.classLevel?.startsWith('BS. 9')
           ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
           : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
+        subjectsList = Object.keys(subjectMap);
+      }
 
-      const computed = computeClassResults(termStudents, termGrades, Object.keys(defaultSubjects), defaultSubjects);
+      const computed = computeClassResults(termStudents, termGrades, subjectsList, subjectMap);
       results[term] = computed;
     });
     return results;
@@ -49,7 +58,7 @@ export default function TrendAnalysis({ termData, students, metadata, teacherSub
         const total = resultsForTerm.reduce((sum, s) => sum + (s.overallTotal || 0), 0);
         termValue = total / resultsForTerm.length;
       } else {
-        const studentResult = resultsForTerm.find(s => s.sn.toString() === selectedStudent);
+        const studentResult = resultsForTerm.find(s => (s.sn || s.id || '').toString() === selectedStudent);
         termValue = studentResult ? (studentResult.overallTotal || 0) : 0;
       }
 
@@ -57,7 +66,7 @@ export default function TrendAnalysis({ termData, students, metadata, teacherSub
       if (selectedStudent === 'class' && resultsForTerm.length > 0) {
          subjectCount = Object.keys(resultsForTerm[0].subjects || {}).length || 9;
       } else {
-         const studentResult = resultsForTerm.find(s => s.sn.toString() === selectedStudent);
+         const studentResult = resultsForTerm.find(s => ((s.sn || s.id) || '').toString() === selectedStudent);
          subjectCount = studentResult ? Object.keys(studentResult.subjects || {}).length || 9 : 9;
       }
 
@@ -102,7 +111,7 @@ export default function TrendAnalysis({ termData, students, metadata, teacherSub
              }, 0);
              value = totalSub / results.length;
           } else {
-             const studentResult = results.find(s => s.sn.toString() === selectedStudent);
+             const studentResult = results.find(s => (s.sn || s.id || '').toString() === selectedStudent);
              if (studentResult && studentResult.subjects[sub]) {
                 value = studentResult.subjects[sub].total;
              }
@@ -193,7 +202,7 @@ export default function TrendAnalysis({ termData, students, metadata, teacherSub
             >
               <option value="class">Entire Class Average</option>
               {students.map(s => (
-                <option key={s.sn} value={s.sn.toString()}>{s.name}</option>
+                <option key={s.sn || s.id || s.name} value={(s.sn || s.id || '').toString()}>{s.name}</option>
               ))}
             </select>
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">

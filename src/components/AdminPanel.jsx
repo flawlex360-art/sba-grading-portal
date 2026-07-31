@@ -1,11 +1,189 @@
 import React, { useState, useEffect } from 'react';
 import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
-import { collection, doc, setDoc, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
-  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward 
+  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
+  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ConsolidatedView from './ConsolidatedView';
+import ReportEditor from './ReportEditor';
+import TrendAnalysis from './TrendAnalysis';
+import ReportCard from './ReportCard';
+import { exportYearlyData } from '../utils/excelExport';
+import { computeClassResults } from '../utils/calculations';
+
+export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) {
+  const [adminTab, setAdminTab] = useState('accounts');
+  const [teachers, setTeachers] = useState([]);
+  const [teachersLoading, setTeachersLoading] = useState(true);
+  const [institution, setInstitution] = useState(null);
+
+  useEffect(() => {
+    const fetchInstitution = async () => {
+      try {
+        const q = query(collection(db, "institutions"), where("adminEmail", "==", adminUser.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const instDoc = snap.docs[0];
+          setInstitution({ id: instDoc.id, ...instDoc.data() });
+        } else {
+          // Fallback if not set up by Senior Super User yet
+          // toast.error("No institution linked to this account. Contact System Owner.");
+        }
+      } catch(e) {
+        console.error(e);
+      }
+    };
+    if (adminUser?.email) fetchInstitution();
+  }, [adminUser]);
+  
+  // Print State
+  const [printAll, setPrintAll] = useState(false);
+  const [printSingleStudent, setPrintSingleStudent] = useState(null);
+  const [printData, setPrintData] = useState(null);
+
+  const fetchTeachersList = async () => {
+    if (!institution) return;
+    setTeachersLoading(true);
+    try {
+      const q = query(collection(db, "teachers"), where("institutionId", "==", institution.id));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (!data.isAdmin && data.email !== 'admin@school.com') {
+          list.push({ uid: doc.id, ...data });
+        }
+      });
+      list.sort((a,b) => new Date(b.createdDate) - new Date(a.createdDate));
+      setTeachers(list);
+    } catch (err) {
+      console.error("Failed to load teachers", err);
+    } finally {
+      setTeachersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (institution) fetchTeachersList();
+  }, [institution]);
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setPrintAll(false);
+      setPrintSingleStudent(null);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
+
+  const isPrinting = printAll || !!printSingleStudent;
+
+
+  return (
+    <>
+      <div className={`min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans select-none flex flex-col transition-colors duration-300 ${isPrinting ? 'no-print hidden-for-print' : ''}`}>
+        
+        {/* Top Navbar */}
+        <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm no-print">
+          <div className="flex items-center gap-2">
+            <img src="/icon.png" className="w-5 h-5 object-contain" alt="Flawlex logo" />
+            <span className="font-bold tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+              title="Toggle Light/Dark Mode"
+            >
+              {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200 dark:border-zinc-850 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Log Out
+            </button>
+          </div>
+        </header>
+
+        {/* Admin Tabs */}
+        <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar select-none no-print shadow-sm z-10">
+          {[
+            { id: 'accounts', name: 'User Management', icon: Users },
+            { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
+            { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
+            { id: 'archives', name: 'Data Archives', icon: Archive }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = adminTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setAdminTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg border transition-all whitespace-nowrap flex-shrink-0 ${
+                  isActive
+                    ? 'border-emerald-500/30 bg-emerald-600 dark:bg-emerald-600 text-white font-bold shadow-sm shadow-emerald-600/20'
+                    : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span>{tab.name}</span>
+              </button>
+            );
+          })}
+        </nav>
+  
+        {/* Main Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-6 transition-all duration-300">
+          
+          {adminTab === 'accounts' && <AdminAccountsTab teachers={teachers} fetchTeachersList={fetchTeachersList} fetching={teachersLoading} institution={institution} />}
+          {adminTab === 'overview' && <AdminOverviewTab teachers={teachers} />}
+          {adminTab === 'reports' && (
+            <AdminReportsTab 
+              teachers={teachers} 
+              setPrintAll={setPrintAll} 
+              setPrintSingleStudent={setPrintSingleStudent} 
+              setPrintData={setPrintData}
+            />
+          )}
+          {adminTab === 'archives' && <AdminArchivesTab />}
+          
+        </main>
+      </div>
+
+      {/* Root-Level Print Layout (bypasses all outer margin/padding spacing) */}
+      {isPrinting && printData && (
+        <div className="print-all-container">
+          {printAll ? (
+            printData.students.map(student => (
+              <ReportCard
+                key={student.sn}
+                student={student}
+                metadata={printData.metadata}
+                calculatedScores={printData.computedResults}
+                teacherSubjects={printData.teacherSubjects}
+                currentUser={printData.currentUser}
+              />
+            ))
+          ) : (
+            <ReportCard
+              student={printSingleStudent}
+              metadata={printData.metadata}
+              calculatedScores={printData.computedResults}
+              teacherSubjects={printData.teacherSubjects}
+              currentUser={printData.currentUser}
+            />
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 
 const JHS_SUBJECTS_LIST = [
   { name: "English Language", key: "ENG. LANG." },
@@ -33,8 +211,7 @@ const PRIMARY_SUBJECTS_LIST = [
   { name: "Creative Arts", key: "C. ARTS" }
 ];
 
-export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) {
-  const [teachers, setTeachers] = useState([]);
+function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,12 +224,10 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
   // Custom metadata fields entered by the Admin for new accounts
   const [schoolName, setSchoolName] = useState('Anglican JHS');
   const [district, setDistrict] = useState('Kpando');
-  const [term, setTerm] = useState('ONE');
-  const [academicYear, setAcademicYear] = useState('2025/2026');
+    const [academicYear, setAcademicYear] = useState('2025/2026');
 
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [successMsg, setSuccessMsg] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   // Editing state variables
@@ -128,45 +303,6 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
   };
 };
 
-
-  const fetchTeachersList = async () => {
-    setFetching(true);
-    try {
-      const querySnapshot = await getDocs(collection(db, "teachers"));
-      const list = [];
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        // Filter out the school admin account
-        if (data.email !== 'admin@school.com' && !data.isAdmin) {
-          list.push({ uid: docSnap.id, ...data });
-        }
-      });
-      
-      // Also fetch the active terms from schools collection
-      const schoolsSnapshot = await getDocs(collection(db, "schools"));
-      const schoolTerms = {};
-      schoolsSnapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        schoolTerms[docSnap.id] = data.activeTerm || "Term 1";
-      });
-
-      // Inject activeTerm into list
-      const enrichedList = list.map(t => ({
-        ...t,
-        activeTerm: schoolTerms[t.uid] || "Term 1"
-      }));
-
-      setTeachers(enrichedList);
-    } catch (e) {
-      console.error("Failed fetching teachers:", e);
-    } finally {
-      setFetching(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTeachersList();
-  }, []);
 
   const handleEditClick = async (teacher) => {
     setSelectedTeacher(teacher);
@@ -398,7 +534,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
         createdDate: new Date().toISOString(),
         password: password.trim(), // Save password for administrator access
         level: level,
-        subjects: finalSubjects
+        subjects: finalSubjects,
+        institutionId: institution ? institution.id : 'unknown'
       };
       await setDoc(teacherDocRef, teacherInfo);
 
@@ -407,9 +544,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       await setDoc(schoolDocRef, getInitialSchoolData(
         finalName,
         assignedClass,
-        schoolName.trim(),
+        institution ? institution.schoolName : schoolName.trim(),
         district.trim(),
-        term,
+        institution ? institution.activeTerm : 'Term 1',
         academicYear.trim()
       ));
 
@@ -441,33 +578,10 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
 
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans select-none flex flex-col transition-colors duration-300">
-      {/* Top Navbar */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2">
-          <img src="/icon.png" className="w-5 h-5 object-contain" alt="Flawlex logo" />
-          <span className="font-bold tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
-            title="Toggle Light/Dark Mode"
-          >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200 dark:border-zinc-850 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Log Out
-          </button>
-        </div>
-      </header>
+    <>
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left 5 Columns: Creator Form */}
         <div className="lg:col-span-5 space-y-4">
@@ -542,19 +656,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                 </div>
               </div>
 
-              {/* Row 2: School Name & District */}
+              {/* Row 2: District */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">School Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={schoolName}
-                    onChange={(e) => setSchoolName(e.target.value)}
-                    placeholder="e.g. Anglican JHS"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
-                  />
-                </div>
                 <div>
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">District</label>
                   <input
@@ -565,22 +668,6 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     placeholder="e.g. Kpando"
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
-                </div>
-              </div>
-
-              {/* Row 3: Term & Academic Year */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Term</label>
-                  <select
-                    value={term}
-                    onChange={(e) => setTerm(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
-                  >
-                    <option value="ONE">ONE</option>
-                    <option value="TWO">TWO</option>
-                    <option value="THREE">THREE</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Academic Year</label>
@@ -595,7 +682,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                 </div>
               </div>
 
-              {/* Row 4: Email & Password */}
+
+              {/* Row 3: Email & Password */}
               <div className="grid grid-cols-2 gap-3 border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
                 <div>
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Login Email</label>
@@ -712,7 +800,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
         </div>
 
         {/* Right 7 Columns: Active accounts log */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="lg:col-span-7 space-y-4 flex flex-col h-full">
           <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 flex flex-col h-full">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3 mb-5">
               <div className="flex items-center gap-2">
@@ -734,41 +822,37 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                 No teacher accounts found. Use the creator form to register a new teacher.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 font-semibold select-none text-center">
-                      <th className="px-4 py-3 text-left">Teacher Name</th>
-                      <th className="px-4 py-3 text-left">Email Address</th>
-                      <th className="px-4 py-3 w-20">Class</th>
-                      <th className="px-4 py-3 w-20">Level</th>
-                      <th className="px-4 py-3 w-20">Term</th>
-                      <th className="px-4 py-3 text-left">Subjects</th>
-                      <th className="px-4 py-3 w-24">Actions</th>
+                      <th className="px-2 py-3 text-left">Teacher Name</th>
+                      <th className="px-2 py-3 text-left">Email Address</th>
+                      <th className="px-2 py-3 w-20">Class</th>
+                      <th className="px-2 py-3 w-20">Level</th>
+                      <th className="px-2 py-3 w-20">Term</th>
+                                            <th className="px-2 py-3 w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-medium">
                     {teachers.map((teacher) => (
                       <tr key={teacher.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/35 transition-colors text-center text-zinc-750 dark:text-zinc-300">
-                        <td className="px-4 py-2.5 text-left font-bold text-zinc-900 dark:text-white">{teacher.name}</td>
-                        <td className="px-4 py-2.5 text-left text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">{teacher.email}</td>
-                        <td className="px-4 py-2.5 font-mono text-[11px]">
+                        <td className="px-2 py-2.5 text-left font-bold text-zinc-900 dark:text-white">{teacher.name}</td>
+                        <td className="px-2 py-2.5 text-left text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">{teacher.email}</td>
+                        <td className="px-2 py-2.5 font-mono text-[11px]">
                           <span className="bg-emerald-ink/10 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 dark:border-emerald-ink/25 px-2 py-0.5 rounded text-[10px] font-bold">
                             {teacher.assignedClass}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
+                        <td className="px-2 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
                           {teacher.level || 'JHS'}
                         </td>
-                        <td className="px-4 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
+                        <td className="px-2 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
                           <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded">
                             {teacher.activeTerm || 'Term 1'}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-left text-zinc-500 dark:text-zinc-400 text-[10px] max-w-[150px] truncate" title={teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'All standard JHS'}>
-                          {teacher.subjects ? teacher.subjects.map(s => s.name).join(', ') : 'Default JHS'}
-                        </td>
-                        <td className="px-4 py-2.5 flex justify-center gap-1.5">
+                                                <td className="px-2 py-2.5 flex justify-center gap-1.5">
                           <button
                             onClick={() => handleEditClick(teacher)}
                             className="p-1 rounded bg-emerald-ink/10 hover:bg-emerald-ink/25 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 transition-colors"
@@ -793,12 +877,12 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
           </div>
         </div>
 
-      </main>
+      </div>
 
       {/* Edit Teacher Modal Backdrop Overlay */}
       {selectedTeacher && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 max-w-md w-full rounded-2xl p-6 shadow-2xl relative overflow-hidden animate-scale-in">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 max-w-md w-full max-h-[95vh] rounded-2xl p-6 shadow-2xl relative overflow-y-auto custom-scrollbar animate-scale-in">
             <button
               onClick={() => setSelectedTeacher(null)}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-450 hover:text-zinc-800 dark:hover:text-white transition-colors"
@@ -906,9 +990,10 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
                     <input
                       type="text"
                       required
-                      value={editSchoolName}
+                      value={institution ? institution.schoolName : editSchoolName}
                       onChange={(e) => setEditSchoolName(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                      readOnly={!!institution}
+                      className={`w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 ${institution ? 'text-zinc-500 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/50' : 'text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink'}`}
                     />
                   </div>
                   <div>
@@ -1034,6 +1119,413 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       <footer className="w-full text-center py-4 text-[10px] text-zinc-500 font-medium mt-auto">
         SBA portal by Flawlex Technologiess (0592664865)
       </footer>
+    </>
+  );
+}
+
+
+
+
+// -------------------------------------------------------------
+// Sub-components for Admin Tabs
+// -------------------------------------------------------------
+
+function AdminOverviewTab({ teachers }) {
+  const [classData, setClassData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [viewMode, setViewMode] = useState('trends'); // 'trends' or 'positions'
+  const [selectedTerm, setSelectedTerm] = useState('Term 1');
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const enriched = await Promise.all(teachers.map(async (t) => {
+          const docRef = doc(db, "schools", t.uid);
+          const docSnap = await getDoc(docRef);
+          const sData = docSnap.exists() ? docSnap.data() : null;
+          const activeTerm = sData?.activeTerm || "Term 1";
+          const activeTermData = sData?.terms?.[activeTerm] || { students: [], grades: {} };
+          return {
+            ...t,
+            schoolData: sData,
+            students: activeTermData.students || [],
+            grades: activeTermData.grades || {}
+          };
+        }));
+        setClassData(enriched);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (teachers.length > 0) loadData();
+    else setLoading(false);
+  }, [teachers]);
+
+  if (loading) return <div className="p-8 text-center text-zinc-500">Loading class overviews...</div>;
+
+  // Helper: build subjectMap & subjectsList from teacher's stored subjects
+  const buildSubjectInfo = (teacherProfile) => {
+    const subjects = teacherProfile?.subjects;
+    if (subjects && Array.isArray(subjects) && subjects.length > 0) {
+      const map = {};
+      subjects.forEach(sub => { map[sub.name] = sub.key; });
+      return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
+    }
+    // Fallback based on level
+    const isJHS = ['BS. 7', 'BS. 8', 'BS. 9'].includes(teacherProfile?.assignedClass);
+    const fallback = isJHS
+      ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
+      : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
+    return { subjectMap: fallback, subjectsList: Object.keys(fallback), teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })) };
+  };
+
+  if (selectedClass) {
+    // Get term-specific data
+    const termData = selectedClass.schoolData?.terms?.[selectedTerm] || { students: [], grades: {} };
+    const termStudents = termData.students || [];
+    const termGrades = termData.grades || {};
+    const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildSubjectInfo(selectedClass);
+
+    const computedResults = termStudents.length > 0
+      ? computeClassResults(termStudents, termGrades, subjectsList, subjectMap)
+      : [];
+
+    // Get available terms
+    const availableTerms = Object.keys(selectedClass.schoolData?.terms || {}).sort();
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setSelectedClass(null)}
+            className="px-3 py-1.5 text-xs font-semibold text-zinc-600 bg-zinc-200 dark:bg-zinc-800 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+          >
+            ← Back to Classes
+          </button>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
+            {selectedClass.assignedClass} - {selectedClass.name}
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <button
+            onClick={() => setViewMode('trends')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'trends' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
+          >
+            Performance Trends
+          </button>
+          <button
+            onClick={() => setViewMode('positions')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'positions' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
+          >
+            Class Positions
+          </button>
+
+          {viewMode === 'positions' && availableTerms.length > 0 && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Academic Term:</span>
+              <select
+                value={selectedTerm}
+                onChange={(e) => setSelectedTerm(e.target.value)}
+                className="appearance-none bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-semibold rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                {availableTerms.map(t => (
+                  <option key={t} value={t}>{t} — {selectedClass.schoolData?.metadata?.academicYear || ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {viewMode === 'trends' ? (
+          <TrendAnalysis 
+            termData={selectedClass.schoolData?.terms || {}}
+            students={selectedClass.students}
+            metadata={selectedClass.schoolData?.metadata || {}}
+            teacherSubjects={tSubjects}
+          />
+        ) : (
+          termStudents.length > 0 ? (
+            <ConsolidatedView
+              computedResults={computedResults}
+              teacherSubjects={tSubjects}
+              metadata={selectedClass.schoolData?.metadata || {}}
+            />
+          ) : (
+            <div className="text-center p-12 text-zinc-500 text-sm">
+              No student data available for <strong>{selectedTerm}</strong>. Please select another term.
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-in">
+      {classData.map(c => (
+        <div 
+          key={c.uid}
+          onClick={() => setSelectedClass(c)}
+          className="glass-card p-5 border border-zinc-200 dark:border-zinc-800/80 rounded-xl hover:border-emerald-ink/30 cursor-pointer transition-all hover:shadow-lg dark:hover:shadow-emerald-ink/5 group"
+        >
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white group-hover:text-emerald-ink dark:group-hover:text-emerald-400 transition-colors">{c.assignedClass}</h3>
+              <p className="text-[11px] text-zinc-500 font-medium">{c.name}</p>
+            </div>
+            <span className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 px-2 py-1 rounded text-[10px] font-bold border border-zinc-200 dark:border-zinc-800">
+              {c.students.length} Learners
+            </span>
+          </div>
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Level</div>
+          <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{c.level || 'JHS'}</div>
+        </div>
+      ))}
+      {classData.length === 0 && !loading && (
+        <div className="col-span-full text-center p-8 text-zinc-500">No classes available.</div>
+      )}
+    </div>
+  );
+}
+
+function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrintData }) {
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [classData, setClassData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedTerm, setSelectedTerm] = useState('Term 1');
+
+  // Find the selected teacher's profile to get their subjects
+  const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
+
+  useEffect(() => {
+    if (!selectedTeacherId) {
+      setClassData(null);
+      return;
+    }
+    async function loadData() {
+      setLoading(true);
+      try {
+        const docRef = doc(db, "schools", selectedTeacherId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const sData = docSnap.data();
+          const active = sData.activeTerm || 'Term 1';
+          setSelectedTerm(active);
+          setClassData(sData);
+        } else {
+          setClassData(null);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [selectedTeacherId]);
+
+  // Build subject info from the teacher profile
+  const buildSubjectInfo = (teacherProfile) => {
+    const subjects = teacherProfile?.subjects;
+    if (subjects && Array.isArray(subjects) && subjects.length > 0) {
+      const map = {};
+      subjects.forEach(sub => { map[sub.name] = sub.key; });
+      return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
+    }
+    const isJHS = ['BS. 7', 'BS. 8', 'BS. 9'].includes(teacherProfile?.assignedClass);
+    const fallback = isJHS
+      ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
+      : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
+    return { subjectMap: fallback, subjectsList: Object.keys(fallback), teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })) };
+  };
+
+  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildSubjectInfo(selectedTeacher);
+
+  const currentTermData = classData?.terms?.[selectedTerm] || { students: [], grades: {} };
+  const currentStudents = currentTermData.students || [];
+  const currentGrades = currentTermData.grades || {};
+
+  const computedResults = currentStudents.length > 0 && classData
+    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap)
+    : [];
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 rounded-xl flex items-end gap-4 max-w-xl">
+        <div className="flex-1">
+          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
+            Select Class to View Report Cards
+          </label>
+          <select
+            value={selectedTeacherId}
+            onChange={(e) => setSelectedTeacherId(e.target.value)}
+            className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
+          >
+            <option value="">-- Choose a Class --</option>
+            {teachers.map(t => (
+              <option key={t.uid} value={t.uid}>{t.assignedClass} ({t.name})</option>
+            ))}
+          </select>
+        </div>
+        
+        {classData && (
+          <div className="flex-1">
+            <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
+              Select Term
+            </label>
+            <select
+              value={selectedTerm}
+              onChange={(e) => setSelectedTerm(e.target.value)}
+              className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
+            >
+              {Object.keys(classData.terms || {}).map(term => (
+                <option key={term} value={term}>{term}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {loading && <div className="p-8 text-center text-zinc-500">Loading records...</div>}
+
+      {classData && !loading && (
+        <div className="mt-6">
+           <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 p-4 rounded-lg text-center mb-6 border border-amber-200 dark:border-amber-800 font-semibold text-sm shadow-sm">
+              ADMINISTRATIVE VIEW (READ-ONLY) - You can now batch print or preview individual report cards here.
+           </div>
+           <ReportEditor
+              students={currentStudents}
+              metadata={{...classData.metadata, term: selectedTerm}}
+              computedResults={computedResults}
+              dropLists={classData.dropLists}
+              onSave={() => {}}
+              onPrintAll={() => {
+                setPrintData({ 
+                  students: currentStudents, 
+                  metadata: {...classData.metadata, term: selectedTerm}, 
+                  computedResults, 
+                  teacherSubjects: tSubjects, 
+                  currentUser: { email: 'admin@school.com', uid: selectedTeacherId } 
+                });
+                setPrintAll(true);
+                setTimeout(() => window.print(), 300);
+              }}
+              onPrintSingle={(s) => {
+                setPrintData({ 
+                  students: [s], 
+                  metadata: {...classData.metadata, term: selectedTerm}, 
+                  computedResults, 
+                  teacherSubjects: tSubjects, 
+                  currentUser: { email: 'admin@school.com', uid: selectedTeacherId } 
+                });
+                setPrintSingleStudent(s);
+                setTimeout(() => window.print(), 300);
+              }}
+              teacherSubjects={tSubjects}
+              viewingTerm={selectedTerm}
+              isReadOnly={true}
+           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminArchivesTab() {
+  const [archives, setArchives] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadArchives() {
+      try {
+        const snap = await getDocs(collection(db, "archives"));
+        const list = [];
+        snap.forEach(docSnap => {
+          list.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setArchives(list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadArchives();
+  }, []);
+
+  const handleDownloadExcel = (archive) => {
+    // Generate and download yearly excel using the original utility
+    // We recreate the term mapping structure for exportYearlyData
+    const mappedTerms = {};
+    if (archive.terms) {
+       Object.keys(archive.terms).forEach(term => {
+          mappedTerms[term] = {
+             grades: archive.terms[term].grades || {},
+             students: archive.terms[term].students || []
+          };
+       });
+    }
+    
+    exportYearlyData(
+      archive.metadata?.schoolName || 'School',
+      archive.metadata?.academicYear || 'Year',
+      archive.metadata?.classAssigned || 'Class',
+      mappedTerms,
+      archive.teacherSubjects || []
+    );
+    toast.success("Downloading archived Excel data...");
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center gap-3 mb-6">
+        <Archive className="w-6 h-6 text-emerald-ink dark:text-emerald-400" />
+        <h2 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Yearly Data Archives</h2>
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-zinc-500 text-sm">Loading archives...</div>
+      ) : archives.length === 0 ? (
+        <div className="glass-card p-12 text-center border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
+          <Archive className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+          <h3 className="text-zinc-500 font-semibold">No archives found</h3>
+          <p className="text-xs text-zinc-400 mt-2 max-w-md mx-auto">
+            When the academic year ends and data is wiped to start a new year, the full yearly records are saved here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {archives.map(arc => (
+            <div key={arc.id} className="glass-card p-5 border border-zinc-200 dark:border-zinc-800/80 rounded-xl relative group overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-ink/5 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="font-bold text-zinc-900 dark:text-white">{arc.metadata?.academicYear || 'Unknown Year'}</h3>
+                  <p className="text-xs text-zinc-500 font-medium mt-1">{arc.teacherName || arc.uid} • {arc.metadata?.classAssigned || 'Unknown Class'}</p>
+                </div>
+              </div>
+              
+              <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-3">
+                Archived on {new Date(arc.timestamp).toLocaleDateString()}
+              </div>
+
+              <button
+                onClick={() => handleDownloadExcel(arc)}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-ink/10 hover:bg-emerald-ink/20 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 py-2.5 rounded-lg text-xs font-bold transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Download Yearly Excel
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

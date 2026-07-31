@@ -15,7 +15,7 @@ export function getOrdinalSuffix(rank) {
 /**
  * Calculates letter grade and remark based on overall total out of 100.
  */
-export function calculateGrade(total) {
+export function calculateGrade(total, config = { formula: 'default' }) {
   const t = parseFloat(total) || 0;
   if (t >= 90) return { grade: "1", remark: "Highest" };
   if (t >= 80) return { grade: "2", remark: "Higher" };

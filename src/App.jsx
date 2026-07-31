@@ -11,6 +11,8 @@ import ChatPanel from './components/ChatPanel';
 import ReportCard from './components/ReportCard';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
+import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
@@ -65,6 +67,7 @@ export default function App() {
   // Auth States
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [institution, setInstitution] = useState(null);
   
   // Multi-term states
   const [activeTerm, setActiveTerm] = useState('Term 1');
@@ -301,16 +304,30 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  const fetchTeacherData = async (uid) => {
+  const fetchTeacherData = async (uid, instId) => {
     setIsLoading(true);
     try {
+      let activeInstTerm = null;
+      let instCrestUrl = null;
+
+      if (instId && instId !== 'unknown') {
+        const instRef = doc(db, "institutions", instId);
+        const instSnap = await getDoc(instRef);
+        if (instSnap.exists()) {
+           const instData = instSnap.data();
+           setInstitution({ id: instSnap.id, ...instData });
+           activeInstTerm = instData.activeTerm;
+           instCrestUrl = instData.schoolCrestUrl;
+        }
+      }
+
       const docRef = doc(db, "schools", uid);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
         
         let loadedTerms = data.terms;
-        let loadedActiveTerm = data.activeTerm;
+        let loadedActiveTerm = activeInstTerm || data.activeTerm || "Term 1";
 
         // Auto-migrate legacy structure
         if (!loadedTerms) {
@@ -320,12 +337,17 @@ export default function App() {
               students: data.students || []
             }
           };
-          loadedActiveTerm = "Term 1";
-          // Fire-and-forget migration save
-          setDoc(doc(db, "schools", uid), { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
         }
+        
+        // Ensure all 3 terms exist
+        ['Term 1', 'Term 2', 'Term 3'].forEach(t => {
+           if (!loadedTerms[t]) loadedTerms[t] = { grades: {}, students: [] };
+        });
 
-        const currentViewTerm = loadedActiveTerm || "Term 1";
+        // Fire-and-forget migration save to keep it in sync
+        setDoc(doc(db, "schools", uid), { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
+
+        const currentViewTerm = loadedActiveTerm;
         setTermData(loadedTerms);
         setActiveTerm(currentViewTerm);
         setViewingTerm(currentViewTerm);
@@ -337,6 +359,15 @@ export default function App() {
         studentsRef.current = activeTermData.students || [];
         setGrades(activeTermData.grades || {});
         let loadedDropLists = data.dropLists;
+          if (!loadedDropLists) {
+            loadedDropLists = {
+              conduct: ["Respectful", "Attentive", "Polite", "Helpful", "Confident", "Friendly"],
+              interest: ["Reading novels", "Sports", "Creative Arts", "Music", "Gardening"],
+              attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable"],
+              remark: ["Keep it up", "Good performance", "Can do better", "Needs to pay more attention in class", "Highly motivated"]
+            };
+            setDoc(doc(db, "schools", uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+          }
         // Migration: If the user has old compound activities, migrate them automatically
         if (loadedDropLists?.interest?.includes("Reading and research")) {
             loadedDropLists.interest = [
@@ -585,6 +616,57 @@ export default function App() {
     }
   };
 
+  const handleExportYearlyData = () => {
+    exportYearlyData(termData, metadata, teacherSubjects);
+  };
+
+  const handleStartNewYear = async (newAcademicYear) => {
+    if (!currentUser) return;
+    
+    // 1. Take a snapshot of everything
+    const snapshot = {
+      metadata: metadata,
+      termData: termData,
+      timestamp: new Date().toISOString(),
+      teacherId: currentUser.uid
+    };
+
+    try {
+      // 2. Save to archives collection
+      const archiveId = `${currentUser.uid}_${metadata.academicYear.replace(/[^a-z0-9]/gi, '_')}`;
+      await setDoc(doc(db, "archives", archiveId), snapshot);
+
+      // 3. Wipe current state
+      const emptyTerms = {
+        "Term 1": { grades: {}, students: [] },
+        "Term 2": { grades: {}, students: [] },
+        "Term 3": { grades: {}, students: [] }
+      };
+
+      const newMeta = { ...metadata, academicYear: newAcademicYear };
+
+      await setDoc(doc(db, "schools", currentUser.uid), {
+        terms: emptyTerms,
+        metadata: newMeta,
+        activeTerm: "Term 1"
+      }, { merge: true });
+
+      // Update React State
+      setTermData(emptyTerms);
+      setMetadata(newMeta);
+      setActiveTerm("Term 1");
+      setViewingTerm("Term 1");
+      setGrades({});
+      setStudents([]);
+      studentsRef.current = [];
+
+      toast.success("Gradebook reset successfully. Previous year archived.");
+    } catch (e) {
+      console.error("Archive error:", e);
+      toast.error("Failed to archive and reset.");
+    }
+  };
+
 
 
   const handleLogout = async () => {
@@ -614,7 +696,28 @@ export default function App() {
     return <Login onLoginSuccess={(user) => setCurrentUser(user)} />;
   }
 
-  // 3. Admin Routing: If user is Admin, show the Admin Dashboard
+  // 3. System Routing: If user is Senior Super User, show the System Dashboard
+if (userProfile?.isSeniorSuperUser) {
+  return (
+    <>
+      <SeniorSuperUserPanel onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: '#18181b',
+            color: '#fff',
+            fontSize: '14px',
+            borderRadius: '12px',
+            border: '1px solid #27272a'
+          }
+        }}
+      />
+    </>
+  );
+}
+
+// 3. Admin Routing: If user is Admin, show the Admin Dashboard
   if (userProfile?.isAdmin) {
     return (
       <>
@@ -648,7 +751,7 @@ export default function App() {
   }
 
   // Calculate ranks and totals class-wide in real-time
-  const computedResults = computeClassResults(students, grades, subjectsList, subjectMap);
+  const computedResults = computeClassResults(students, grades, subjectsList, subjectMap, { formula: institution?.gradingFormula || 'default' });
 
   const isPrinting = printAll || !!printSingleStudent;
   const isReadOnly = viewingTerm !== activeTerm;
@@ -660,7 +763,11 @@ export default function App() {
       {/* 1. Header Bar */}
       <header className="glass-panel sticky top-0 z-40 px-6 py-4 flex items-center justify-between no-print shadow-sm">
         <div className="flex items-center gap-2.5">
-          <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
+          {institution?.schoolCrestUrl ? (
+                <img src={institution.schoolCrestUrl} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5" alt="School Crest" />
+              ) : (
+                <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
+              )}
           <div>
             <h1 className="text-md font-black tracking-wider text-zinc-900 dark:text-white">
               SBA Portal
@@ -738,7 +845,7 @@ export default function App() {
       </header>
 
       {/* 2. Secondary Tab Switcher */}
-      <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-6 py-2 flex items-center gap-1 overflow-x-auto select-none no-print">
+      <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar select-none no-print">
         {MAIN_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -746,14 +853,14 @@ export default function App() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 md:px-4 md:py-2 text-sm md:text-xs font-bold rounded-lg border transition-all truncate ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg border transition-all whitespace-nowrap flex-shrink-0 ${
                 isActive
-                  ? 'border-emerald-ink/20 bg-champagne/40 dark:bg-emerald-900/10 text-emerald-ink dark:text-emerald-400 font-extrabold shadow-sm'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  ? 'border-emerald-500/30 bg-emerald-600 dark:bg-emerald-600 text-white font-bold shadow-sm shadow-emerald-600/20'
+                  : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-850 hover:text-zinc-900 dark:hover:text-white'
               }`}
             >
-              <Icon className="w-5 h-5 md:w-4 md:h-4 flex-shrink-0" />
-              {tab.name}
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span>{tab.name}</span>
             </button>
           );
         })}
@@ -767,6 +874,8 @@ export default function App() {
             students={students}
             computedResults={computedResults}
             onSave={handleSaveMetadata}
+            onStartNewYear={handleStartNewYear}
+            onExportYearlyData={handleExportYearlyData}
             teacherSubjects={teacherSubjects}
             isReadOnly={isReadOnly}
             viewingTerm={viewingTerm}

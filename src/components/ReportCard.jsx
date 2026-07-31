@@ -26,7 +26,7 @@ const DEFAULT_JHS_SUBJECTS = [
   { name: "Creative Arts & Design", key: "Creative Arts & Design" }
 ];
 
-export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser, viewingTerm }) {
+export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser, viewingTerm, institution }) {
   if (!student) return null;
 
   const subjects = teacherSubjects && teacherSubjects.length > 0 
@@ -61,11 +61,19 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           alt="Ghana Coat of Arms" 
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
-        <img 
-          src="/anglican-crest.png" 
-          alt="School Crest" 
-          className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.8] origin-center"
-        />
+        {institution?.schoolCrestUrl ? (
+          <img 
+            src={institution.schoolCrestUrl} 
+            alt="School Crest" 
+            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
+          />
+        ) : (
+          <img 
+            src="/icon.png" 
+            alt="School Crest" 
+            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.2] origin-center"
+          />
+        )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
         <h2 className="text-sm font-semibold uppercase text-black tracking-wider mt-0.5">
           {metadata.district}
