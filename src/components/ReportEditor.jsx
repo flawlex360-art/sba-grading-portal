@@ -203,8 +203,6 @@ export default function ReportEditor({
               )}
             </div>
           </div>
-
-          </div>
         </div>
 
         {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
