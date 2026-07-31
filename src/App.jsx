@@ -327,18 +327,6 @@ export default function App() {
               instDocs.sort((a,b) => (a.createdAt || a.id).localeCompare(b.createdAt || b.id));
               instData = instDocs[0];
               userInstId = instData.id;
-            } else if (isAdminUser) {
-              // Self-heal: Create default institution document for legacy admin
-              const newInstId = "kpando-anglican-basic-school-1785516603580";
-              const newInst = {
-                schoolName: "Kpando Anglican Basic School",
-                adminEmail: userEmail,
-                activeTerm: "Term 1",
-                createdAt: new Date().toISOString()
-              };
-              await setDoc(doc(db, "institutions", newInstId), newInst, { merge: true });
-              instData = { id: newInstId, ...newInst };
-              userInstId = newInstId;
             }
           }
 
@@ -364,24 +352,6 @@ export default function App() {
 
             // Unblock UI immediately so Admin dashboard renders with zero delay
             setIsLoading(false);
-
-            // Fire-and-forget background migration without blocking login
-            if (userInstId) {
-              (async () => {
-                try {
-                  const anglicanEmails = ["sirfrank@anglican.com", "eli@anglican.com", "frank@anglican.com", "dayi@anglican.com", "microroot1@gmail.com"];
-                  for (const aEmail of anglicanEmails) {
-                    const qT = query(collection(db, "teachers"), where("email", "==", aEmail));
-                    const snapT = await getDocs(qT);
-                    snapT.forEach((tDoc) => {
-                      if (tDoc.data().institutionId !== userInstId) {
-                        setDoc(doc(db, "teachers", tDoc.id), { institutionId: userInstId }, { merge: true }).catch(() => {});
-                      }
-                    });
-                  }
-                } catch (_) {}
-              })();
-            }
             return;
           } else {
             const currentProf = profileData || { name: "Teacher", assignedClass: "BS. 7", institutionId: userInstId };
