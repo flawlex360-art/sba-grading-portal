@@ -30,28 +30,6 @@ export default function Login({ onLoginSuccess }) {
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
 
-  const handleRegisterAdmin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, 'admin@school.com', password);
-      const teacherDocRef = doc(db, "teachers", userCredential.user.uid);
-      await setDoc(teacherDocRef, {
-        name: "School Admin",
-        email: "admin@school.com",
-        assignedClass: "Admin",
-        createdDate: new Date().toISOString(),
-        isAdmin: true
-      });
-      onLoginSuccess(userCredential.user);
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to register Admin account.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!configValid) {
@@ -72,19 +50,7 @@ export default function Login({ onLoginSuccess }) {
         if (adminExists) {
           setError("Incorrect password for Administrator account.");
         } else {
-          setError(
-            <div className="flex flex-col gap-2">
-              <span>Admin account not registered yet.</span>
-              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Administrator login for this database:</span>
-              <button
-                type="button"
-                onClick={handleRegisterAdmin}
-                className="bg-emerald-ink hover:bg-emerald-900 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
-              >
-                Register Admin Account
-              </button>
-            </div>
-          );
+          setError("Administrator account has not been provisioned on this database yet. Please run the administrative initialization script 'register_admin.js' on the server.");
         }
         setLoading(false);
         return;
