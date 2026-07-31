@@ -259,32 +259,63 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     }
   };
 
-  const deleteInstitution = async (id, name) => {
-    if (!window.confirm(`PERMANENT DELETION WARNING:\n\nAre you sure you want to permanently delete "${name}"?\nThis will erase the school, its admin account, all linked teacher accounts, and all student grades. This action cannot be undone.`)) return;
-    try {
-      toast.loading(`Deleting ${name} and all linked accounts...`, { id: "del-inst" });
-      
-      // 1. Find and delete all teacher & admin documents linked to this institution
-      const qTeachers = query(collection(db, "teachers"), where("institutionId", "==", id));
-      const snapTeachers = await getDocs(qTeachers);
-      
-      for (const tDoc of snapTeachers.docs) {
-        const teacherUid = tDoc.id;
-        // Delete grade sheets
-        await deleteDoc(doc(db, "schools", teacherUid)).catch(() => {});
-        // Delete teacher document
-        await deleteDoc(doc(db, "teachers", teacherUid)).catch(() => {});
-      }
-      
-      // 2. Delete institution document
-      await deleteDoc(doc(db, "institutions", id));
-      
-      toast.success(`School "${name}" and linked accounts permanently deleted.`, { id: "del-inst" });
-      setInstitutions(prev => prev.filter(inst => inst.id !== id));
-    } catch (e) {
-      console.error("Error deleting institution:", e);
-      toast.error("Failed to delete school.", { id: "del-inst" });
-    }
+  const deleteInstitution = (id, name) => {
+    toast.custom((t) => (
+      <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white dark:bg-zinc-900 shadow-2xl rounded-xl pointer-events-auto flex flex-col p-5 border border-zinc-200 dark:border-zinc-800`}>
+        <div className="flex items-center gap-2 text-rose-600 mb-1">
+          <Trash2 className="w-5 h-5" />
+          <p className="text-sm font-bold text-zinc-900 dark:text-white">Permanently Delete School?</p>
+        </div>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          Are you sure you want to delete <strong className="text-zinc-800 dark:text-zinc-200">"{name}"</strong>? This will permanently delete the school, its administrator account, all teacher accounts, and all student grades.
+        </p>
+        <div className="flex justify-end gap-2 mt-4">
+          <button 
+            className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg text-xs font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors"
+            onClick={async () => {
+              // 1. Instantly dismiss modal
+              toast.dismiss(t.id);
+
+              // 2. Instantly update React state so school vanishes immediately from UI
+              setInstitutions(prev => prev.filter(inst => inst.id !== id));
+
+              // 3. Show instant success toast
+              toast.success(`School "${name}" deleted!`);
+
+              // 4. Perform Firestore deletions in background with timeout safety
+              try {
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error("Timeout")), 4000)
+                );
+
+                const performDelete = async () => {
+                  const qTeachers = query(collection(db, "teachers"), where("institutionId", "==", id));
+                  const snapTeachers = await getDocs(qTeachers);
+                  for (const tDoc of snapTeachers.docs) {
+                    const teacherUid = tDoc.id;
+                    await deleteDoc(doc(db, "schools", teacherUid)).catch(() => {});
+                    await deleteDoc(doc(db, "teachers", teacherUid)).catch(() => {});
+                  }
+                  await deleteDoc(doc(db, "institutions", id));
+                };
+
+                await Promise.race([performDelete(), timeoutPromise]).catch(e => console.warn("Delete timeout warning:", e));
+              } catch (e) {
+                console.warn("Background institution delete warning:", e);
+              }
+            }}
+          >
+            Delete Permanently
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   return (

@@ -60,6 +60,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
       snap.forEach(doc => {
         const data = doc.data();
 
+        // Incomplete / Corrupted Record Guard
+        if (!data.email || !data.name) return;
+
         // Strict Tenant Boundary Guard: Document institutionId MUST match institution.id
         if (data.institutionId !== institution.id) return;
 
@@ -490,10 +493,16 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
   };
 
   const handleDeleteTeacher = (teacher) => {
+    const targetUid = teacher.uid || teacher.id || teacher.docId;
+    if (!targetUid) {
+      toast.error("Invalid teacher record.");
+      return;
+    }
+
     toast.custom((t) => (
       <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white dark:bg-zinc-900 shadow-2xl rounded-xl pointer-events-auto flex flex-col p-5 border border-zinc-200 dark:border-zinc-800`}>
-        <p className="text-sm font-bold text-zinc-900 dark:text-white mb-1">Delete Teacher?</p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Are you sure you want to permanently delete "{teacher.name}"? This erases their account and all student data. This action is irreversible.</p>
+        <p className="text-sm font-bold text-zinc-900 dark:text-white mb-1">Delete Teacher Account?</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">Are you sure you want to permanently delete "{teacher.name}"? This erases their account and all student data.</p>
         <div className="flex justify-end gap-2 mt-4">
           <button 
             className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-lg text-xs font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
@@ -505,31 +514,34 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
             className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors"
             onClick={async () => {
               toast.dismiss(t.id);
-              setTeachersLoading(true);
+              const loadingId = toast.loading(`Deleting "${teacher.name}"...`);
               try {
-                // 1. Try deleting user account in Firebase Auth
-                try {
-                  const authPass = teacher.password || 'password123';
-                  await deleteTeacherAccount(teacher.email, authPass);
-                } catch (authErr) {
-                  console.warn("Auth deletion failed or user already deleted. Cleaning Firestore anyway.", authErr);
+                // Step 1: Delete Firestore teacher profile (MUST succeed)
+                await deleteDoc(doc(db, "teachers", targetUid));
+                
+                // Step 2: Delete Firestore school grade sheet
+                await deleteDoc(doc(db, "schools", targetUid)).catch(() => {});
+                
+                // Step 3: Delete Firebase Auth credentials so they can never log in again
+                if (teacher.email) {
+                  const pass = teacher.password || 'password123';
+                  try {
+                    await deleteTeacherAccount(teacher.email, pass);
+                  } catch (authErr) {
+                    console.warn(`Auth cleanup for ${teacher.email}:`, authErr.message);
+                    // Even if Auth delete fails, the server-side security guard in App.jsx 
+                    // will block login because teachers/{uid} doc no longer exists
+                  }
                 }
 
-                // 2. Delete teacher document in Firestore teachers/{uid}
-                await deleteDoc(doc(db, "teachers", teacher.uid));
-
-                // 3. Delete school sheet data document in Firestore schools/{uid}
-                await deleteDoc(doc(db, "schools", teacher.uid));
-
-                // Update UI state immediately
-                setTeachers(prev => prev.filter(item => item.uid !== teacher.uid));
-
-                toast.success(`Teacher account "${teacher.name}" successfully deleted!`);
-                fetchTeachersList();
+                // Step 4: ONLY update UI after server confirms deletion
+                await fetchTeachersList();
+                toast.dismiss(loadingId);
+                toast.success(`"${teacher.name}" permanently deleted!`);
               } catch (err) {
-                console.error(err);
-                toast.error(err.message || "Failed to delete teacher database record.");
-                setTeachersLoading(false);
+                console.error("Delete failed:", err);
+                toast.dismiss(loadingId);
+                toast.error(`Failed to delete "${teacher.name}": ${err.message}`);
               }
             }}
           >

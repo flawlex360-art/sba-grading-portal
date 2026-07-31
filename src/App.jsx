@@ -16,7 +16,7 @@ import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
-import { doc, getDoc, setDoc, query, where, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, query, where, collection, getDocs } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { Toaster } from 'react-hot-toast';
 
@@ -286,9 +286,16 @@ export default function App() {
       if (user) {
         setIsLoading(true);
         try {
-          // 2. Fetch profile from 'teachers' collection for this UID
+          // 2. Fetch profile from 'teachers' collection — BYPASS IndexedDB cache to get fresh server data
           const profileDocRef = doc(db, "teachers", user.uid);
-          const profileSnap = await getDoc(profileDocRef);
+          let profileSnap;
+          try {
+            profileSnap = await getDocFromServer(profileDocRef);
+          } catch (serverErr) {
+            // Fallback to cache if offline
+            console.warn("Server read failed, falling back to cache:", serverErr);
+            profileSnap = await getDoc(profileDocRef);
+          }
           let profileData = profileSnap.exists() ? profileSnap.data() : null;
           const userEmail = (user.email || '').toLowerCase().trim();
 
@@ -305,7 +312,7 @@ export default function App() {
           }
 
           // Determine if Admin User
-          const isAdminUser = userEmail === 'admin@school.com' || profileData?.isAdmin;
+          const isAdminUser = profileData?.isAdmin === true;
 
           // 3. Resolve Institution
           let userInstId = profileData?.institutionId;
@@ -328,6 +335,22 @@ export default function App() {
               instData = instDocs[0];
               userInstId = instData.id;
             }
+          }
+
+          // ═══════════════════════════════════════════════════════
+          // SECURITY GUARD: DELETED ACCOUNT DETECTION
+          // If no profile doc exists on the SERVER and user is NOT a
+          // registered institution admin, REJECT LOGIN immediately.
+          // ═══════════════════════════════════════════════════════
+          if (!profileSnap.exists() && !instData) {
+            console.warn(`SECURITY: Deleted account login blocked for ${user.email} (${user.uid})`);
+            await signOut(auth);
+            setCurrentUser(null);
+            setUserProfile(null);
+            setInstitution(null);
+            setIsLoading(false);
+            toast.error("This account has been deleted by an administrator and can no longer be used.");
+            return;
           }
 
           if (instData) {
@@ -354,7 +377,8 @@ export default function App() {
             setIsLoading(false);
             return;
           } else {
-            const currentProf = profileData || { name: "Teacher", assignedClass: "BS. 7", institutionId: userInstId };
+            // Teacher with valid profile
+            const currentProf = profileData;
             setUserProfile(currentProf);
             await fetchTeacherData(user.uid, userInstId);
           }
