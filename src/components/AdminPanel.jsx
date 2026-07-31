@@ -106,9 +106,23 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         
         {/* Top Navbar */}
         <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm no-print">
-          <div className="flex items-center gap-2">
-            <img src="/icon.png" className="w-5 h-5 object-contain" alt="Flawlex logo" />
-            <span className="font-bold tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
+          <div className="flex items-center gap-3">
+            {institution?.schoolCrestUrl ? (
+              <img src={institution.schoolCrestUrl} className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
+            ) : (
+              <img src="/icon.png" className="w-6 h-6 object-contain" alt="Flawlex logo" />
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-300 dark:border-emerald-700">SUPER ADMIN</span>
+              </div>
+              {institution?.schoolName && (
+                <p className="text-xs font-bold text-emerald-ink dark:text-emerald-400 tracking-wide mt-0.5">
+                  {institution.schoolName}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2.5">
             <button
@@ -491,7 +505,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
             className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors"
             onClick={async () => {
               toast.dismiss(t.id);
-              setFetching(true);
+              setTeachersLoading(true);
               try {
                 // 1. Try deleting user account in Firebase Auth
                 try {
@@ -507,12 +521,15 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                 // 3. Delete school sheet data document in Firestore schools/{uid}
                 await deleteDoc(doc(db, "schools", teacher.uid));
 
-                toast.success("Teacher account and data successfully deleted!");
+                // Update UI state immediately
+                setTeachers(prev => prev.filter(item => item.uid !== teacher.uid));
+
+                toast.success(`Teacher account "${teacher.name}" successfully deleted!`);
                 fetchTeachersList();
               } catch (err) {
                 console.error(err);
                 toast.error(err.message || "Failed to delete teacher database record.");
-                setFetching(false);
+                setTeachersLoading(false);
               }
             }}
           >
