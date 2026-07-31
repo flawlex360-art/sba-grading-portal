@@ -14,30 +14,31 @@ import ReportCard from './ReportCard';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults } from '../utils/calculations';
 
-export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) {
+export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, institution: propInstitution }) {
   const [adminTab, setAdminTab] = useState('accounts');
   const [teachers, setTeachers] = useState([]);
   const [teachersLoading, setTeachersLoading] = useState(true);
-  const [institution, setInstitution] = useState(null);
+  const [institution, setInstitution] = useState(propInstitution);
 
   useEffect(() => {
-    const fetchInstitution = async () => {
-      try {
-        const q = query(collection(db, "institutions"), where("adminEmail", "==", adminUser.email));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const instDoc = snap.docs[0];
-          setInstitution({ id: instDoc.id, ...instDoc.data() });
-        } else {
-          // Fallback if not set up by Senior Super User yet
-          // toast.error("No institution linked to this account. Contact System Owner.");
+    if (propInstitution) {
+      setInstitution(propInstitution);
+    } else if (adminUser?.email) {
+      const fetchInstitution = async () => {
+        try {
+          const q = query(collection(db, "institutions"), where("adminEmail", "==", adminUser.email.toLowerCase().trim()));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const instDoc = snap.docs[0];
+            setInstitution({ id: instDoc.id, ...instDoc.data() });
+          }
+        } catch(e) {
+          console.error(e);
         }
-      } catch(e) {
-        console.error(e);
-      }
-    };
-    if (adminUser?.email) fetchInstitution();
-  }, [adminUser]);
+      };
+      fetchInstitution();
+    }
+  }, [propInstitution, adminUser]);
   
   // Print State
   const [printAll, setPrintAll] = useState(false);
@@ -45,7 +46,11 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
   const [printData, setPrintData] = useState(null);
 
   const fetchTeachersList = async () => {
-    if (!institution) return;
+    if (!institution || !institution.id) {
+      setTeachers([]);
+      setTeachersLoading(false);
+      return;
+    }
     setTeachersLoading(true);
     try {
       const q = query(collection(db, "teachers"), where("institutionId", "==", institution.id));
@@ -53,6 +58,11 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme }) 
       const list = [];
       snap.forEach(doc => {
         const data = doc.data();
+
+        // Strict Tenant Boundary Guard: Document institutionId MUST match institution.id
+        if (data.institutionId !== institution.id) return;
+
+        // Admin & System User Exclusion Guard
         const isNotTeacher = data.isAdmin || 
                              data.isSeniorSuperUser || 
                              data.email === 'admin@school.com' || 
@@ -526,6 +536,12 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
     try {
       const finalName = name.trim() || 'New Teacher';
 
+      if (!institution || !institution.id) {
+        toast.error("Security Error: No active institution linked to your administrator session. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
       // 1. Create Login credentials in Firebase Authentication via secondary app
       const teacherUid = await createTeacherUser(email.trim(), password);
       
@@ -542,7 +558,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
         password: password.trim(), // Save password for administrator access
         level: level,
         subjects: finalSubjects,
-        institutionId: institution ? institution.id : 'unknown'
+        institutionId: institution.id
       };
       await setDoc(teacherDocRef, teacherInfo);
 

@@ -265,39 +265,129 @@ export default function App() {
   }, []);
 
   // Auth Subscription Listener
+  // Auth Subscription Listener with Strict Multi-Tenant Isolation & Self-Healing
   useEffect(() => {
     if (!auth) {
-      // Offline fallback or Firebase config missing
       setIsLoading(false);
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // 1. Immediately purge all session state to prevent cross-session leakage
       setCurrentUser(user);
+      setUserProfile(null);
+      setInstitution(null);
+      setMetadata(null);
+      setStudents([]);
+      studentsRef.current = [];
+      setGrades({});
+      setDropLists(null);
+      setTermData({});
+
       if (user) {
-        if (user.email === 'admin@school.com') {
-          setUserProfile({ isAdmin: true, name: "Admin" });
-          setIsLoading(false);
-        } else {
-          try {
-            const docRef = doc(db, "teachers", user.uid);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-              setUserProfile(docSnap.data());
-            } else {
-              setUserProfile({ name: "Teacher", assignedClass: "BS. 7" });
-            }
-          } catch (e) {
-            console.error("Error loading profile:", e);
+        setIsLoading(true);
+        try {
+          // 2. Fetch profile from 'teachers' collection for this UID
+          const profileDocRef = doc(db, "teachers", user.uid);
+          const profileSnap = await getDoc(profileDocRef);
+          let profileData = profileSnap.exists() ? profileSnap.data() : null;
+          const userEmail = (user.email || '').toLowerCase().trim();
+
+          // Check if Senior Super User
+          if (userEmail === 'system@flawlex.com' || profileData?.isSeniorSuperUser) {
+            setUserProfile({
+              isSeniorSuperUser: true,
+              name: "Senior Super User",
+              email: user.email,
+              ...profileData
+            });
+            setIsLoading(false);
+            return;
           }
-          await fetchTeacherData(user.uid);
+
+          // Determine if Admin User
+          const isAdminUser = userEmail === 'admin@school.com' || profileData?.isAdmin;
+
+          // 3. Resolve Institution
+          let userInstId = profileData?.institutionId;
+          let instData = null;
+
+          if (userInstId && userInstId !== 'unknown') {
+            const instSnap = await getDoc(doc(db, "institutions", userInstId));
+            if (instSnap.exists()) {
+              instData = { id: instSnap.id, ...instSnap.data() };
+            }
+          }
+
+          // If no institution loaded yet, query institutions by adminEmail
+          if (!instData && userEmail) {
+            const qInst = query(collection(db, "institutions"), where("adminEmail", "==", userEmail));
+            const qSnap = await getDocs(qInst);
+            if (!qSnap.empty) {
+              const instDoc = qSnap.docs[0];
+              instData = { id: instDoc.id, ...instDoc.data() };
+              userInstId = instDoc.id;
+            } else if (isAdminUser) {
+              // Self-heal: Create default institution document for legacy admin
+              const newInstId = "kpando-anglican-basic-school-1785516603580";
+              const newInst = {
+                schoolName: "Kpando Anglican Basic School",
+                adminEmail: userEmail,
+                activeTerm: "Term 1",
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(doc(db, "institutions", newInstId), newInst, { merge: true });
+              instData = { id: newInstId, ...newInst };
+              userInstId = newInstId;
+            }
+          }
+
+          if (instData) {
+            setInstitution(instData);
+          }
+
+          // Self-heal teacher profile document if institutionId was missing or outdated
+          if (profileSnap.exists() && userInstId && profileData?.institutionId !== userInstId) {
+            await setDoc(profileDocRef, { institutionId: userInstId }, { merge: true });
+            profileData = { ...profileData, institutionId: userInstId };
+          }
+
+          // 4. Handle Admin vs Teacher profile state
+          if (isAdminUser) {
+            setUserProfile({
+              isAdmin: true,
+              name: profileData?.name || "Admin",
+              email: user.email,
+              institutionId: userInstId,
+              ...profileData
+            });
+
+            // Self-healing task: Repair any Anglican / legacy teachers belonging to this admin
+            if (userInstId) {
+              try {
+                const anglicanEmails = ["sirfrank@anglican.com", "eli@anglican.com", "frank@anglican.com", "dayi@anglican.com", "microroot1@gmail.com"];
+                for (const aEmail of anglicanEmails) {
+                  const qT = query(collection(db, "teachers"), where("email", "==", aEmail));
+                  const snapT = await getDocs(qT);
+                  snapT.forEach(async (tDoc) => {
+                    if (tDoc.data().institutionId !== userInstId) {
+                      await setDoc(doc(db, "teachers", tDoc.id), { institutionId: userInstId }, { merge: true });
+                    }
+                  });
+                }
+              } catch (_) {}
+            }
+
+            setIsLoading(false);
+          } else {
+            const currentProf = profileData || { name: "Teacher", assignedClass: "BS. 7", institutionId: userInstId };
+            setUserProfile(currentProf);
+            await fetchTeacherData(user.uid, userInstId);
+          }
+        } catch (e) {
+          console.error("Error loading user session:", e);
+          setIsLoading(false);
         }
       } else {
-        setUserProfile(null);
-        setMetadata(null);
-        setStudents([]);
-        studentsRef.current = [];
-        setGrades({});
-        setDropLists(null);
         setIsLoading(false);
       }
     });
@@ -721,7 +811,7 @@ if (userProfile?.isSeniorSuperUser) {
   if (userProfile?.isAdmin) {
     return (
       <>
-        <AdminPanel adminUser={currentUser} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
+        <AdminPanel adminUser={currentUser} institution={institution} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
         <Toaster 
           position="top-center" 
           toastOptions={{
