@@ -14,6 +14,17 @@ import ReportCard from './ReportCard';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults } from '../utils/calculations';
 
+const getDirectImageUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('drive.google.com/file/d/')) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+    }
+  }
+  return url;
+};
+
 export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, institution: propInstitution }) {
   const [adminTab, setAdminTab] = useState('accounts');
   const [teachers, setTeachers] = useState([]);
@@ -111,7 +122,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm no-print">
           <div className="flex items-center gap-3">
             {institution?.schoolCrestUrl ? (
-              <img src={institution.schoolCrestUrl} className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
+              <img src={getDirectImageUrl(institution.schoolCrestUrl)} className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
             ) : (
               <img src="/icon.png" className="w-6 h-6 object-contain" alt="Flawlex logo" />
             )}
@@ -183,6 +194,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
               setPrintAll={setPrintAll} 
               setPrintSingleStudent={setPrintSingleStudent} 
               setPrintData={setPrintData}
+              institution={institution}
             />
           )}
           {adminTab === 'archives' && <AdminArchivesTab />}
@@ -202,6 +214,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
                 calculatedScores={printData.computedResults}
                 teacherSubjects={printData.teacherSubjects}
                 currentUser={printData.currentUser}
+                institution={institution}
               />
             ))
           ) : (
@@ -1334,7 +1347,7 @@ function AdminOverviewTab({ teachers }) {
   );
 }
 
-function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrintData }) {
+function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrintData, institution }) {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [classData, setClassData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1444,6 +1457,7 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
               metadata={{...classData.metadata, term: selectedTerm}}
               computedResults={computedResults}
               dropLists={classData.dropLists}
+              institution={institution}
               onSave={() => {}}
               onPrintAll={() => {
                 setPrintData({ 

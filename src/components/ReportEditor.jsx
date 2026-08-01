@@ -12,7 +12,8 @@ export default function ReportEditor({
   onPrintSingle, 
   teacherSubjects, 
   viewingTerm, 
-  isReadOnly 
+  isReadOnly,
+  institution
 }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -175,7 +176,7 @@ export default function ReportEditor({
               />
             </div>
             
-            <div className="max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar divide-y divide-zinc-100 dark:divide-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+            <div className={`${isReadOnly ? 'max-h-[calc(100vh-250px)]' : 'max-h-[160px]'} overflow-y-auto custom-scrollbar divide-y divide-zinc-100 dark:divide-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg`}>
               {filteredStudents.map(s => {
                 const isCurrent = selectedStudent && selectedStudent.sn === s.sn;
                 return (
@@ -203,10 +204,7 @@ export default function ReportEditor({
               )}
             </div>
           </div>
-        </div>
-
-        {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
-        <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print">
+        
           {/* Direct Input Card */}
           {selectedStudent && !isReadOnly && (
             <div className="glass-card p-6 space-y-4">
@@ -387,13 +385,18 @@ export default function ReportEditor({
               </form>
             </div>
           )}
-          {previewStudent ? (
+</div>
+
+        {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
+        <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print">
+                    {previewStudent ? (
             <ReportCard
               student={previewStudent}
               metadata={metadata}
               calculatedScores={computedResults}
               teacherSubjects={teacherSubjects}
               viewingTerm={viewingTerm}
+              institution={institution}
             />
           ) : (
             <div className="glass-card p-12 text-center text-zinc-400 no-print">

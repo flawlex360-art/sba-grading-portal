@@ -1,6 +1,17 @@
 import React from 'react';
 import { getOrdinalSuffix } from '../utils/calculations';
 
+const getDirectImageUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('drive.google.com/file/d/')) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+    }
+  }
+  return url;
+};
+
 // Date formatter helper: "2023-12-22" -> "Dec 22, 2023"
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -63,7 +74,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
         />
         {institution?.schoolCrestUrl ? (
           <img 
-            src={institution.schoolCrestUrl} 
+            src={getDirectImageUrl(institution.schoolCrestUrl)} 
             alt="School Crest" 
             className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
           />

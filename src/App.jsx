@@ -20,6 +20,17 @@ import { doc, getDoc, getDocFromServer, setDoc, query, where, collection, getDoc
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { Toaster } from 'react-hot-toast';
 
+const getDirectImageUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('drive.google.com/file/d/')) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+    }
+  }
+  return url;
+};
+
 const MAIN_TABS = [
   { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
   { id: 'roster', name: 'Roster', icon: Users },
@@ -859,7 +870,7 @@ if (userProfile?.isSeniorSuperUser) {
       <header className="glass-panel sticky top-0 z-40 px-6 py-4 flex items-center justify-between no-print shadow-sm">
         <div className="flex items-center gap-2.5">
           {institution?.schoolCrestUrl ? (
-                <img src={institution.schoolCrestUrl} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5" alt="School Crest" />
+                <img src={getDirectImageUrl(institution.schoolCrestUrl)} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5" alt="School Crest" />
               ) : (
                 <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
               )}
@@ -1033,6 +1044,7 @@ if (userProfile?.isSeniorSuperUser) {
             teacherSubjects={teacherSubjects}
             viewingTerm={viewingTerm}
             isReadOnly={isReadOnly}
+            institution={institution}
           />
         )}
         {activeTab === 'droplists' && (
@@ -1069,6 +1081,7 @@ if (userProfile?.isSeniorSuperUser) {
                 calculatedScores={computedResults}
                 teacherSubjects={teacherSubjects}
                 currentUser={currentUser}
+                institution={institution}
               />
             ))
           ) : (
@@ -1078,6 +1091,7 @@ if (userProfile?.isSeniorSuperUser) {
               calculatedScores={computedResults}
               teacherSubjects={teacherSubjects}
               currentUser={currentUser}
+              institution={institution}
             />
           )}
         </div>
