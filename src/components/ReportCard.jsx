@@ -79,6 +79,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           <img 
             src={getDirectImageUrl(institution.schoolCrestUrl)} 
             alt="School Crest" 
+            referrerPolicy="no-referrer"
             className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
           />
         ) : (
