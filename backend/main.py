@@ -59,6 +59,7 @@ class ChatRequest(BaseModel):
     message: str
     history: list = []
     apiKey: str = ""
+    contextData: dict = None
 
 # API Endpoints
 @app.get("/api/data")
@@ -188,13 +189,16 @@ async def chat_endpoint(request: ChatRequest):
             yield "data: [DONE]\n\n"
         return StreamingResponse(err_generator(), media_type="text/event-stream")
 
-    db = load_db()
+    if request.contextData:
+        db = request.contextData
+    else:
+        db = load_db()
     
     # Construct a concise context of the class database
     context_data = {
-        "metadata": db["metadata"],
-        "students_count": len(db["students"]),
-        "students": [{"sn": s["sn"], "name": s["name"]} for s in db["students"]],
+        "metadata": db.get("metadata", {}),
+        "students_count": len(db.get("students", [])),
+        "students": [{"sn": s.get("sn"), "name": s.get("name")} for s in db.get("students", [])],
         "grades": {}
     }
     

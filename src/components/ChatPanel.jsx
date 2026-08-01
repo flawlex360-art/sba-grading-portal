@@ -19,16 +19,43 @@ class ErrorBoundary extends Component {
   }
 }
 
-export default function ChatPanel({ isOpen, onClose, apiKey }) {
+export default function ChatPanel({ isOpen, onClose, apiKey, contextData }) {
+  const schoolName = contextData?.metadata?.schoolName || "your school";
+  const className = contextData?.metadata?.classLevel || "";
+  const termName = contextData?.metadata?.term || "";
+  
+  const generateWelcomeMessage = () => {
+    return `Hello! I am your Grading and Data Analyst Assistant for **${schoolName}** ${className ? `(${className}, Term ${termName})` : ''}.\n\nIt looks like we don't have any student records or grades loaded into the system just yet.\n\nHow can I help you today? You can:\n\n1. **Paste or upload your student list and grades** (SBA and Exam scores).\n2. **Ask me to set up a template** for entering your grades.\n3. **Ask any questions** about how we will calculate rankings, averages, and grade distributions once your data is ready!`;
+  };
+
   const [messages, setMessages] = useState(() => {
     const saved = localStorage.getItem('gemini_chat_history');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { 
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) {
+          // Update the first message to reflect the current school
+          parsed[0].content = generateWelcomeMessage();
+          return parsed;
+        }
+      } catch (e) {}
     }
     return [
-      { role: 'model', content: "Hi! I am Antigravity's Grading Assistant. Ask me anything about your class grades, rankings, or performance trends." }
+      { role: 'model', content: generateWelcomeMessage() }
     ];
   });
+
+  // Whenever contextData changes, ensure the first message reflects the right school
+  useEffect(() => {
+    setMessages(prev => {
+      if (prev.length > 0 && prev[0].role === 'model') {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], content: generateWelcomeMessage() };
+        return updated;
+      }
+      return prev;
+    });
+  }, [schoolName, className, termName]);
 
   useEffect(() => {
     localStorage.setItem('gemini_chat_history', JSON.stringify(messages));
@@ -130,9 +157,15 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
         body: JSON.stringify({
           message: textToSend.trim(),
           history: currentMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
-          apiKey: apiKey || ""
+          apiKey: apiKey || "",
+          contextData: contextData
         })
       });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Server returned ${response.status}: ${errText}`);
+      }
 
       if (!response.body) {
         throw new Error("No response body.");
@@ -184,6 +217,29 @@ export default function ChatPanel({ isOpen, onClose, apiKey }) {
           }
         }
       }
+      
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr && dataStr !== '[DONE]') {
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.type === 'THOUGHT') thinking += parsed.content;
+                else if (parsed.type === 'SUGGESTION') suggestions.push(parsed.content);
+                else reply += parsed.content;
+              } catch (e) {}
+            }
+          }
+        }
+      }
+
+      if (!reply && !thinking) {
+        throw new Error("Empty response received from assistant.");
+      }
+
     } catch (error) {
       console.error(error);
       setMessages([...currentMessages, { role: 'model', content: `⚠️ Error connecting to assistant: ${error.message}` }]);

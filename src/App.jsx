@@ -22,11 +22,14 @@ import { Toaster } from 'react-hot-toast';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
-  if (url.includes('drive.google.com/file/d/')) {
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match && match[1]) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-    }
+  let fileId = null;
+  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (dMatch && dMatch[1]) fileId = dMatch[1];
+  else if (idMatch && idMatch[1]) fileId = idMatch[1];
+  
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
   return url;
 };
@@ -867,25 +870,25 @@ if (userProfile?.isSeniorSuperUser) {
       <div className={`min-h-screen bg-zinc-50 dark:bg-[#09090b] transition-colors duration-300 flex flex-col ${isPrinting ? 'no-print hidden-for-print' : ''}`}>
       
       {/* 1. Header Bar */}
-      <header className="glass-panel sticky top-0 z-40 px-6 py-4 flex items-center justify-between no-print shadow-sm">
-        <div className="flex items-center gap-2.5">
+      <header className="glass-panel sticky top-0 z-40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between no-print shadow-sm gap-2">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {institution?.schoolCrestUrl ? (
-                <img src={getDirectImageUrl(institution.schoolCrestUrl)} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5" alt="School Crest" />
+                <img src={getDirectImageUrl(institution.schoolCrestUrl)} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
               ) : (
-                <img src="/icon.png" className="w-7 h-7 object-contain select-none" alt="Flawlex logo" />
+                <img src="/icon.png" className="w-7 h-7 object-contain select-none shrink-0" alt="Flawlex logo" />
               )}
-          <div>
-            <h1 className="text-md font-black tracking-wider text-zinc-900 dark:text-white">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">
               SBA Portal
             </h1>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase">
+            <p className="text-[9px] sm:text-[10px] text-zinc-400 font-bold uppercase leading-tight line-clamp-2 sm:line-clamp-none">
               {metadata.schoolName} — {metadata.classLevel}
             </p>
           </div>
         </div>
 
         {/* Global Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* User Profile Info */}
           <div className="hidden sm:flex flex-col text-right mr-2">
             <span className="text-xs font-bold text-zinc-750 dark:text-zinc-300">
@@ -897,11 +900,11 @@ if (userProfile?.isSeniorSuperUser) {
           </div>
 
           {/* Term Switcher */}
-          <div className="relative group">
+          <div className="relative group shrink-0">
             <select 
               value={viewingTerm}
               onChange={(e) => setViewingTerm(e.target.value)}
-              className={`appearance-none outline-none text-xs font-black tracking-wider pl-4 pr-10 py-2 rounded-xl transition-all cursor-pointer shadow-sm ${
+              className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
                 isReadOnly 
                   ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
                   : 'bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg focus:ring-2 focus:ring-emerald-500/20'
@@ -911,10 +914,10 @@ if (userProfile?.isSeniorSuperUser) {
                 <option key={term} value={term} className="font-semibold">{term}</option>
               ))}
             </select>
-            <div className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-300 group-hover:translate-y-[-40%] ${
+            <div className={`absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-300 group-hover:translate-y-[-40%] ${
               isReadOnly ? 'text-amber-600 dark:text-amber-500' : 'text-zinc-400 dark:text-zinc-500'
             }`}>
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
             </div>
             {isReadOnly && (
               <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
@@ -925,26 +928,26 @@ if (userProfile?.isSeniorSuperUser) {
           </div>          {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-1.5 sm:p-2 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            {theme === 'light' ? <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </button>
 
           {/* Logout Button */}
           <button
             onClick={handleLogout}
-            className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-550 hover:text-rose-500 dark:text-zinc-400 dark:hover:text-rose-455 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-1.5 sm:p-2 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-550 hover:text-rose-500 dark:text-zinc-400 dark:hover:text-rose-455 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             title="Log Out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           {/* Floating Assistant Trigger */}
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
-            className="bg-emerald-ink hover:bg-emerald-900 text-white rounded-lg p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
+            className="bg-emerald-ink hover:bg-emerald-900 shrink-0 text-white rounded-lg p-1.5 sm:p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
           >
-            <Bot className="w-4 h-4" />
+            <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span className="hidden md:inline">Ask AI</span>
           </button>
         </div>
@@ -1063,6 +1066,14 @@ if (userProfile?.isSeniorSuperUser) {
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         apiKey={apiKey}
+        contextData={{
+          metadata: {
+            ...metadata,
+            schoolName: institution?.name || metadata?.schoolName || 'Unknown School'
+          },
+          students: students,
+          grades: grades
+        }}
       />
 
 

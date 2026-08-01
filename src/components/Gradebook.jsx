@@ -216,14 +216,14 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   return (
     <div className="space-y-4">
       {/* Excel Sheet Tabs at the top */}
-      <div className="flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-4 overflow-x-auto select-none no-print">
+      <div className="flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-4 overflow-x-auto select-none no-print hide-scrollbar">
         <FileSpreadsheet className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-        <div className="flex bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-0.5 overflow-hidden">
+        <div className="flex bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-0.5 overflow-hidden min-w-max">
           {SUBJECT_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => handleTabSwitch(tab)}
-              className={`px-4 py-3 md:px-3 md:py-1.5 text-sm md:text-xs font-semibold rounded-md transition-all truncate max-w-[130px] ${
+              className={`flex-shrink-0 px-4 py-3 md:px-3 md:py-1.5 text-sm md:text-xs font-semibold rounded-md transition-all truncate max-w-[130px] ${
                 activeTab.key === tab.key
                   ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-sm"
                   : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"

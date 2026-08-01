@@ -16,11 +16,14 @@ import { computeClassResults } from '../utils/calculations';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
-  if (url.includes('drive.google.com/file/d/')) {
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match && match[1]) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-    }
+  let fileId = null;
+  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (dMatch && dMatch[1]) fileId = dMatch[1];
+  else if (idMatch && idMatch[1]) fileId = idMatch[1];
+  
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
   }
   return url;
 };
