@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, isConfigValid, getFirebaseConfig } from '../utils/firebase';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { LogIn, Key, Mail, Lock, ShieldAlert, AlertCircle, HelpCircle, Save, Settings, Eye, EyeOff } from 'lucide-react';
@@ -30,28 +30,6 @@ export default function Login({ onLoginSuccess }) {
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
 
-  const handleRegisterSystem = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, 'system@flawlex.com', password);
-      const teacherDocRef = doc(db, "teachers", userCredential.user.uid);
-      await setDoc(teacherDocRef, {
-        name: "Senior Super User",
-        email: "system@flawlex.com",
-        assignedClass: "System",
-        createdDate: new Date().toISOString(),
-        isSeniorSuperUser: true
-      });
-      onLoginSuccess(userCredential.user);
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to register System account.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!configValid) {
@@ -73,16 +51,11 @@ export default function Login({ onLoginSuccess }) {
           setError("Incorrect password for System account.");
         } else {
           setError(
-            <div className="flex flex-col gap-2">
-              <span>System account not registered yet.</span>
-              <span className="text-[10px] text-zinc-500 font-semibold">Click below to register this email/password as the single Senior Super User login for this database:</span>
-              <button
-                type="button"
-                onClick={handleRegisterSystem}
-                className="bg-emerald-ink hover:bg-emerald-900 text-white rounded px-2.5 py-1 mt-1 text-[10px] font-bold self-start transition-colors"
-              >
-                Register System Account
-              </button>
+            <div className="flex flex-col gap-2 text-rose-500 dark:text-rose-400">
+              <span className="font-bold">System account is not registered.</span>
+              <span className="text-[10px] text-zinc-400 font-semibold leading-relaxed">
+                Administrative account provisioning is strictly managed out-of-band/server-side to prevent unauthorized client-side registration. Please run the CLI script <code className="bg-zinc-850 text-zinc-200 px-1 py-0.5 rounded font-mono">node register_admin.js &lt;password&gt;</code> on the server to provision the Senior Super User.
+              </span>
             </div>
           );
         }
