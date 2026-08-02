@@ -11,6 +11,7 @@ import ConsolidatedView from './ConsolidatedView';
 import ReportEditor from './ReportEditor';
 import TrendAnalysis from './TrendAnalysis';
 import ReportCard from './ReportCard';
+import Gradebook from './Gradebook';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults } from '../utils/calculations';
 
@@ -200,7 +201,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
               institution={institution}
             />
           )}
-          {adminTab === 'archives' && <AdminArchivesTab />}
+          {adminTab === 'archives' && <AdminArchivesTab institution={institution} />}
           
         </main>
       </div>
@@ -1494,19 +1495,32 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
   );
 }
 
-function AdminArchivesTab() {
+function AdminArchivesTab({ institution }) {
   const [archives, setArchives] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedTerm, setSelectedTerm] = useState('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   useEffect(() => {
     async function loadArchives() {
+      if (!institution?.id) return;
       try {
-        const snap = await getDocs(collection(db, "archives"));
+        const qArch = query(collection(db, "archives"), where("institutionId", "==", institution.id));
+        const snap = await getDocs(qArch);
         const list = [];
         snap.forEach(docSnap => {
           list.push({ id: docSnap.id, ...docSnap.data() });
         });
-        setArchives(list.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
+        
+        list.sort((a,b) => new Date(b.archivedAt) - new Date(a.archivedAt));
+        setArchives(list);
+        
+        if (list.length > 0) {
+           setSelectedYear(list[0].academicYear);
+           setSelectedTerm(list[0].term);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -1514,30 +1528,63 @@ function AdminArchivesTab() {
       }
     }
     loadArchives();
-  }, []);
+  }, [institution]);
 
-  const handleDownloadExcel = (archive) => {
-    // Generate and download yearly excel using the original utility
-    // We recreate the term mapping structure for exportYearlyData
-    const mappedTerms = {};
-    if (archive.terms) {
-       Object.keys(archive.terms).forEach(term => {
-          mappedTerms[term] = {
-             grades: archive.terms[term].grades || {},
-             students: archive.terms[term].students || []
-          };
-       });
-    }
+  const uniqueYears = [...new Set(archives.map(a => a.academicYear))];
+  
+  const teachersForSelection = archives.filter(a => 
+    a.academicYear === selectedYear && a.term === selectedTerm
+  );
+
+  const selectedArchive = archives.find(a => 
+    a.academicYear === selectedYear && 
+    a.term === selectedTerm && 
+    a.teacherId === selectedTeacherId
+  );
+  
+  // Auto-select first teacher if available and none selected
+  useEffect(() => {
+     if (teachersForSelection.length > 0 && (!selectedTeacherId || !teachersForSelection.find(t => t.teacherId === selectedTeacherId))) {
+         setSelectedTeacherId(teachersForSelection[0].teacherId);
+     }
+  }, [teachersForSelection, selectedTeacherId]);
+
+  const handleDownloadExcel = () => {
+    if (!selectedArchive) return;
+    const termData = {
+      [selectedArchive.term]: {
+        grades: selectedArchive.grades || {},
+        students: selectedArchive.students || []
+      }
+    };
     
     exportYearlyData(
-      archive.metadata?.schoolName || 'School',
-      archive.metadata?.academicYear || 'Year',
-      archive.metadata?.classAssigned || 'Class',
-      mappedTerms,
-      archive.teacherSubjects || []
+      termData,
+      {
+         schoolName: institution?.schoolName || 'School',
+         academicYear: selectedArchive.academicYear || 'Year',
+         classAssigned: selectedArchive.teacherName || 'Class'
+      },
+      selectedArchive.subList || []
     );
     toast.success("Downloading archived Excel data...");
   };
+
+  if (loading) {
+     return <div className="p-8 text-center text-zinc-500 text-sm">Loading archives...</div>;
+  }
+
+  if (archives.length === 0) {
+     return (
+        <div className="glass-card p-12 text-center border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
+          <Archive className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+          <h3 className="text-zinc-500 font-semibold">No archives found</h3>
+          <p className="text-xs text-zinc-400 mt-2 max-w-md mx-auto">
+            When the academic year ends and data is wiped to start a new year, the archived records will appear here.
+          </p>
+        </div>
+     );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1546,43 +1593,70 @@ function AdminArchivesTab() {
         <h2 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Yearly Data Archives</h2>
       </div>
 
-      {loading ? (
-        <div className="p-8 text-center text-zinc-500 text-sm">Loading archives...</div>
-      ) : archives.length === 0 ? (
-        <div className="glass-card p-12 text-center border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
-          <Archive className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
-          <h3 className="text-zinc-500 font-semibold">No archives found</h3>
-          <p className="text-xs text-zinc-400 mt-2 max-w-md mx-auto">
-            When the academic year ends and data is wiped to start a new year, the full yearly records are saved here.
-          </p>
-        </div>
+      <div className="glass-card p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-4 items-end">
+         <div className="flex-1 min-w-[150px]">
+           <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Academic Year</label>
+           <select 
+             value={selectedYear}
+             onChange={(e) => setSelectedYear(e.target.value)}
+             className="w-full bg-white dark:bg-[#121214] border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm font-medium"
+           >
+             {uniqueYears.map(y => (
+               <option key={y} value={y}>{y}</option>
+             ))}
+           </select>
+         </div>
+         <div className="flex-1 min-w-[150px]">
+           <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Term</label>
+           <select 
+             value={selectedTerm}
+             onChange={(e) => setSelectedTerm(e.target.value)}
+             className="w-full bg-white dark:bg-[#121214] border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm font-medium"
+           >
+             {["Term 1", "Term 2", "Term 3"].map(t => (
+               <option key={t} value={t}>{t}</option>
+             ))}
+           </select>
+         </div>
+         <div className="flex-1 min-w-[200px]">
+           <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Class / Teacher</label>
+           <select 
+             value={selectedTeacherId}
+             onChange={(e) => setSelectedTeacherId(e.target.value)}
+             className="w-full bg-white dark:bg-[#121214] border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm font-medium text-emerald-ink dark:text-emerald-400"
+           >
+             {teachersForSelection.length === 0 && <option value="">No classes found</option>}
+             {teachersForSelection.map(t => (
+               <option key={t.teacherId} value={t.teacherId}>{t.teacherName}</option>
+             ))}
+           </select>
+         </div>
+         <div>
+           <button
+             onClick={handleDownloadExcel}
+             disabled={!selectedArchive}
+             className="px-4 py-2 bg-emerald-ink hover:bg-emerald-ink/90 text-white rounded-lg text-sm font-bold disabled:opacity-50 transition-colors flex items-center gap-2"
+           >
+             <FileSpreadsheet className="w-4 h-4" />
+             Export Excel
+           </button>
+         </div>
+      </div>
+      
+      {selectedArchive ? (
+         <div className="mt-8">
+           <Gradebook 
+             students={selectedArchive.students || []}
+             initialGrades={selectedArchive.grades || {}}
+             viewingTerm={selectedArchive.term}
+             isReadOnly={true}
+             teacherSubjects={selectedArchive.subList || []}
+           />
+         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {archives.map(arc => (
-            <div key={arc.id} className="glass-card p-5 border border-zinc-200 dark:border-zinc-800/80 rounded-xl relative group overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-ink/5 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-zinc-900 dark:text-white">{arc.metadata?.academicYear || 'Unknown Year'}</h3>
-                  <p className="text-xs text-zinc-500 font-medium mt-1">{arc.teacherName || arc.uid} • {arc.metadata?.classAssigned || 'Unknown Class'}</p>
-                </div>
-              </div>
-              
-              <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-3">
-                Archived on {new Date(arc.timestamp).toLocaleDateString()}
-              </div>
-
-              <button
-                onClick={() => handleDownloadExcel(arc)}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-ink/10 hover:bg-emerald-ink/20 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 py-2.5 rounded-lg text-xs font-bold transition-colors"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Download Yearly Excel
-              </button>
-            </div>
-          ))}
-        </div>
+         <div className="py-12 text-center text-zinc-500 text-sm">
+            No archive data available for this selection.
+         </div>
       )}
     </div>
   );

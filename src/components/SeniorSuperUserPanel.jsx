@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
-import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save } from 'lucide-react';
+import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
@@ -31,6 +31,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
 
       snap.forEach(d => {
         const instData = { id: d.id, ...d.data() };
+        instData.academicYear = instData.academicYear || "2026/2027";
         instData.teachers = allTeachers.filter(t => t.institutionId === d.id && !t.isAdmin && !t.isSeniorSuperUser);
         instData.adminProfile = allTeachers.find(t => t.institutionId === d.id && t.isAdmin);
         list.push(instData);
@@ -100,6 +101,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         schoolName,
         adminEmail,
         activeTerm: "Term 1",
+        academicYear: "2026/2027",
         schoolCrestUrl: "",
         gradingFormula: 'default',
         createdAt: new Date().toISOString()
@@ -232,6 +234,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         schoolName: schoolName.trim(),
         adminEmail: adminEmail.toLowerCase().trim(),
         activeTerm,
+        academicYear: "2026/2027",
         schoolCrestUrl: schoolCrestUrl.trim(),
         gradingFormula: 'default',
         createdAt: new Date().toISOString()
@@ -261,14 +264,109 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     }
   };
 
-  const updateInstitutionTerm = async (id, newTerm) => {
+  const archiveTermData = async (instId, academicYear, termToArchive) => {
     try {
+      const qTeachers = query(collection(db, "teachers"), where("institutionId", "==", instId));
+      const snapTeachers = await getDocs(qTeachers);
+      
+      const archivePromises = [];
+      
+      for (const tDoc of snapTeachers.docs) {
+        if (tDoc.data().isAdmin || tDoc.data().isSeniorSuperUser) continue;
+        
+        const teacherUid = tDoc.id;
+        const sDoc = await getDoc(doc(db, "schools", teacherUid));
+        if (sDoc.exists()) {
+          const sData = sDoc.data();
+          const termData = sData.terms?.[termToArchive];
+          if (termData) {
+            const archiveId = `${instId}_${academicYear.replace('/', '-')}_${termToArchive.replace(' ', '')}_${teacherUid}`;
+            archivePromises.push(
+              setDoc(doc(db, "archives", archiveId), {
+                institutionId: instId,
+                academicYear,
+                term: termToArchive,
+                teacherId: teacherUid,
+                teacherName: tDoc.data().name,
+                subList: sData.subList || [],
+                grades: termData.grades || {},
+                students: termData.students || [],
+                archivedAt: new Date().toISOString()
+              })
+            );
+          }
+        }
+      }
+      await Promise.all(archivePromises);
+    } catch (e) {
+      console.error("Error archiving term data:", e);
+      throw e;
+    }
+  };
+
+  const updateInstitutionTerm = async (inst, newTerm) => {
+    const id = inst.id;
+    const oldTerm = inst.activeTerm;
+    const academicYear = inst.academicYear || "2026/2027";
+    
+    if (oldTerm === newTerm) return;
+    
+    const toastId = toast.loading(`Archiving ${oldTerm} and switching to ${newTerm}...`);
+    try {
+      await archiveTermData(id, academicYear, oldTerm);
       await setDoc(doc(db, "institutions", id), { activeTerm: newTerm }, { merge: true });
-      toast.success("Active term updated!");
-      setInstitutions(prev => prev.map(inst => inst.id === id ? { ...inst, activeTerm: newTerm } : inst));
+      toast.success(`${oldTerm} archived and active term updated!`, { id: toastId });
+      setInstitutions(prev => prev.map(i => i.id === id ? { ...i, activeTerm: newTerm } : i));
     } catch (e) {
       console.error(e);
-      toast.error("Failed to update term.");
+      toast.error("Failed to update term.", { id: toastId });
+    }
+  };
+
+  const handleEndOfYearRollover = async (inst) => {
+    const confirmed = window.prompt(`Type "CONFIRM" to archive Term 3 and reset ${inst.schoolName} for the New Academic Year.`);
+    if (confirmed !== "CONFIRM") return;
+
+    let nextAcademicYear = window.prompt("Enter the New Academic Year (e.g., 2027/2028):", "2027/2028");
+    if (!nextAcademicYear) return;
+
+    const toastId = toast.loading(`Archiving Term 3 and rolling over ${inst.schoolName}...`);
+    try {
+      const academicYear = inst.academicYear || "2026/2027";
+      // 1. Archive Term 3
+      await archiveTermData(inst.id, academicYear, "Term 3");
+
+      // 2. Wipe teacher terms data completely
+      const qTeachers = query(collection(db, "teachers"), where("institutionId", "==", inst.id));
+      const snapTeachers = await getDocs(qTeachers);
+      
+      const wipePromises = [];
+      for (const tDoc of snapTeachers.docs) {
+        if (tDoc.data().isAdmin || tDoc.data().isSeniorSuperUser) continue;
+        const teacherUid = tDoc.id;
+        wipePromises.push(
+          setDoc(doc(db, "schools", teacherUid), {
+            terms: {
+              "Term 1": { students: [], grades: {} },
+              "Term 2": { students: [], grades: {} },
+              "Term 3": { students: [], grades: {} }
+            }
+          }, { merge: true })
+        );
+      }
+      await Promise.all(wipePromises);
+
+      // 3. Update institution to new academic year and reset to Term 1
+      await setDoc(doc(db, "institutions", inst.id), { 
+        activeTerm: "Term 1",
+        academicYear: nextAcademicYear 
+      }, { merge: true });
+
+      toast.success("End of year rollover complete!", { id: toastId });
+      fetchInstitutions();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to perform end of year rollover.", { id: toastId });
     }
   };
 
@@ -445,9 +543,9 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
               <tr className="bg-zinc-100 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-semibold">
                 <th className="px-4 py-3">School Name</th>
                 <th className="px-4 py-3">Super User Email</th>
-                <th className="px-4 py-3">Crest</th>
-                <th className="px-4 py-3 w-40">Active Term</th>
-                <th className="px-4 py-3 w-20 text-center">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Academic Year</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Active Term</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-medium">
@@ -501,27 +599,13 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        {editingInstId === inst.id ? (
-                          <input 
-                            type="text" 
-                            value={editCrestUrl} 
-                            onChange={(e) => setEditCrestUrl(e.target.value)}
-                            placeholder="Crest URL"
-                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full focus:ring-violet-500 focus:border-violet-500"
-                          />
-                        ) : (
-                          inst.schoolCrestUrl ? (
-                            <img src={inst.schoolCrestUrl} alt="crest" className="w-6 h-6 object-contain rounded bg-white" />
-                          ) : (
-                            <span className="text-[10px] text-zinc-500">None</span>
-                          )
-                        )}
+                      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 font-medium">
+                        {inst.academicYear}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <select 
                           value={inst.activeTerm}
-                          onChange={(e) => updateInstitutionTerm(inst.id, e.target.value)}
+                          onChange={(e) => updateInstitutionTerm(inst, e.target.value)}
                           className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded focus:ring-violet-500 focus:border-violet-500 w-full font-bold text-violet-700 dark:text-violet-400"
                         >
                           <option value="Term 1">Term 1</option>
@@ -561,13 +645,26 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                               <Edit className="w-4 h-4" />
                             </button>
                           )}
-                            <button 
-                              onClick={() => deleteInstitution(inst)}
-                              className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"
-                            title="Delete School"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEndOfYearRollover(inst);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                          title="End of Year Rollover (Archive Term 3)"
+                        >
+                          <Archive className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteInstitution(inst);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Delete School Permanently"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                         </div>
                       </td>
                     </tr>
