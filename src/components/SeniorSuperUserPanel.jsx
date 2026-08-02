@@ -157,10 +157,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
           grades[sub.key] = {};
           students.forEach(s => {
             // Generate realistic bell-curve marks for an ideal classroom
-            const gw1 = randInt(12, 25);   // Group Work 1 (out of 25)
-            const test = randInt(10, 25);   // Class Test (out of 25)
-            const gw2 = randInt(12, 25);   // Group Work 2 (out of 25)
-            const proj = randInt(10, 25);   // Project (out of 25)
+            const gw1 = randInt(12, 20);   // TEST 1 (out of 20)
+            const test = randInt(15, 30);   // GW (out of 30)
+            const gw2 = randInt(12, 20);   // TEST 2 (out of 20)
+            const proj = randInt(15, 30);   // PROJ (out of 30)
             const exams = randInt(40, 95);  // End of Term Exam (out of 100)
             grades[sub.key][s.sn] = {
               gw1: gw1.toString(),
