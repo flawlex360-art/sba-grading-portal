@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
-import { db, createTeacherUser } from '../utils/firebase';
+import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
 import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -295,7 +295,9 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     }
   };
 
-  const deleteInstitution = (id, name) => {
+  const deleteInstitution = (inst) => {
+    const id = inst.id;
+    const name = inst.schoolName;
     toast.custom((t) => (
       <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white dark:bg-zinc-900 shadow-2xl rounded-xl pointer-events-auto flex flex-col p-5 border border-zinc-200 dark:border-zinc-800`}>
         <div className="flex items-center gap-2 text-rose-600 mb-1">
@@ -327,7 +329,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
               // 4. Perform Firestore deletions in background with timeout safety
               try {
                 const timeoutPromise = new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error("Timeout")), 4000)
+                  setTimeout(() => reject(new Error("Timeout")), 60000)
                 );
 
                 const performDelete = async () => {
@@ -335,9 +337,20 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                   const snapTeachers = await getDocs(qTeachers);
                   for (const tDoc of snapTeachers.docs) {
                     const teacherUid = tDoc.id;
+                    const teacherData = tDoc.data();
+                    
+                    if (teacherData.email && teacherData.password) {
+                      await deleteTeacherAccount(teacherData.email, teacherData.password).catch(() => {});
+                    }
+                    
                     await deleteDoc(doc(db, "schools", teacherUid)).catch(() => {});
                     await deleteDoc(doc(db, "teachers", teacherUid)).catch(() => {});
                   }
+                  
+                  if (inst.adminProfile?.email && inst.adminProfile?.password) {
+                    await deleteTeacherAccount(inst.adminProfile.email, inst.adminProfile.password).catch(() => {});
+                  }
+                  
                   await deleteDoc(doc(db, "institutions", id));
                 };
 
@@ -548,9 +561,9 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                               <Edit className="w-4 h-4" />
                             </button>
                           )}
-                          <button 
-                            onClick={() => deleteInstitution(inst.id, inst.schoolName)}
-                            className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            <button 
+                              onClick={() => deleteInstitution(inst)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"
                             title="Delete School"
                           >
                             <Trash2 className="w-4 h-4" />
