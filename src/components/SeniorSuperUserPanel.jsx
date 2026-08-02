@@ -543,6 +543,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
               <tr className="bg-zinc-100 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-semibold">
                 <th className="px-4 py-3">School Name</th>
                 <th className="px-4 py-3">Super User Email</th>
+                <th className="px-4 py-3">Crest</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Academic Year</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Active Term</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
@@ -597,6 +598,23 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                             <Key className="w-3 h-3 text-emerald-500" />
                             Pass: <span className="font-mono text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-1 rounded">{inst.adminProfile.password}</span>
                           </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {editingInstId === inst.id ? (
+                          <input 
+                            type="text" 
+                            value={editCrestUrl} 
+                            onChange={(e) => setEditCrestUrl(e.target.value)}
+                            placeholder="Crest URL"
+                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full focus:ring-violet-500 focus:border-violet-500"
+                          />
+                        ) : (
+                          inst.schoolCrestUrl ? (
+                            <img src={inst.schoolCrestUrl} alt="crest" className="w-6 h-6 object-contain rounded bg-white" />
+                          ) : (
+                            <span className="text-[10px] text-zinc-500">None</span>
+                          )
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 font-medium">
