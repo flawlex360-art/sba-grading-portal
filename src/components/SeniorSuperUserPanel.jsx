@@ -12,11 +12,13 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [editingInstId, setEditingInstId] = useState(null);
   const [editSchoolName, setEditSchoolName] = useState('');
   const [editCrestUrl, setEditCrestUrl] = useState('');
+  const [editAcademicYear, setEditAcademicYear] = useState('');
   // Form State
   const [schoolName, setSchoolName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [activeTerm, setActiveTerm] = useState('Term 1');
+  const [academicYear, setAcademicYear] = useState('2026/2027');
   const [schoolCrestUrl, setSchoolCrestUrl] = useState('');
   
   const fetchInstitutions = async () => {
@@ -234,7 +236,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         schoolName: schoolName.trim(),
         adminEmail: adminEmail.toLowerCase().trim(),
         activeTerm,
-        academicYear: "2026/2027",
+        academicYear: academicYear.trim() || "2026/2027",
         schoolCrestUrl: schoolCrestUrl.trim(),
         gradingFormula: 'default',
         createdAt: new Date().toISOString()
@@ -379,11 +381,12 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
     try {
       await setDoc(doc(db, "institutions", id), { 
         schoolName: editSchoolName.trim(), 
-        schoolCrestUrl: editCrestUrl.trim() 
+        schoolCrestUrl: editCrestUrl.trim(),
+        academicYear: editAcademicYear.trim() || "2026/2027"
       }, { merge: true });
       
       setInstitutions(prev => prev.map(inst => 
-        inst.id === id ? { ...inst, schoolName: editSchoolName.trim(), schoolCrestUrl: editCrestUrl.trim() } : inst
+        inst.id === id ? { ...inst, schoolName: editSchoolName.trim(), schoolCrestUrl: editCrestUrl.trim(), academicYear: editAcademicYear.trim() || "2026/2027" } : inst
       ));
       toast.success("Changes saved successfully", { id: toastId });
       setEditingInstId(null);
@@ -521,6 +524,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                   <input value={schoolCrestUrl} onChange={e => setSchoolCrestUrl(e.target.value)} placeholder="https://..." className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs" />
                 </div>
                 <div>
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Academic Year</label>
+                  <input value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="e.g. 2026/2027" className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs" />
+                </div>
+                <div>
                   <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Initial Active Term</label>
                   <select value={activeTerm} onChange={e => setActiveTerm(e.target.value)} className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs">
                     <option value="Term 1">Term 1</option>
@@ -617,8 +624,18 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                           )
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-zinc-600 dark:text-zinc-400 font-medium">
-                        {inst.academicYear}
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {editingInstId === inst.id ? (
+                          <input 
+                            type="text" 
+                            value={editAcademicYear} 
+                            onChange={(e) => setEditAcademicYear(e.target.value)}
+                            placeholder="e.g. 2026/2027"
+                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full focus:ring-violet-500 focus:border-violet-500"
+                          />
+                        ) : (
+                          <span className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">{inst.academicYear}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <select 
@@ -655,6 +672,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                               onClick={() => {
                                 setEditSchoolName(inst.schoolName);
                                 setEditCrestUrl(inst.schoolCrestUrl || '');
+                                setEditAcademicYear(inst.academicYear || '2026/2027');
                                 setEditingInstId(inst.id);
                               }}
                               className="p-1.5 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors opacity-0 group-hover:opacity-100"

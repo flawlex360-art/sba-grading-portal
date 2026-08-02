@@ -461,7 +461,8 @@ export default function App() {
         const effectiveInst = fetchedInstData || institution;
         const mergedMetadata = {
           ...(data.metadata || {}),
-          schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name"
+          schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name",
+          academicYear: effectiveInst?.academicYear || data.metadata?.academicYear || "2026/2027"
         };
         setMetadata(mergedMetadata);
         setStudents(activeTermData.students || []);

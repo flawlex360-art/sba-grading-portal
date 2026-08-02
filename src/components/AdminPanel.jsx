@@ -395,7 +395,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editDistrict || !editAcademicYear || !editPassword) {
+    if (!editDistrict || !editPassword) {
       setEditError("All fields except Teacher's Name are required.");
       return;
     }
@@ -438,32 +438,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
       let updatedSchoolData = {};
       if (schoolDocSnap.exists()) {
         const currentData = schoolDocSnap.data();
-        const oldTerm = currentData.metadata?.term || "ONE";
-        const newTerm = editTerm;
         
-        let newActiveTerm = currentData.activeTerm || "Term 1";
+        let newActiveTerm = institution?.activeTerm || currentData.activeTerm || "Term 1";
         let newTerms = currentData.terms || { [newActiveTerm]: { grades: currentData.grades || {}, students: currentData.students || [] } };
-        
-        // Handle term change (promotion/switching)
-        if (oldTerm !== newTerm) {
-           const mapTerm = { "ONE": "Term 1", "TWO": "Term 2", "THREE": "Term 3" };
-           newActiveTerm = mapTerm[newTerm] || "Term 1";
-           
-           if (!newTerms[newActiveTerm]) {
-              // Create the new term, copying students from the previous active term
-              let currentRoster = newTerms[currentData.activeTerm]?.students || currentData.students || [];
-              const cleanRoster = currentRoster.map(s => {
-                  const newStudent = { ...s };
-                  delete newStudent.headTeacherRemark;
-                  delete newStudent.classTeacherRemark;
-                  return newStudent;
-              });
-              newTerms[newActiveTerm] = {
-                  grades: {},
-                  students: cleanRoster
-              };
-           }
-        }
 
         updatedSchoolData = {
           ...currentData,
@@ -471,11 +448,11 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
           terms: newTerms,
           metadata: {
             ...(currentData.metadata || {}),
-            schoolName: editSchoolName.trim(),
+            schoolName: institution?.schoolName || editSchoolName.trim(),
             district: editDistrict.trim(),
             classLevel: editClass,
-            term: editTerm,
-            academicYear: editAcademicYear.trim(),
+            term: institution?.activeTerm === 'Term 3' ? 'THREE' : (institution?.activeTerm === 'Term 2' ? 'TWO' : 'ONE'),
+            academicYear: institution?.academicYear || editAcademicYear.trim(),
             teacherName: finalEditName
           }
         };
@@ -483,10 +460,10 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
         updatedSchoolData = getInitialSchoolData(
           finalEditName,
           editClass,
-          editSchoolName.trim(),
+          institution?.schoolName || editSchoolName.trim(),
           editDistrict.trim(),
-          editTerm,
-          editAcademicYear.trim()
+          institution?.activeTerm || 'Term 1',
+          institution?.academicYear || editAcademicYear.trim()
         );
       }
       await setDoc(schoolDocRef, updatedSchoolData);
@@ -571,7 +548,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
   const handleGenerateAccount = async (e) => {
     e.preventDefault();
-    if (!email || !password || !schoolName || !district || !academicYear) {
+    if (!email || !password || !district) {
       setErrorMsg("All fields except Teacher's Name are required.");
       return;
     }
@@ -617,7 +594,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
         institution ? institution.schoolName : schoolName.trim(),
         district.trim(),
         institution ? institution.activeTerm : 'Term 1',
-        academicYear.trim()
+        institution ? (institution.academicYear || "2026/2027") : academicYear.trim()
       ));
 
       setSuccessMsg(`Account generated successfully!`);
@@ -743,11 +720,10 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                   <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Academic Year</label>
                   <input
                     type="text"
-                    required
-                    value={academicYear}
-                    onChange={(e) => setAcademicYear(e.target.value)}
-                    placeholder="e.g. 2025/2026"
-                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                    disabled
+                    value={institution?.academicYear || "2026/2027"}
+                    className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-500 cursor-not-allowed"
+                    title="Managed by Senior Super Admin"
                   />
                 </div>
               </div>
@@ -1042,15 +1018,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                   </div>
                   <div>
                     <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Term</label>
-                    <select
-                      value={editTerm}
-                      onChange={(e) => setEditTerm(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
-                    >
-                      <option value="ONE">ONE</option>
-                      <option value="TWO">TWO</option>
-                      <option value="THREE">THREE</option>
-                    </select>
+                    <input
+                      type="text"
+                      disabled
+                      value={institution?.activeTerm || "Term 1"}
+                      className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-500 cursor-not-allowed uppercase"
+                      title="Managed by Senior Super Admin"
+                    />
                   </div>
                 </div>
 
@@ -1069,10 +1043,10 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                     <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Academic Year</label>
                     <input
                       type="text"
-                      required
-                      value={editAcademicYear}
-                      onChange={(e) => setEditAcademicYear(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                      disabled
+                      value={institution?.academicYear || "2026/2027"}
+                      className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-500 cursor-not-allowed"
+                      title="Managed by Senior Super Admin"
                     />
                   </div>
                 </div>
