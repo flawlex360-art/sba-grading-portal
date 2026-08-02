@@ -6,21 +6,28 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'admin@school.com';
     }
     
+    // Check if the user is the Senior Super User (by hardcoded email)
+    function isSeniorSuperUser() {
+      return request.auth != null && request.auth.token.email == 'system@flawlex.com';
+    }
+
     // Or if the user document says they are an admin
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
     function isAdmin() {
-      return isSuperAdmin() || isTeacherAdmin();
+      return isSuperAdmin() || isTeacherAdmin() || isSeniorSuperUser();
     }
 
     // Rules for the teachers collection (accounts)
     match /teachers/{teacherId} {
       // Anyone logged in can read basic teacher profiles
       allow read: if request.auth != null;
-      // Only admins can create/update/delete teachers
+      // Only admins and super users can create/update/delete teachers
       allow write: if isAdmin();
     }
 
@@ -29,4 +36,19 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection (tenant schools metadata)
+    match /institutions/{institutionId} {
+      // Any authenticated user can read institutions (to display school names/crests/active terms)
+      allow read: if request.auth != null;
+      // Only Senior Super User or hardcoded super admin can write institutions
+      allow write: if request.auth != null && (isSeniorSuperUser() || isSuperAdmin());
+    }
+
+    // Rules for the archives collection (historical yearly gradebooks)
+    match /archives/{archiveId} {
+      // Only authenticated users with admin/super-user privileges can read/write archived records
+      allow read, write: if request.auth != null && isAdmin();
+    }
+  }
 }
