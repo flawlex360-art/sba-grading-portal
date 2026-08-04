@@ -11,16 +11,24 @@ service cloud.firestore {
       return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
+    // Check if the user document says they are a Senior Super User
+    function isSeniorSuperUser() {
+      return request.auth != null && (
+        request.auth.token.email == 'system@flawlex.com' ||
+        get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isSeniorSuperUser == true
+      );
+    }
+
     // Check if user has any form of admin rights
     function isAdmin() {
-      return isSuperAdmin() || isTeacherAdmin();
+      return isSuperAdmin() || isTeacherAdmin() || isSeniorSuperUser();
     }
 
     // Rules for the teachers collection (accounts)
     match /teachers/{teacherId} {
       // Anyone logged in can read basic teacher profiles
       allow read: if request.auth != null;
-      // Only admins can create/update/delete teachers
+      // Only admins/super-admins can create/update/delete teachers
       allow write: if isAdmin();
     }
 
@@ -29,4 +37,21 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection (enclosing school details)
+    match /institutions/{institutionId} {
+      // Anyone logged in can read basic institution profiles
+      allow read: if request.auth != null;
+      // Only Senior Super Users can manage institutions
+      allow write: if isSeniorSuperUser();
+    }
+
+    // Rules for the archives collection (historical gradebook records)
+    match /archives/{archiveId} {
+      // Admins and Senior Super Users can read archives
+      allow read: if request.auth != null && (isAdmin() || isSeniorSuperUser());
+      // Admins, Senior Super Users, or the specific teacher starting a new year can write archives
+      allow write: if request.auth != null && (isAdmin() || isSeniorSuperUser() || archiveId.startsWith(request.auth.uid));
+    }
+  }
 }
