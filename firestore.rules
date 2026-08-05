@@ -6,14 +6,25 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'admin@school.com';
     }
     
+    // Check if the user is a senior super user
+    function isSeniorSuperUser() {
+      return request.auth != null && (
+        request.auth.token.email == 'system@flawlex.com' ||
+        (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isSeniorSuperUser == true)
+      );
+    }
+
     // Or if the user document says they are an admin
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
     function isAdmin() {
-      return isSuperAdmin() || isTeacherAdmin();
+      return isSuperAdmin() || isTeacherAdmin() || isSeniorSuperUser();
     }
 
     // Rules for the teachers collection (accounts)
@@ -29,4 +40,46 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection (multi-tenant definitions)
+    match /institutions/{institutionId} {
+      // Senior Super Users, institution Admins, and associated teachers can read institution configurations
+      allow read: if request.auth != null && (
+        isSeniorSuperUser() ||
+        (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == institutionId) ||
+        resource.data.adminEmail == request.auth.token.email
+      );
+      // Only Senior Super Users and corresponding institution Admins can write to institution settings
+      allow write: if request.auth != null && (
+        isSeniorSuperUser() ||
+        (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == institutionId &&
+         isTeacherAdmin())
+      );
+    }
+
+    // Rules for the archives collection (historical student reports and grades)
+    match /archives/{archiveId} {
+      // Senior Super Users can read/write any archive; Admins can read archives of their own institution; Teachers can read/write their own archives.
+      allow read: if request.auth != null && (
+        isSeniorSuperUser() ||
+        (resource != null && (
+          resource.data.teacherId == request.auth.uid ||
+          (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == resource.data.institutionId &&
+           isTeacherAdmin())
+        ))
+      );
+      allow write: if request.auth != null && (
+        isSeniorSuperUser() ||
+        (request.resource != null && request.resource.data.teacherId == request.auth.uid &&
+         exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == request.resource.data.institutionId) ||
+        (resource != null && resource.data.teacherId == request.auth.uid &&
+         exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == resource.data.institutionId)
+      );
+    }
+  }
 }
