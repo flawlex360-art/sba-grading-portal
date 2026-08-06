@@ -1,0 +1,4 @@
+## 2025-02-18 - Preventing Evaluation Crashes on Non-existent Document Lookups in Firestore Rules
+**Vulnerability:** Evaluating a document attribute using `get()` in Firestore rules without ensuring the document exists crashes the rule evaluation, leading to accidental denial of service or unexpected security rule behavior.
+**Learning:** Firestore Security Rules are strict. If `get(/databases/$(database)/documents/teachers/$(request.auth.uid))` is invoked for a user without an existing document in the `teachers` collection, any direct attribute access like `.data.isAdmin` on the resulting reference results in a runtime rule evaluation error.
+**Prevention:** Always guard `get()` document reads in security rules with a leading `exists()` check: `exists(/path/to/doc) && get(/path/to/doc).data.attribute == expectedValue`.
