@@ -128,7 +128,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             {institution?.schoolCrestUrl ? (
               <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
             ) : (
-              <img src="/icon.png" className="w-6 h-6 object-contain" alt="Flawlex logo" />
+              <img src="/icon.png" className="w-12 h-12 object-contain" alt="Flawlex logo" />
             )}
             <div>
               <div className="flex items-center gap-2">

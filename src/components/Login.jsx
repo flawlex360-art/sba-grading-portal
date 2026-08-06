@@ -115,7 +115,7 @@ export default function Login({ onLoginSuccess }) {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col items-center mb-8 relative">
-          <img src="/icon.png" className="w-16 h-16 object-contain mb-3 select-none" alt="Flawlex logo" />
+          <img src="/icon.png" className="w-32 h-32 object-contain mb-3 select-none" alt="Flawlex logo" />
           <h1 className="text-xl font-bold tracking-tight text-white">Flawlex Technologies SBA Portal</h1>
           <p className="text-xs text-zinc-400 mt-1 text-center">
             Sign in to access your classroom spreadsheets and report cards

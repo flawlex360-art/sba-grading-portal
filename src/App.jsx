@@ -876,7 +876,7 @@ if (userProfile?.isSeniorSuperUser) {
           {institution?.schoolCrestUrl ? (
                 <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
               ) : (
-                <img src="/icon.png" className="w-7 h-7 object-contain select-none shrink-0" alt="Flawlex logo" />
+                <img src="/icon.png" className="w-14 h-14 object-contain select-none shrink-0" alt="Flawlex logo" />
               )}
           <div className="min-w-0">
             <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">

@@ -473,7 +473,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       {/* Top Navbar */}
       <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
-          <img src="/icon.png" className="w-5 h-5 object-contain" alt="logo" />
+          <img src="/icon.png" className="w-10 h-10 object-contain" alt="logo" />
           <span className="font-bold tracking-tight text-sm uppercase text-violet-600 dark:text-violet-400">Senior Super User Portal</span>
         </div>
         <div className="flex items-center gap-4">
