@@ -8,6 +8,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+import logging
+
+# Set up logging to securely log error details on the server rather than exposing them to clients
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend")
 
 app = FastAPI()
 
@@ -99,7 +104,8 @@ async def import_roster(file: UploadFile = File(...)):
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.exception("Failed to read Excel file during import")
+        raise HTTPException(status_code=400, detail="Failed to read Excel file. Please ensure it is a valid Excel document.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -138,7 +144,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.exception("Failed parsing NAMES sheet during import")
+        raise HTTPException(status_code=500, detail="Failed parsing NAMES sheet. Please ensure the NAMES sheet follows the required template structure.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
@@ -180,6 +187,14 @@ def update_drop_lists(drop_lists: dict):
 # Gemini Streaming Chat Endpoint
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
+    # Security input validation to prevent Denial of Service (DoS) and excessive token/resource usage
+    if len(request.message) > 5000:
+        raise HTTPException(status_code=400, detail="Input message is too long (maximum 5000 characters).")
+    if len(request.history) > 100:
+        raise HTTPException(status_code=400, detail="Chat history exceeds maximum allowed limit.")
+    if len(request.apiKey) > 200:
+        raise HTTPException(status_code=400, detail="API key is too long.")
+
     api_key = request.apiKey or os.environ.get("GEMINI_API_KEY")
     if not api_key:
         # Yield an error event and exit
@@ -319,7 +334,8 @@ async def chat_endpoint(request: ChatRequest):
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': f'⚠️ Chat Error: {str(e)}'})}\n\n"
+            logger.exception("Error during Gemini chat streaming")
+            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': '⚠️ Chat Error: An internal error occurred while generating the response.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
