@@ -2,12 +2,17 @@ import os
 import json
 import io
 import asyncio
+import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+
+# Configure Python standard logger "backend" to securely capture exceptions
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend")
 
 app = FastAPI()
 
@@ -95,11 +100,17 @@ def update_roster(students: list[StudentModel]):
 
 @app.post("/api/roster/import")
 async def import_roster(file: UploadFile = File(...)):
+    # Limit file size to 2MB to prevent DoS via large files
+    max_file_size = 2 * 1024 * 1024
     contents = await file.read()
+    if len(contents) > max_file_size:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size allowed is 2MB.")
+
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.error("Failed to read Excel file", exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to read Excel file due to an invalid format or corruption.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -138,7 +149,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.error("Failed parsing NAMES sheet", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed parsing the roster document. Please ensure the NAMES sheet follows the standard template.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
@@ -180,6 +192,14 @@ def update_drop_lists(drop_lists: dict):
 # Gemini Streaming Chat Endpoint
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
+    # Enforce a secure message input limit (max 1000 chars) to prevent prompt token abuse and resource exhaustion
+    if len(request.message) > 1000:
+         async def len_err_generator():
+              err_msg = "⚠️ Your input is too long. Please restrict your message to under 1000 characters."
+              yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': err_msg})}\n\n"
+              yield "data: [DONE]\n\n"
+         return StreamingResponse(len_err_generator(), media_type="text/event-stream")
+
     api_key = request.apiKey or os.environ.get("GEMINI_API_KEY")
     if not api_key:
         # Yield an error event and exit
@@ -319,7 +339,8 @@ async def chat_endpoint(request: ChatRequest):
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': f'⚠️ Chat Error: {str(e)}'})}\n\n"
+            logger.error("Chat SSE generator exception", exc_info=True)
+            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': '⚠️ Chat Error: An internal error occurred while communicating with the assistant.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
