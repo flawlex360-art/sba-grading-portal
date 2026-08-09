@@ -287,7 +287,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
   const [showSupaKey, setShowSupaKey] = useState(false);
   const [editName, setEditName] = useState('');
   const [editClass, setEditClass] = useState('BS. 7');
-  const [editPassword, setEditPassword] = useState('');
   const [editSchoolName, setEditSchoolName] = useState('');
   const [editDistrict, setEditDistrict] = useState('');
   const [editTerm, setEditTerm] = useState('ONE');
@@ -360,7 +359,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
     setSelectedTeacher(teacher);
     setEditName(teacher.name === 'New Teacher' ? '' : (teacher.name || ''));
     setEditClass(teacher.assignedClass || 'BS. 7');
-    setEditPassword(teacher.password || 'password123');
     setEditLevel(teacher.level || 'JHS');
     const activeSubjects = teacher.subjects || JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC');
     setEditSelectedSubjects(activeSubjects.map(s => s.key));
@@ -395,13 +393,8 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editDistrict || !editPassword) {
+    if (!editDistrict) {
       setEditError("All fields except Teacher's Name are required.");
-      return;
-    }
-
-    if (editPassword.length < 6) {
-      setEditError("Password must be at least 6 characters.");
       return;
     }
 
@@ -412,12 +405,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
     try {
       const finalEditName = editName.trim() || 'New Teacher';
 
-      // 1. If password has changed, update in Firebase Authentication
-      if (editPassword !== selectedTeacher.password) {
-        const currentStoredPassword = selectedTeacher.password || 'password123';
-        await updateTeacherPassword(selectedTeacher.email, currentStoredPassword, editPassword.trim());
-      }
-
       // 2. Update teachers/{uid} doc
       const finalEditSubjects = (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST)
         .filter(s => editSelectedSubjects.includes(s.key));
@@ -426,7 +413,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
       await setDoc(teacherDocRef, {
         name: finalEditName,
         assignedClass: editClass,
-        password: editPassword.trim(),
         level: editLevel,
         subjects: finalEditSubjects
       }, { merge: true });
@@ -518,9 +504,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                 
                 // Step 3: Delete Firebase Auth credentials so they can never log in again
                 if (teacher.email) {
-                  const pass = teacher.password || 'password123';
                   try {
-                    await deleteTeacherAccount(teacher.email, pass);
+                    // Note: Auth deletion requires backend Admin SDK since password is unknown
+                    await deleteTeacherAccount(teacher.email, "").catch(() => {});
                   } catch (authErr) {
                     console.warn(`Auth cleanup for ${teacher.email}:`, authErr.message);
                     // Even if Auth delete fails, the server-side security guard in App.jsx 
@@ -579,7 +565,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
         email: email.trim().toLowerCase(),
         assignedClass: assignedClass,
         createdDate: new Date().toISOString(),
-        password: password.trim(), // Save password for administrator access
         level: level,
         subjects: finalSubjects,
         institutionId: institution.id
@@ -973,16 +958,6 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                       onChange={(e) => setEditName(e.target.value)}
                       placeholder="e.g. Kofi Mensah"
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Teacher Password</label>
-                    <input
-                      type="text"
-                      required
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink font-mono"
                     />
                   </div>
                 </div>
