@@ -43,3 +43,5 @@ data/*.json
 list_models.*
 test_chat.py
 register_admin.js
+
+.vercel

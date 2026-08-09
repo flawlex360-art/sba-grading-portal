@@ -1,7 +1,8 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
-export const exportYearlyData = (termData, metadata, teacherSubjects) => {
-  const wb = XLSX.utils.book_new();
+export const exportYearlyData = async (termData, metadata, teacherSubjects) => {
+  const wb = new ExcelJS.Workbook();
 
   // Create a sheet for each term
   ["Term 1", "Term 2", "Term 3"].forEach(termName => {
@@ -11,7 +12,7 @@ export const exportYearlyData = (termData, metadata, teacherSubjects) => {
     const students = term.students;
     const grades = term.grades || {};
 
-    const sheetData = [];
+    const ws = wb.addWorksheet(termName);
 
     // Header Rows
     const header1 = ["", ""];
@@ -22,8 +23,8 @@ export const exportYearlyData = (termData, metadata, teacherSubjects) => {
       header2.push("Test 1", "Group Work", "Test 2", "Project", "Exams", "Total");
     });
     
-    sheetData.push(header1);
-    sheetData.push(header2);
+    ws.addRow(header1);
+    ws.addRow(header2);
 
     students.forEach(student => {
       const row = [student.sn, student.name];
@@ -40,29 +41,27 @@ export const exportYearlyData = (termData, metadata, teacherSubjects) => {
 
         row.push(t1, gw, t2, pr, ex, total);
       });
-      sheetData.push(row);
+      ws.addRow(row);
     });
 
-    const ws = XLSX.utils.aoa_to_sheet(sheetData);
-    
     // Add some column widths for readability
-    const wscols = [{wch: 5}, {wch: 30}];
+    ws.getColumn(1).width = 5;
+    ws.getColumn(2).width = 30;
     for (let i = 0; i < teacherSubjects.length * 6; i++) {
-        wscols.push({wch: 10});
+        ws.getColumn(3 + i).width = 10;
     }
-    ws['!cols'] = wscols;
-
-    XLSX.utils.book_append_sheet(wb, ws, termName);
   });
 
-  if (wb.SheetNames.length === 0) {
-    const ws = XLSX.utils.aoa_to_sheet([["No data available"]]);
-    XLSX.utils.book_append_sheet(wb, ws, "Empty");
+  if (wb.worksheets.length === 0) {
+    const ws = wb.addWorksheet("Empty");
+    ws.addRow(["No data available"]);
   }
 
   const sanitizedSchool = (metadata?.schoolName || 'School').replace(/[^a-z0-9]/gi, '_');
   const sanitizedClass = (metadata?.classLevel || 'Class').replace(/[^a-z0-9]/gi, '_');
   const sanitizedYear = (metadata?.academicYear || 'Year').replace(/[^a-z0-9]/gi, '_');
   
-  XLSX.writeFile(wb, `${sanitizedSchool}_${sanitizedClass}_${sanitizedYear}_Archive.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  saveAs(blob, `${sanitizedSchool}_${sanitizedClass}_${sanitizedYear}_Archive.xlsx`);
 };

@@ -112,7 +112,6 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         isAdmin: true,
         name: "Admin",
         email: adminEmail,
-        password: adminPassword,
         institutionId: id,
         createdDate: new Date().toISOString()
       });
@@ -134,7 +133,6 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         await setDoc(doc(db, "teachers", teacherUid), {
           name: `${cls.className} Teacher`,
           email: cls.email,
-          password: adminPassword,
           assignedClass: cls.className,
           level: cls.level,
           subjects: cls.subList,
@@ -247,7 +245,6 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         isAdmin: true,
         name: "Admin",
         email: adminEmail.trim().toLowerCase(),
-        password: adminPassword.trim(),
         institutionId: id,
         createdDate: new Date().toISOString()
       });
@@ -441,6 +438,8 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                     const teacherData = tDoc.data();
                     
                     if (teacherData.email && teacherData.password) {
+                      // Note: Deleting from Auth without Admin SDK is impossible if password isn't known.
+                      // We will rely on Firebase Admin SDK or Cloud Functions in the future for Auth deletion.
                       await deleteTeacherAccount(teacherData.email, teacherData.password).catch(() => {});
                     }
                     
@@ -602,8 +601,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                         <div className="text-zinc-600 dark:text-zinc-400 font-semibold">{inst.adminEmail}</div>
                         {inst.adminProfile && (
                           <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1">
-                            <Key className="w-3 h-3 text-emerald-500" />
-                            Pass: <span className="font-mono text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-1 rounded">{inst.adminProfile.password}</span>
+                            <span className="font-semibold">Super Admin Account</span>
                           </div>
                         )}
                       </td>
@@ -724,8 +722,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                                         {t.assignedClass}
                                       </span>
                                       <div className="flex items-center gap-1 text-zinc-500">
-                                        <Key className="w-3 h-3" />
-                                        <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">{t.password}</span>
+                                        <span className="text-zinc-400">Hidden for Security</span>
                                       </div>
                                     </div>
                                   </div>

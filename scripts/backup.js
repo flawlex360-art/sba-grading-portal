@@ -95,6 +95,13 @@ const runBackup = async () => {
       }
       
       // B. Sync Teachers database table
+      const { data: existingUser } = await supabase.from('teachers').select('uid').eq('email', teacher.email).maybeSingle();
+      if (existingUser && existingUser.uid !== teacher.uid) {
+        console.log(`Found orphaned Supabase record for email ${teacher.email} with old UID. Purging old record...`);
+        await supabase.from('schools').delete().eq('teacher_uid', existingUser.uid);
+        await supabase.from('teachers').delete().eq('uid', existingUser.uid);
+      }
+
       const { error: teacherErr } = await supabase
         .from('teachers')
         .upsert({
