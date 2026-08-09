@@ -128,7 +128,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             {institution?.schoolCrestUrl ? (
               <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
             ) : (
-              <img src="/icon.png" className="w-12 h-12 object-contain" alt="Flawlex logo" />
+              <img src="/icon.png" className="w-12 h-12 object-contain" alt="Madifor logo" />
             )}
             <div>
               <div className="flex items-center gap-2">
@@ -853,7 +853,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                 <Users className="w-5 h-5 text-emerald-ink dark:text-emerald-400" />
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Active Teacher Accounts</h3>
-                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-0.5">Manage credentials for the Flawlex Technologies SBA Portal ({teachers.length} active)</p>
+                  <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-0.5">Manage credentials for the Madifor Technologies SBA Portal ({teachers.length} active)</p>
                 </div>
               </div>
             </div>
@@ -1149,7 +1149,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
       )}
 
       <footer className="w-full text-center py-4 text-[10px] text-zinc-500 font-medium mt-auto">
-        SBA portal by Flawlex Technologiess (0592664865)
+        SBA portal by Madifor Technologies (0592664865)
       </footer>
     </>
   );

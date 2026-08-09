@@ -795,7 +795,7 @@ export default function App() {
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-zinc-50 dark:bg-[#09090b]">
         <div className="w-8 h-8 rounded-full border-4 border-zinc-200 border-t-emerald-ink animate-spin" />
         <span className="text-sm text-zinc-500 font-semibold uppercase tracking-widest animate-pulse">
-          Loading Flawlex Technologies SBA Portal...
+          Loading Madifor Technologies SBA Portal...
         </span>
       </div>
     );
@@ -876,7 +876,7 @@ if (userProfile?.isSeniorSuperUser) {
           {institution?.schoolCrestUrl ? (
                 <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
               ) : (
-                <img src="/icon.png" className="w-14 h-14 object-contain select-none shrink-0" alt="Flawlex logo" />
+                <img src="/icon.png" className="w-14 h-14 object-contain select-none shrink-0" alt="Madifor logo" />
               )}
           <div className="min-w-0">
             <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">
@@ -1060,7 +1060,7 @@ if (userProfile?.isSeniorSuperUser) {
       </main>
 
       <footer className="w-full text-center py-4 text-[10px] text-zinc-500 font-medium no-print">
-        SBA portal by Flawlex Technologiess (0592664865)
+        SBA portal by Madifor Technologies (0592664865)
       </footer>
       {/* 4. Floating Chat Panel */}
       <ChatPanel

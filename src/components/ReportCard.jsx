@@ -251,7 +251,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
       {/* Subtle footer */}
       <div className="text-center text-[9px] text-black mt-4 border-t border-zinc-100 pt-1 italic">
-        Flawlex Technologies (0592664865)
+        Madifor Technologies (0592664865)
       </div>
 
       {/* Grading Interpretation Table */}
