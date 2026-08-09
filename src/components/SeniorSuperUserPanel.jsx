@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
 import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
