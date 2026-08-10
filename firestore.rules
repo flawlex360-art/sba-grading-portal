@@ -6,9 +6,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'admin@school.com';
     }
     
-    // Or if the user document says they are an admin
+    // Or if the user document says they are an admin.
+    // Guarded with an exists() check to prevent crash on non-existent documents.
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
@@ -29,4 +32,25 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection
+    match /institutions/{institutionId} {
+      // Anyone logged in can read basic institution profiles
+      allow read: if request.auth != null;
+      // Only admins can modify institutions
+      allow write: if isAdmin();
+    }
+
+    // Rules for the archives collection
+    match /archives/{archiveId} {
+      // Teachers can read archives if they own them. Admins can read all.
+      allow read: if request.auth != null && (resource.data.teacherId == request.auth.uid || isAdmin());
+
+      // Teachers can create archives under their own teacherId. Admins can create any.
+      allow create: if request.auth != null && (request.resource.data.teacherId == request.auth.uid || isAdmin());
+
+      // Teachers can update/delete archives they own. Admins can manage all.
+      allow update, delete: if request.auth != null && (resource.data.teacherId == request.auth.uid || isAdmin());
+    }
+  }
 }
