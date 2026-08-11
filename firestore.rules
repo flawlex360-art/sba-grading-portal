@@ -1,14 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Check if the user is the super admin (by hardcoded email)
+    // Check if the user is the super admin (by hardcoded email or Senior Super User field)
     function isSuperAdmin() {
-      return request.auth != null && request.auth.token.email == 'admin@school.com';
+      return request.auth != null && (
+        request.auth.token.email == 'admin@school.com' ||
+        (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isSeniorSuperUser == true)
+      );
     }
     
     // Or if the user document says they are an admin
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
@@ -29,4 +35,49 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection (schools meta configuration managed by Senior Super Users)
+    match /institutions/{institutionId} {
+      // Anyone logged in can read
+      allow read: if request.auth != null;
+
+      // Only Senior Super Users can create institutions with proper properties
+      allow create: if isSuperAdmin() &&
+                    request.resource.data.schoolName is string &&
+                    request.resource.data.adminEmail is string &&
+                    request.resource.data.activeTerm is string;
+
+      // Only Senior Super Users can update and ensure immutable fields are unchanged
+      allow update: if isSuperAdmin() &&
+                    request.resource.data.schoolName is string &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+
+      // Only Senior Super Users can delete
+      allow delete: if isSuperAdmin();
+    }
+
+    // Rules for the archives collection (immutable historic academic snapshots)
+    match /archives/{archiveId} {
+      // Allow read if super admin, or if user is an admin of the institution that owns the archive, or is the original teacher
+      allow read: if request.auth != null && (
+        isSuperAdmin() ||
+        (exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true &&
+         get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.institutionId == resource.data.institutionId) ||
+        (resource.data.teacherId == request.auth.uid)
+      );
+
+      // Allow create if super admin, or if a user is archiving their own data (where teacherId matches request.auth.uid)
+      allow create: if request.auth != null && (
+        isSuperAdmin() ||
+        (request.resource.data.teacherId == request.auth.uid)
+      ) && request.resource.data.teacherId is string;
+
+      // Allow update only for super admins and ensure original identity (teacherId) is immutable
+      allow update: if isSuperAdmin() && request.resource.data.teacherId == resource.data.teacherId;
+
+      // Allow delete only for super admins
+      allow delete: if isSuperAdmin();
+    }
+  }
 }
