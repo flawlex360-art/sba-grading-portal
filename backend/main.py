@@ -2,12 +2,17 @@ import os
 import json
 import io
 import asyncio
+import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+
+# Configure Python standard logger as "backend"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend")
 
 app = FastAPI()
 
@@ -95,11 +100,22 @@ def update_roster(students: list[StudentModel]):
 
 @app.post("/api/roster/import")
 async def import_roster(file: UploadFile = File(...)):
+    # Validate file extension
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in [".xlsx", ".xls"]:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only Excel files (.xlsx, .xls) are allowed.")
+
+    # Read and enforce file size constraint (max 5MB)
     contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File size exceeds maximum limit of 5MB.")
+
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.exception("Failed to read Excel file structure")
+        raise HTTPException(status_code=400, detail="Failed to read Excel file. Please ensure the file is not corrupted.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -118,7 +134,8 @@ async def import_roster(file: UploadFile = File(...)):
                 if len(row) > 4 and pd.notna(row[4]):
                     name_val = str(row[4]).strip()
                     if name_val and name_val != "Name (Surname First)":
-                        names.append(name_val)
+                        # Truncate extremely long names to prevent DB/UI overflow
+                        names.append(name_val[:100])
         
         # Build new student roster
         students = []
@@ -138,7 +155,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.exception("Error occurred while parsing the NAMES sheet in the Excel file")
+        raise HTTPException(status_code=500, detail="An error occurred while parsing the NAMES sheet. Please verify the template format.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
@@ -180,6 +198,16 @@ def update_drop_lists(drop_lists: dict):
 # Gemini Streaming Chat Endpoint
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
+    # Enforce input length boundaries to prevent resource/token abuse (DoS)
+    if not request.message or len(request.message.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Chat message cannot be empty.")
+
+    if len(request.message) > 4000:
+        raise HTTPException(status_code=400, detail="Chat message is too long. Maximum length is 4000 characters.")
+
+    if len(request.history) > 30:
+        raise HTTPException(status_code=400, detail="Chat history exceeds the maximum limit of 30 messages.")
+
     api_key = request.apiKey or os.environ.get("GEMINI_API_KEY")
     if not api_key:
         # Yield an error event and exit
@@ -222,7 +250,9 @@ async def chat_endpoint(request: ChatRequest):
 
     # Build conversation messages
     contents = []
-    for msg in request.history:
+    # Only keep the last 10 messages of history for token protection and safety
+    safe_history = request.history[-10:]
+    for msg in safe_history:
         contents.append(f"{'User' if msg.get('role') == 'user' else 'Assistant'}: {msg.get('content')}")
     contents.append(f"User: {request.message}")
     prompt = "\n".join(contents)
@@ -319,7 +349,8 @@ async def chat_endpoint(request: ChatRequest):
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': f'⚠️ Chat Error: {str(e)}'})}\n\n"
+            logger.exception("An error occurred during Gemini AI Streaming Chat generation")
+            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': '⚠️ Chat Error: An error occurred while processing your request.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
