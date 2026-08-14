@@ -2,12 +2,17 @@ import os
 import json
 import io
 import asyncio
+import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+
+# Configure standard Python logger for secure console logging
+logger = logging.getLogger("backend")
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
@@ -95,11 +100,19 @@ def update_roster(students: list[StudentModel]):
 
 @app.post("/api/roster/import")
 async def import_roster(file: UploadFile = File(...)):
-    contents = await file.read()
+    # Limit file upload size to 5 MB to prevent Denial of Service (DoS) attacks
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+    # Read up to MAX_FILE_SIZE + 1 to check if actual file exceeds size limit
+    contents = await file.read(MAX_FILE_SIZE + 1)
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5MB.")
+
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.error("Failed to read Excel file during import roster", exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to read Excel file. Please ensure it is a valid format.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -138,7 +151,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.error("Failed parsing NAMES sheet", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred while parsing the NAMES sheet.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
@@ -319,7 +333,8 @@ async def chat_endpoint(request: ChatRequest):
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': f'⚠️ Chat Error: {str(e)}'})}\n\n"
+            logger.error("Error occurred in SSE generator for chat_endpoint", exc_info=True)
+            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': '⚠️ Chat Error: An unexpected error occurred. Please try again later.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
