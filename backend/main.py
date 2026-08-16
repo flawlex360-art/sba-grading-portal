@@ -2,12 +2,15 @@ import os
 import json
 import io
 import asyncio
+import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+
+logger = logging.getLogger("backend")
 
 app = FastAPI()
 
@@ -99,7 +102,8 @@ async def import_roster(file: UploadFile = File(...)):
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.error("Failed to read Excel file: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to read Excel file. Please ensure it is a valid Excel document.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -138,7 +142,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.error("Failed parsing NAMES sheet: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed parsing NAMES sheet. Please ensure the file contains valid student data.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
