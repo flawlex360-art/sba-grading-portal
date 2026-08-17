@@ -5,7 +5,7 @@ import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 from backend.db import load_db, save_db
 
@@ -26,40 +26,40 @@ app.add_middleware(
 
 # API Data Models
 class MetadataModel(BaseModel):
-    schoolName: str
-    district: str
-    classLevel: str
-    term: str
-    academicYear: str
-    date: str
-    nextTermBegins: str
-    timesOpen: int
+    schoolName: str = Field(..., max_length=200)
+    district: str = Field(..., max_length=150)
+    classLevel: str = Field(..., max_length=50)
+    term: str = Field(..., max_length=50)
+    academicYear: str = Field(..., max_length=50)
+    date: str = Field(..., max_length=50)
+    nextTermBegins: str = Field("", max_length=50)
+    timesOpen: int = Field(0, ge=0, le=365)
 
 class StudentModel(BaseModel):
-    sn: int
-    name: str
-    attendance: int = 0
-    conduct: str = ""
-    interest: str = ""
-    remarks: str = ""
-    promotedTo: str = ""
+    sn: int = Field(..., ge=1, le=1000)
+    name: str = Field(..., max_length=150)
+    attendance: int = Field(0, ge=0, le=365)
+    conduct: str = Field("", max_length=500)
+    interest: str = Field("", max_length=500)
+    remarks: str = Field("", max_length=500)
+    promotedTo: str = Field("", max_length=100)
 
 class GradeRecord(BaseModel):
-    gw1: float = 0
-    test: float = 0
-    gw2: float = 0
-    proj: float = 0
-    exams: float = 0
+    gw1: float = Field(0, ge=0, le=100)
+    test: float = Field(0, ge=0, le=100)
+    gw2: float = Field(0, ge=0, le=100)
+    proj: float = Field(0, ge=0, le=100)
+    exams: float = Field(0, ge=0, le=100)
 
 class GradebookModel(BaseModel):
-    subject: str
+    subject: str = Field(..., max_length=100)
     grades: dict  # studentSn -> GradeRecord
 
 class ChatRequest(BaseModel):
-    message: str
-    history: list = []
-    apiKey: str = ""
-    contextData: dict = None
+    message: str = Field(..., max_length=4000)
+    history: list = Field(default_factory=list)
+    apiKey: str = Field("", max_length=250)
+    contextData: dict | None = None
 
 # API Endpoints
 @app.get("/api/data")
@@ -95,11 +95,15 @@ def update_roster(students: list[StudentModel]):
 
 @app.post("/api/roster/import")
 async def import_roster(file: UploadFile = File(...)):
+    # File size limit: 10MB to prevent memory exhaustion DoS
     contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds maximum limit of 10MB")
+
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        raise HTTPException(status_code=400, detail="Failed to read Excel file")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -120,6 +124,10 @@ async def import_roster(file: UploadFile = File(...)):
                     if name_val and name_val != "Name (Surname First)":
                         names.append(name_val)
         
+        # Limit roster size to 1000 students max
+        if len(names) > 1000:
+            raise HTTPException(status_code=400, detail="Roster size exceeds maximum limit of 1000 students")
+
         # Build new student roster
         students = []
         for i, name in enumerate(names, 1):
@@ -137,8 +145,10 @@ async def import_roster(file: UploadFile = File(...)):
         db["students"] = students
         save_db(db)
         return {"status": "success", "students": students}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed parsing NAMES sheet")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
