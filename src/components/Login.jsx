@@ -12,6 +12,9 @@ export default function Login({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [systemExists, setSystemExists] = useState(false);
   
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTimer, setLockoutTimer] = useState(0);
+  
   // Password Reset State
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -33,6 +36,20 @@ export default function Login({ onLoginSuccess }) {
     };
     checkSystemExists();
   }, []);
+
+  // Handle lockout countdown
+  useEffect(() => {
+    let timer;
+    if (lockoutTimer > 0) {
+      timer = setInterval(() => {
+        setLockoutTimer(prev => prev - 1);
+      }, 1000);
+    } else if (lockoutTimer === 0 && failedAttempts >= 5) {
+      // Reset attempts when timer finishes
+      setFailedAttempts(0);
+    }
+    return () => clearInterval(timer);
+  }, [lockoutTimer, failedAttempts]);
 
   const config = getFirebaseConfig();
   const configValid = isConfigValid(config);
@@ -61,6 +78,12 @@ export default function Login({ onLoginSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (lockoutTimer > 0) {
+      setError(`Too many failed attempts. Please wait ${lockoutTimer} seconds.`);
+      return;
+    }
+
     if (!configValid) {
       setError("Firebase is not configured yet.");
       return;
@@ -71,13 +94,27 @@ export default function Login({ onLoginSuccess }) {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // Reset on success
+      setFailedAttempts(0);
+      setLockoutTimer(0);
       onLoginSuccess(userCredential.user);
     } catch (err) {
       console.error(err);
-      let errMsg = "Invalid email or password. Please try again.";
+      
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      
+      if (newAttempts >= 5) {
+        setLockoutTimer(60); // Lock for 60 seconds
+        setError("Too many failed attempts. Account temporarily locked for 1 minute.");
+        setLoading(false);
+        return;
+      }
+
+      let errMsg = `Invalid email or password. (${5 - newAttempts} attempts remaining)`;
       if (email.trim().toLowerCase() === 'system@flawlex.com') {
         if (systemExists) {
-          setError("Incorrect password for System account.");
+          setError(`Incorrect password for System account. (${5 - newAttempts} attempts remaining)`);
         } else {
           setError(
             <div className="flex flex-col gap-2">
@@ -97,11 +134,14 @@ export default function Login({ onLoginSuccess }) {
         return;
       }
       if (err.code === 'auth/invalid-credential') {
-        errMsg = "Incorrect email address or password.";
+        errMsg = `Incorrect email address or password. (${5 - newAttempts} attempts remaining)`;
       } else if (err.code === 'auth/user-not-found') {
         errMsg = "No teacher account exists with this email address.";
       } else if (err.code === 'auth/wrong-password') {
-        errMsg = "Incorrect password.";
+        errMsg = `Incorrect password. (${5 - newAttempts} attempts remaining)`;
+      } else if (err.code === 'auth/too-many-requests') {
+        setLockoutTimer(60);
+        errMsg = "Access blocked by Firebase due to unusual activity. Please wait 1 minute.";
       } else if (err.code === 'auth/network-request-failed') {
         errMsg = "Network error. Please check your internet connection.";
       }
@@ -217,13 +257,17 @@ export default function Login({ onLoginSuccess }) {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || lockoutTimer > 0}
               className="w-full bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-lg mt-6"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Authenticating...
+                </span>
+              ) : lockoutTimer > 0 ? (
+                <span className="flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> Locked ({lockoutTimer}s)
                 </span>
               ) : (
                 <>

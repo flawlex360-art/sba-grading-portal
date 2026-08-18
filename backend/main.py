@@ -2,6 +2,10 @@ import os
 import json
 import io
 import asyncio
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -10,6 +14,10 @@ import pandas as pd
 from backend.db import load_db, save_db
 
 app = FastAPI()
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Enable CORS for frontend proxy
 app.add_middleware(
@@ -63,7 +71,8 @@ class ChatRequest(BaseModel):
 
 # API Endpoints
 @app.get("/api/data")
-def get_all_data():
+@limiter.limit("10/minute")
+def get_all_data(request: Request):
     return load_db()
 
 @app.post("/api/metadata")
@@ -179,7 +188,8 @@ def update_drop_lists(drop_lists: dict):
 
 # Gemini Streaming Chat Endpoint
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+@limiter.limit("5/minute")
+async def chat_endpoint(request: ChatRequest, fastapi_req: Request):
     api_key = request.apiKey or os.environ.get("GEMINI_API_KEY")
     if not api_key:
         # Yield an error event and exit
