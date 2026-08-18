@@ -470,12 +470,12 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-[#09090b] text-zinc-100' : 'bg-zinc-50 text-zinc-900'} font-sans select-none flex flex-col transition-colors duration-300`}>
       {/* Top Navbar */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm">
+      <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex flex-col sm:flex-row items-center justify-between flex-wrap gap-4 shadow-sm">
         <div className="flex items-center gap-2">
           <img src="/icon.png" className="w-10 h-10 object-contain" alt="logo" />
           <span className="font-bold tracking-tight text-sm uppercase text-violet-600 dark:text-violet-400">Senior Super User Portal</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap justify-center sm:justify-end items-center gap-4">
           <button onClick={toggleTheme} className="p-2 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
@@ -490,14 +490,14 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       </header>
 
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 transition-all duration-300">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">Registered Institutions</h1>
             <p className="text-xs text-zinc-500 mt-1">Manage school tenants and their active terms</p>
           </div>
           <button 
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
+            className="w-full sm:w-auto flex justify-center items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
           >
             <Plus className="w-4 h-4" /> {showAddForm ? 'Cancel' : 'Register New School'}
           </button>
@@ -543,8 +543,8 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
           </div>
         )}
 
-        <div className="glass-card rounded-xl border border-zinc-200 dark:border-zinc-800/80 overflow-hidden">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="glass-card rounded-xl border border-zinc-200 dark:border-zinc-800/80 overflow-x-auto w-full">
+          <table className="w-full text-left text-xs border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-zinc-100 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-semibold">
                 <th className="px-4 py-3">School Name</th>

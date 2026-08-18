@@ -123,15 +123,15 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
       <div className={`min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans select-none flex flex-col transition-colors duration-300 ${isPrinting ? 'no-print hidden-for-print' : ''}`}>
         
         {/* Top Navbar */}
-        <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm no-print">
-          <div className="flex items-center gap-3">
+        <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 shadow-sm no-print">
+          <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
             {institution?.schoolCrestUrl ? (
-              <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm" alt="Crest" />
+              <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm shrink-0" alt="Crest" />
             ) : (
-              <img src="/icon.png" className="w-12 h-12 object-contain" alt="Madifor logo" />
+              <img src="/icon.png" className="w-12 h-12 object-contain shrink-0" alt="Madifor logo" />
             )}
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <span className="font-black tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
                 <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-300 dark:border-emerald-700">SUPER ADMIN</span>
               </div>
@@ -142,7 +142,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2.5 w-full sm:w-auto">
             <button
               onClick={toggleTheme}
               className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
