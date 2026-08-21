@@ -1,0 +1,4 @@
+## 2025-05-18 - Input Validation Constraints and Internal Traceback Leakage Prevention
+**Vulnerability:** The `/api/chat` and `/api/roster/import` endpoints were vulnerable to resource/token abuse DoS via unbounded `message` / `history` payload lengths and internal traceback/exception information disclosure via raw `str(e)` response formatting.
+**Learning:** Unconstrained Pydantic request models in FastAPI allow client requests to send arbitrary string lengths and list sizes, risking RAM/token exhaustion. Uncaught exception handlers returning `str(e)` directly to SSE stream output expose internal server/library details to clients.
+**Prevention:** Bound string and array inputs in Pydantic models using `Field(..., max_length=N)` and catch internal exceptions, logging full tracebacks with `logger.error(..., exc_info=True)` while returning generic client-safe error messages.
