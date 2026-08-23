@@ -8,7 +8,9 @@ service cloud.firestore {
     
     // Or if the user document says they are an admin
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
@@ -29,4 +31,17 @@ service cloud.firestore {
       // Teachers can only read and write to their OWN school data. Admins can read and write to ALL schools.
       allow read, write: if request.auth != null && (request.auth.uid == schoolId || isAdmin());
     }
+
+    // Rules for the institutions collection
+    match /institutions/{institutionId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Rules for the archives collection
+    match /archives/{archiveId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
 }
