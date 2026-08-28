@@ -9,7 +9,7 @@ from fastapi import Request
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 from backend.db import load_db, save_db
 
@@ -41,27 +41,27 @@ class MetadataModel(BaseModel):
     academicYear: str
     date: str
     nextTermBegins: str
-    timesOpen: int
+    timesOpen: int = Field(default=0, ge=0, le=365)
 
 class StudentModel(BaseModel):
-    sn: int
+    sn: int = Field(..., ge=1)
     name: str
-    attendance: int = 0
+    attendance: int = Field(default=0, ge=0)
     conduct: str = ""
     interest: str = ""
     remarks: str = ""
     promotedTo: str = ""
 
 class GradeRecord(BaseModel):
-    gw1: float = 0
-    test: float = 0
-    gw2: float = 0
-    proj: float = 0
-    exams: float = 0
+    gw1: float = Field(default=0, ge=0, le=100)
+    test: float = Field(default=0, ge=0, le=100)
+    gw2: float = Field(default=0, ge=0, le=100)
+    proj: float = Field(default=0, ge=0, le=100)
+    exams: float = Field(default=0, ge=0, le=100)
 
 class GradebookModel(BaseModel):
     subject: str
-    grades: dict  # studentSn -> GradeRecord
+    grades: dict[str, GradeRecord]
 
 class ChatRequest(BaseModel):
     message: str
@@ -76,14 +76,16 @@ def get_all_data(request: Request):
     return load_db()
 
 @app.post("/api/metadata")
-def update_metadata(meta: MetadataModel):
+@limiter.limit("30/minute")
+def update_metadata(meta: MetadataModel, request: Request):
     db = load_db()
     db["metadata"] = meta.model_dump()
     save_db(db)
     return {"status": "success", "metadata": db["metadata"]}
 
 @app.post("/api/roster")
-def update_roster(students: list[StudentModel]):
+@limiter.limit("30/minute")
+def update_roster(students: list[StudentModel], request: Request):
     db = load_db()
     # Merge existing student records (to keep their comments/attendance)
     existing_map = {s["sn"]: s for s in db.get("students", [])}
@@ -103,7 +105,8 @@ def update_roster(students: list[StudentModel]):
     return {"status": "success", "students": db["students"]}
 
 @app.post("/api/roster/import")
-async def import_roster(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def import_roster(request: Request, file: UploadFile = File(...)):
     contents = await file.read()
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
@@ -150,7 +153,8 @@ async def import_roster(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
 
 @app.post("/api/grades")
-def update_grades(gradebook: GradebookModel):
+@limiter.limit("30/minute")
+def update_grades(gradebook: GradebookModel, request: Request):
     db = load_db()
     if "grades" not in db:
         db["grades"] = {}
@@ -161,7 +165,8 @@ def update_grades(gradebook: GradebookModel):
     return {"status": "success"}
 
 @app.post("/api/reports")
-def update_student_report(report: StudentModel):
+@limiter.limit("30/minute")
+def update_student_report(report: StudentModel, request: Request):
     db = load_db()
     students = db.get("students", [])
     found = False
@@ -180,7 +185,8 @@ def update_student_report(report: StudentModel):
     return {"status": "success", "students": db["students"]}
 
 @app.post("/api/dropLists")
-def update_drop_lists(drop_lists: dict):
+@limiter.limit("30/minute")
+def update_drop_lists(drop_lists: dict, request: Request):
     db = load_db()
     db["dropLists"] = drop_lists
     save_db(db)
