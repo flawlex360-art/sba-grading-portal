@@ -9,7 +9,7 @@ from fastapi import Request
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 from backend.db import load_db, save_db
 
@@ -44,24 +44,24 @@ class MetadataModel(BaseModel):
     timesOpen: int
 
 class StudentModel(BaseModel):
-    sn: int
-    name: str
-    attendance: int = 0
+    sn: int = Field(..., ge=1)
+    name: str = Field(..., min_length=1)
+    attendance: int = Field(0, ge=0)
     conduct: str = ""
     interest: str = ""
     remarks: str = ""
     promotedTo: str = ""
 
 class GradeRecord(BaseModel):
-    gw1: float = 0
-    test: float = 0
-    gw2: float = 0
-    proj: float = 0
-    exams: float = 0
+    gw1: float = Field(0, ge=0, le=100)
+    test: float = Field(0, ge=0, le=100)
+    gw2: float = Field(0, ge=0, le=100)
+    proj: float = Field(0, ge=0, le=100)
+    exams: float = Field(0, ge=0, le=100)
 
 class GradebookModel(BaseModel):
     subject: str
-    grades: dict  # studentSn -> GradeRecord
+    grades: dict[str, GradeRecord]  # studentSn -> GradeRecord
 
 class ChatRequest(BaseModel):
     message: str
