@@ -27,7 +27,7 @@ pnpm-debug.log*
 *.log
 backup.log
 
-# Editor/Agent folders
+# Editor / Agent folders
 .vscode/
 .idea/
 .DS_Store
@@ -35,13 +35,20 @@ backup.log
 /scratch/
 /brain/
 
-# Local data (student PII)
+# Local data (Student PII & Local DB Dumps)
+data/
 data/db.json
 data/*.json
 
-# Test/Debug scripts
+# Internal Administrative, Destructive & Backup Automation Scripts
+scripts/
+run-backup.bat
+*.bat
+*.ps1
+register_admin.js
 list_models.*
 test_chat.py
-register_admin.js
+backend/test_rate_limit.py
+backend/update_main.py
 
 .vercel
