@@ -2,6 +2,7 @@ import os
 import json
 import io
 import asyncio
+import logging
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -12,6 +13,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 from backend.db import load_db, save_db
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend")
 
 app = FastAPI()
 limiter = Limiter(key_func=get_remote_address)
@@ -108,7 +112,8 @@ async def import_roster(file: UploadFile = File(...)):
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+        logger.error("Failed reading Excel file", exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to read Excel file.")
         
     sheet_name = None
     for name in xl.sheet_names:
@@ -147,7 +152,8 @@ async def import_roster(file: UploadFile = File(...)):
         save_db(db)
         return {"status": "success", "students": students}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
+        logger.error("Failed parsing NAMES sheet", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed parsing NAMES sheet due to an internal server error.")
 
 @app.post("/api/grades")
 def update_grades(gradebook: GradebookModel):
@@ -189,8 +195,8 @@ def update_drop_lists(drop_lists: dict):
 # Gemini Streaming Chat Endpoint
 @app.post("/api/chat")
 @limiter.limit("5/minute")
-async def chat_endpoint(request: ChatRequest, fastapi_req: Request):
-    api_key = request.apiKey or os.environ.get("GEMINI_API_KEY")
+async def chat_endpoint(request: Request, chat_body: ChatRequest):
+    api_key = chat_body.apiKey or os.environ.get("GEMINI_API_KEY")
     if not api_key:
         # Yield an error event and exit
         async def err_generator():
@@ -199,8 +205,8 @@ async def chat_endpoint(request: ChatRequest, fastapi_req: Request):
             yield "data: [DONE]\n\n"
         return StreamingResponse(err_generator(), media_type="text/event-stream")
 
-    if request.contextData:
-        db = request.contextData
+    if chat_body.contextData:
+        db = chat_body.contextData
     else:
         db = load_db()
     
@@ -232,9 +238,9 @@ async def chat_endpoint(request: ChatRequest, fastapi_req: Request):
 
     # Build conversation messages
     contents = []
-    for msg in request.history:
+    for msg in chat_body.history:
         contents.append(f"{'User' if msg.get('role') == 'user' else 'Assistant'}: {msg.get('content')}")
-    contents.append(f"User: {request.message}")
+    contents.append(f"User: {chat_body.message}")
     prompt = "\n".join(contents)
 
     async def sse_generator():
@@ -329,7 +335,8 @@ async def chat_endpoint(request: ChatRequest, fastapi_req: Request):
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': f'⚠️ Chat Error: {str(e)}'})}\n\n"
+            logger.error("Chat streaming endpoint error", exc_info=True)
+            yield f"data: {json.dumps({'type': 'FINAL_RESPONSE', 'content': '⚠️ Chat Error: An unexpected error occurred while processing your request.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
