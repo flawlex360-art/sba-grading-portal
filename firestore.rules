@@ -8,7 +8,9 @@ service cloud.firestore {
     
     // Or if the user document says they are an admin
     function isTeacherAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.isAdmin == true;
     }
     
     // Check if user has any form of admin rights
