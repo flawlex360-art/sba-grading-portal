@@ -76,14 +76,16 @@ def get_all_data(request: Request):
     return load_db()
 
 @app.post("/api/metadata")
-def update_metadata(meta: MetadataModel):
+@limiter.limit("10/minute")
+def update_metadata(request: Request, meta: MetadataModel):
     db = load_db()
     db["metadata"] = meta.model_dump()
     save_db(db)
     return {"status": "success", "metadata": db["metadata"]}
 
 @app.post("/api/roster")
-def update_roster(students: list[StudentModel]):
+@limiter.limit("10/minute")
+def update_roster(request: Request, students: list[StudentModel]):
     db = load_db()
     # Merge existing student records (to keep their comments/attendance)
     existing_map = {s["sn"]: s for s in db.get("students", [])}
@@ -103,7 +105,8 @@ def update_roster(students: list[StudentModel]):
     return {"status": "success", "students": db["students"]}
 
 @app.post("/api/roster/import")
-async def import_roster(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def import_roster(request: Request, file: UploadFile = File(...)):
     contents = await file.read()
     try:
         xl = pd.ExcelFile(io.BytesIO(contents))
@@ -150,7 +153,8 @@ async def import_roster(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed parsing NAMES sheet: {str(e)}")
 
 @app.post("/api/grades")
-def update_grades(gradebook: GradebookModel):
+@limiter.limit("10/minute")
+def update_grades(request: Request, gradebook: GradebookModel):
     db = load_db()
     if "grades" not in db:
         db["grades"] = {}
@@ -161,7 +165,8 @@ def update_grades(gradebook: GradebookModel):
     return {"status": "success"}
 
 @app.post("/api/reports")
-def update_student_report(report: StudentModel):
+@limiter.limit("10/minute")
+def update_student_report(request: Request, report: StudentModel):
     db = load_db()
     students = db.get("students", [])
     found = False
@@ -180,7 +185,8 @@ def update_student_report(report: StudentModel):
     return {"status": "success", "students": db["students"]}
 
 @app.post("/api/dropLists")
-def update_drop_lists(drop_lists: dict):
+@limiter.limit("10/minute")
+def update_drop_lists(request: Request, drop_lists: dict):
     db = load_db()
     db["dropLists"] = drop_lists
     save_db(db)
