@@ -1049,6 +1049,7 @@ if (userProfile?.isSeniorSuperUser) {
             viewingTerm={viewingTerm}
             isReadOnly={isReadOnly}
             institution={institution}
+            termData={termData}
           />
         )}
         {activeTab === 'droplists' && (
@@ -1094,6 +1095,7 @@ if (userProfile?.isSeniorSuperUser) {
                 teacherSubjects={teacherSubjects}
                 currentUser={currentUser}
                 institution={institution}
+                viewingTerm={viewingTerm}
               />
             ))
           ) : (
@@ -1104,6 +1106,7 @@ if (userProfile?.isSeniorSuperUser) {
               teacherSubjects={teacherSubjects}
               currentUser={currentUser}
               institution={institution}
+              viewingTerm={viewingTerm}
             />
           )}
         </div>

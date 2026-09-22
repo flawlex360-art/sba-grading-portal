@@ -1,5 +1,5 @@
 import React from 'react';
-import { getOrdinalSuffix } from '../utils/calculations';
+import { getOrdinalSuffix, generateParentAdvisory } from '../utils/calculations';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
@@ -64,6 +64,15 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
   
   const termDisplayMap = { "Term 1": "ONE", "Term 2": "TWO", "Term 3": "THREE" };
   const displayTerm = termDisplayMap[viewingTerm] || viewingTerm || metadata.term || "";
+
+  // Extract STEM scores for Parent Advisory Note (Page 2)
+  const mathScore = result.subjects?.['Mathematics']?.total ?? 
+                    result.subjects?.['Maths']?.total ?? 0;
+  const scienceScore = result.subjects?.['Science']?.total ?? 
+                       result.subjects?.['Integrated Science']?.total ?? 0;
+  const advisoryNote = (student.parentAdvisoryNote !== undefined && student.parentAdvisoryNote !== '')
+    ? student.parentAdvisoryNote
+    : generateParentAdvisory(student.name, mathScore, scienceScore);
   
   return (
     <div className="print-page bg-white text-black p-6 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-6 font-sans">
@@ -223,7 +232,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           <span className="text-black font-bold uppercase w-40">Class Teacher's Remarks:</span>
           <span className="font-semibold border-b border-zinc-400 flex-1 pb-0.5">{student.remarks || "N/A"}</span>
         </div>
-        {student.promotedTo && (
+        {viewingTerm === 'Term 3' && student.promotedTo && (
           <div className="flex gap-2 items-center">
             <span className="text-black font-bold uppercase w-40">Promoted to:</span>
             <span className="font-bold border-b border-zinc-400 flex-1 pb-0.5 text-black">{student.promotedTo}</span>
@@ -314,6 +323,51 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
             </tr>
           </tbody>
         </table>
+        </div>
+      </div>
+
+      {/* 8. PARENT / GUARDIAN ACADEMIC ADVISORY (Page 2) */}
+      <div className="mt-6 pt-4 border-t-2 border-zinc-950 break-inside-avoid space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold uppercase text-black tracking-wide">
+            PARENT / GUARDIAN ACADEMIC ADVISORY
+          </span>
+          <span className="text-[9px] font-bold text-zinc-600 uppercase">
+            Mathematics & Science Diagnostic
+          </span>
+        </div>
+
+        <div className="bg-zinc-50 border border-zinc-300 rounded p-3 text-[11px] leading-relaxed text-black">
+          <div className="whitespace-pre-line font-normal">
+            {advisoryNote}
+          </div>
+        </div>
+
+        {/* PARENT / GUARDIAN ACKNOWLEDGMENT SLIP */}
+        <div className="border border-zinc-950 rounded p-3 bg-white mt-3 break-inside-avoid">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-bold uppercase text-black">
+              PARENT / GUARDIAN ACKNOWLEDGMENT
+            </span>
+            <span className="text-[9px] text-zinc-500 italic">Please sign and return copy to class teacher</span>
+          </div>
+          <p className="text-[10px] text-zinc-700 italic mb-4">
+            "I have reviewed my ward's terminal performance and the recommendations above."
+          </p>
+          <div className="grid grid-cols-3 gap-6 text-[10px] pt-2">
+            <div>
+              <div className="border-b border-zinc-400 pb-0.5" />
+              <span className="text-[9px] uppercase font-bold text-zinc-600 block mt-1">Parent/Guardian Name</span>
+            </div>
+            <div>
+              <div className="border-b border-zinc-400 pb-0.5" />
+              <span className="text-[9px] uppercase font-bold text-zinc-600 block mt-1">Signature</span>
+            </div>
+            <div>
+              <div className="border-b border-zinc-400 pb-0.5" />
+              <span className="text-[9px] uppercase font-bold text-zinc-600 block mt-1">Date</span>
+            </div>
+          </div>
         </div>
       </div>
 

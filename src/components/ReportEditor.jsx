@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Printer, User, Search, ChevronRight, FileCheck, Check } from 'lucide-react';
 import ReportCard from './ReportCard';
+import { computeCumulativePromotion, generateParentAdvisory } from '../utils/calculations';
 
 export default function ReportEditor({ 
   students, 
@@ -13,7 +14,8 @@ export default function ReportEditor({
   teacherSubjects, 
   viewingTerm, 
   isReadOnly,
-  institution
+  institution,
+  termData
 }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,8 +26,23 @@ export default function ReportEditor({
   const [interest, setInterest] = useState('');
   const [remarks, setRemarks] = useState('');
   const [promotedTo, setPromotedTo] = useState('');
+  const [parentAdvisoryNote, setParentAdvisoryNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Compute cumulative promotion map when viewing Term 3
+  const promotionMap = useMemo(() => {
+    if (viewingTerm !== 'Term 3' || !termData) return {};
+    const activeSubjects = teacherSubjects && teacherSubjects.length > 0
+      ? teacherSubjects.map(s => s.name)
+      : ["English Language", "Mathematics", "Science", "Career Technology", "Social Studies", "Computing", "Religious and Moral Education", "Ghanaian Language", "Creative Arts & Design"];
+    const subMap = activeSubjects.reduce((acc, sub) => { acc[sub] = sub; return acc; }, {});
+    const list = computeCumulativePromotion(termData, students, activeSubjects, subMap, metadata.classLevel);
+    return list.reduce((acc, item) => {
+      acc[item.sn] = item;
+      return acc;
+    }, {});
+  }, [termData, students, teacherSubjects, metadata.classLevel, viewingTerm]);
 
   // Set first student as default if none selected
   useEffect(() => {
@@ -41,7 +58,32 @@ export default function ReportEditor({
     setConduct(student.conduct || '');
     setInterest(student.interest || '');
     setRemarks(student.remarks || '');
-    setPromotedTo(student.promotedTo || '');
+
+    // Auto-fill promotion on Term 3 if not already manually set
+    if (viewingTerm === 'Term 3') {
+      if (student.promotedTo && student.promotedTo.trim() !== '') {
+        setPromotedTo(student.promotedTo);
+      } else {
+        const promo = promotionMap[student.sn];
+        setPromotedTo(promo ? promo.autoPromotedTo : '');
+      }
+    } else {
+      setPromotedTo(student.promotedTo || '');
+    }
+
+    // Auto-generate or load Parent Advisory Note
+    const studentResult = computedResults.find(r => r.sn === student.sn);
+    const mathScore = studentResult?.subjects?.['Mathematics']?.total ?? 
+                      studentResult?.subjects?.['Maths']?.total ?? 0;
+    const scienceScore = studentResult?.subjects?.['Science']?.total ?? 
+                         studentResult?.subjects?.['Integrated Science']?.total ?? 0;
+    const defaultAdvisory = generateParentAdvisory(student.name, mathScore, scienceScore);
+
+    if (student.parentAdvisoryNote !== undefined && student.parentAdvisoryNote !== '') {
+      setParentAdvisoryNote(student.parentAdvisoryNote);
+    } else {
+      setParentAdvisoryNote(defaultAdvisory);
+    }
   };
 
   const handleFormSubmit = (e) => {
@@ -70,7 +112,8 @@ export default function ReportEditor({
       conduct: updatedFields.hasOwnProperty('conduct') ? updatedFields.conduct : conduct,
       interest: updatedFields.hasOwnProperty('interest') ? updatedFields.interest : interest,
       remarks: updatedFields.hasOwnProperty('remarks') ? updatedFields.remarks : remarks,
-      promotedTo: updatedFields.hasOwnProperty('promotedTo') ? updatedFields.promotedTo : promotedTo
+      promotedTo: updatedFields.hasOwnProperty('promotedTo') ? updatedFields.promotedTo : promotedTo,
+      parentAdvisoryNote: updatedFields.hasOwnProperty('parentAdvisoryNote') ? updatedFields.parentAdvisoryNote : parentAdvisoryNote
     };
     
     await onSave(updatedStudent);
@@ -123,7 +166,8 @@ export default function ReportEditor({
     conduct,
     interest,
     remarks: remarks,
-    promotedTo
+    promotedTo,
+    parentAdvisoryNote
   } : null;
 
   return (
@@ -220,7 +264,7 @@ export default function ReportEditor({
 
               <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-semibold">
                 <fieldset disabled={isReadOnly} className="space-y-4 text-xs font-semibold">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className={viewingTerm === 'Term 3' ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4"}>
                     <div>
                       <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
                         ATTENDANCE (Max: {metadata.timesOpen || 100})
@@ -236,23 +280,41 @@ export default function ReportEditor({
                         className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">PROMOTED TO</label>
-                      <select
-                        value={promotedTo}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPromotedTo(val);
-                          saveFormDirect({ promotedTo: val, attendance });
-                        }}
-                        className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="">-- None --</option>
-                        {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
-                          <option key={idx} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {viewingTerm === 'Term 3' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400">PROMOTED TO</label>
+                          {promotionMap[selectedStudent?.sn] && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              promotionMap[selectedStudent?.sn].passed 
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}>
+                              Auto: {promotionMap[selectedStudent?.sn].annualScore}%
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={promotedTo}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPromotedTo(val);
+                            saveFormDirect({ promotedTo: val, attendance });
+                          }}
+                          className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="">-- None --</option>
+                          {promotionMap[selectedStudent?.sn] && (
+                            <option value={promotionMap[selectedStudent?.sn].autoPromotedTo}>
+                              ★ {promotionMap[selectedStudent?.sn].autoPromotedTo}
+                            </option>
+                          )}
+                          {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
+                            <option key={idx} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -333,6 +395,41 @@ export default function ReportEditor({
                       placeholder="Or type custom remarks..."
                       className="w-full mt-1.5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400">
+                        PARENT ADVISORY NOTE (PAGE 2)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const studentResult = computedResults.find(r => r.sn === selectedStudent?.sn);
+                          const mathScore = studentResult?.subjects?.['Mathematics']?.total ?? 
+                                            studentResult?.subjects?.['Maths']?.total ?? 0;
+                          const scienceScore = studentResult?.subjects?.['Science']?.total ?? 
+                                               studentResult?.subjects?.['Integrated Science']?.total ?? 0;
+                          const generated = generateParentAdvisory(selectedStudent?.name, mathScore, scienceScore);
+                          setParentAdvisoryNote(generated);
+                          saveFormDirect({ parentAdvisoryNote: generated, attendance });
+                        }}
+                        className="text-[9px] text-blue-500 hover:text-blue-600 font-semibold"
+                      >
+                        Reset to Auto-Suggested Note
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={parentAdvisoryNote}
+                      onChange={(e) => setParentAdvisoryNote(e.target.value)}
+                      onBlur={(e) => saveFormDirect({ parentAdvisoryNote: e.target.value, attendance })}
+                      placeholder="Auto-generated parent advisory note for Maths and Science will appear here..."
+                      className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans leading-relaxed"
+                    />
+                    <p className="text-[9px] text-zinc-400 mt-1">
+                      This note is automatically tailored to this learner's Mathematics and Science scores and prints on Page 2 of their report card.
+                    </p>
                   </div>
 
                   <div className="flex gap-2 pt-2">

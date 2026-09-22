@@ -1,3 +1,5 @@
+import { PROMOTION_THRESHOLD, CLASS_PROGRESSION } from '../constants/promotionMap';
+
 /**
  * Generates ordinal suffixes for ranks (e.g. 1 -> 1st, 2 -> 2nd, etc.).
  */
@@ -171,3 +173,114 @@ export function computeClassResults(students, gradesStore, subjects, subjectMap)
   // Return list sorted by S/N (matching Excel roster ordering)
   return studentList.sort((a, b) => a.sn - b.sn);
 }
+
+/**
+ * Computes cumulative promotion recommendation across academic terms
+ * with dynamic re-weighting for mid-year admissions.
+ * Standard weights: Term 1 = 25% (0.25), Term 2 = 25% (0.25), Term 3 = 50% (0.50).
+ * Mid-year dynamic re-weighting: Terms 2 & 3 = 33.3% (0.333) and 66.7% (0.667).
+ */
+export function computeCumulativePromotion(termData, currentStudents, subjects, subjectMap, classLevel) {
+  if (!currentStudents || currentStudents.length === 0) return [];
+
+  const terms = ['Term 1', 'Term 2', 'Term 3'];
+  const termResults = {};
+
+  terms.forEach(t => {
+    if (termData && termData[t] && termData[t].students && termData[t].grades) {
+      termResults[t] = computeClassResults(
+        termData[t].students,
+        termData[t].grades,
+        subjects,
+        subjectMap
+      );
+    } else {
+      termResults[t] = [];
+    }
+  });
+
+  return currentStudents.map(student => {
+    const studentTerms = {};
+
+    terms.forEach(t => {
+      const found = termResults[t].find(s => s.sn === student.sn);
+      if (found) {
+        const numSubjects = subjects.length || 1;
+        const termPercentage = found.overallTotal / numSubjects;
+        const termGrades = termData?.[t]?.grades || {};
+        const hasScores = Object.values(termGrades).some(sheet => {
+          const g = sheet[student.sn];
+          return g && (g.gw1 || g.test || g.gw2 || g.proj || g.exams);
+        });
+
+        if (hasScores || termResults[t].length > 0) {
+          studentTerms[t] = termPercentage;
+        }
+      }
+    });
+
+    const availableTerms = Object.keys(studentTerms);
+    let annualScore = 0;
+
+    // Dynamic re-weighting based on available terms
+    if (availableTerms.includes('Term 1') && availableTerms.includes('Term 2') && availableTerms.includes('Term 3')) {
+      // Standard: 25% (0.25) Term 1, 25% (0.25) Term 2, 50% (0.50) Term 3
+      annualScore = (0.25 * studentTerms['Term 1']) + (0.25 * studentTerms['Term 2']) + (0.50 * studentTerms['Term 3']);
+    } else if (availableTerms.includes('Term 2') && availableTerms.includes('Term 3')) {
+      // Mid-year admission in Term 2: 33.3% Term 2, 66.7% Term 3
+      annualScore = (0.333 * studentTerms['Term 2']) + (0.667 * studentTerms['Term 3']);
+    } else if (availableTerms.includes('Term 1') && availableTerms.includes('Term 3')) {
+      // 33.3% Term 1, 66.7% Term 3
+      annualScore = (0.333 * studentTerms['Term 1']) + (0.667 * studentTerms['Term 3']);
+    } else if (availableTerms.includes('Term 1') && availableTerms.includes('Term 2')) {
+      // 50% Term 1, 50% Term 2
+      annualScore = (0.50 * studentTerms['Term 1']) + (0.50 * studentTerms['Term 2']);
+    } else if (availableTerms.length === 1) {
+      // Single term (e.g. admitted in Term 3 only): 100% weight
+      annualScore = studentTerms[availableTerms[0]];
+    } else {
+      annualScore = 0;
+    }
+
+    annualScore = Math.round(annualScore * 10) / 10;
+    const passed = annualScore >= PROMOTION_THRESHOLD;
+    const nextClass = CLASS_PROGRESSION[classLevel] || CLASS_PROGRESSION[classLevel?.trim()] || 'the next class';
+    const autoPromotedTo = passed
+      ? `Promoted to ${nextClass}`
+      : `To Repeat ${classLevel || 'current class'}`;
+
+    return {
+      sn: student.sn,
+      annualScore,
+      autoPromotedTo,
+      passed
+    };
+  });
+}
+
+/**
+ * Generates parent academic advisory note focusing on Mathematics and Science.
+ */
+export function generateParentAdvisory(studentName, mathScore, scienceScore) {
+  const firstName = (studentName || 'Learner').trim().split(/\s+/)[0];
+  const m = parseFloat(mathScore) || 0;
+  const s = parseFloat(scienceScore) || 0;
+
+  if (m < 50 && s < 50) {
+    // Both < 50%: Double STEM Alert
+    return `Special Academic Notice: While ${firstName} has shown effort this term, their performance in Mathematics (${m.toFixed(1)}%) and Integrated Science (${s.toFixed(1)}%) requires urgent attention.\n\nRecommended Practical Steps:\n1. Establish a daily 30-minute study period alternating between math exercises and science reading.\n2. Supervise completion of holiday assignments and practical exercises.\n3. Consider enrolling in remedial classes before the next term to strengthen foundational concepts.`;
+  } else if (m < 50 && s >= 50) {
+    // Maths < 50% only
+    return `Subject Focus Notice (Mathematics): ${firstName} requires additional support in Mathematics (${m.toFixed(1)}%).\n\nRecommended Practical Steps:\nPlease assist with consistent practice in basic operations, word problems, and multiplication tables. Encourage them to solve at least 5 math problems daily at home.`;
+  } else if (s < 50 && m >= 50) {
+    // Science < 50% only
+    return `Subject Focus Notice (Science): ${firstName} requires reinforcement in Integrated Science (${s.toFixed(1)}%).\n\nRecommended Practical Steps:\nAssist your ward in reading science textbooks and defining key terms. Encourage curiosity about natural phenomena and review class diagrams together.`;
+  } else if (m >= 70 && s >= 70) {
+    // Both >= 70%: Commendation
+    return `Commendation: ${firstName} has demonstrated excellent aptitude in both Mathematics (${m.toFixed(1)}%) and Integrated Science (${s.toFixed(1)}%) this term! Continue encouraging this passion with STEM reading materials, educational puzzles, and science documentaries.`;
+  } else {
+    // Both >= 50% but < 70%: Satisfactory Performance
+    return `${firstName}'s performance in Mathematics (${m.toFixed(1)}%) and Integrated Science (${s.toFixed(1)}%) is satisfactory this term. Continue encouraging consistent study habits, regular homework completion, and active participation in class to maintain and improve these results.`;
+  }
+}
+
