@@ -33,10 +33,31 @@ export default function ReportEditor({
   // Compute cumulative promotion map when viewing Term 3
   const promotionMap = useMemo(() => {
     if (viewingTerm !== 'Term 3' || !termData) return {};
-    const activeSubjects = teacherSubjects && teacherSubjects.length > 0
-      ? teacherSubjects.map(s => s.name)
-      : ["English Language", "Mathematics", "Science", "Career Technology", "Social Studies", "Computing", "Religious and Moral Education", "Ghanaian Language", "Creative Arts & Design"];
-    const subMap = activeSubjects.reduce((acc, sub) => { acc[sub] = sub; return acc; }, {});
+    let activeSubjects = [];
+    let subMap = {};
+    if (teacherSubjects && teacherSubjects.length > 0) {
+      activeSubjects = teacherSubjects.map(s => s.name);
+      subMap = teacherSubjects.reduce((acc, sub) => { acc[sub.name] = sub.key || sub.name; return acc; }, {});
+    } else {
+      activeSubjects = ["English Language", "Mathematics", "Science", "Career Technology", "Social Studies", "Computing", "Religious and Moral Education", "Ghanaian Language", "Creative Arts & Design"];
+      const fallbackKeys = {
+        "English Language": "ENGLISH",
+        "Mathematics": "MATHS",
+        "Science": "SCIENCE",
+        "Career Technology": "CAREER_TECH",
+        "Social Studies": "SOCIAL_STUDIES",
+        "Computing": "COMPUTING",
+        "Religious and Moral Education": "RME",
+        "Ghanaian Language": "GHANAIAN_LANG",
+        "Creative Arts & Design": "CREATIVE_ARTS",
+        "French": "FRENCH",
+        "Arabic": "ARABIC"
+      };
+      subMap = activeSubjects.reduce((acc, name) => {
+        acc[name] = fallbackKeys[name] || name;
+        return acc;
+      }, {});
+    }
     const list = computeCumulativePromotion(termData, students, activeSubjects, subMap, metadata.classLevel);
     return list.reduce((acc, item) => {
       acc[item.sn] = item;
