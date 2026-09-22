@@ -649,6 +649,7 @@ export default function App() {
         await setDoc(doc(db, "schools", currentUser.uid), payload, { merge: true });
       } catch (e) {
         console.error("Roster sync error:", e);
+        throw e; // re-throw so the UI knows it failed
       }
     }
   };

@@ -52,8 +52,21 @@ export default function Roster({ students, metadata, onSave, onImport, isReadOnl
     setNewStudentName('');
     setNewStudentGender('U');
     setIsSaving(true);
-    await onSave(reindexed, snMap);
-    setIsSaving(false);
+    
+    try {
+      await toast.promise(
+        onSave(reindexed, snMap),
+        {
+          loading: 'Saving student...',
+          success: 'Student added successfully!',
+          error: 'Failed to save student.'
+        }
+      );
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRemove = async (sn) => {
@@ -61,8 +74,12 @@ export default function Roster({ students, metadata, onSave, onImport, isReadOnl
     const { reindexed, snMap } = sortAndReindex(rawList);
     setList(reindexed);
     setIsSaving(true);
-    await onSave(reindexed, snMap);
-    setIsSaving(false);
+    try {
+      await toast.promise(
+        onSave(reindexed, snMap),
+        { loading: 'Removing student...', success: 'Student removed!', error: 'Failed to remove.' }
+      );
+    } catch (e) {} finally { setIsSaving(false); }
   };
 
   const startEdit = (student) => {
@@ -86,8 +103,12 @@ export default function Roster({ students, metadata, onSave, onImport, isReadOnl
     setEditingName('');
     setEditingGender('');
     setIsSaving(true);
-    await onSave(reindexed, snMap);
-    setIsSaving(false);
+    try {
+      await toast.promise(
+        onSave(reindexed, snMap),
+        { loading: 'Updating student...', success: 'Student updated!', error: 'Failed to update.' }
+      );
+    } catch (e) {} finally { setIsSaving(false); }
   };
 
   const handleClear = () => {
