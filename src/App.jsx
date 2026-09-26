@@ -451,12 +451,15 @@ export default function App() {
         // Fire-and-forget migration save to keep it in sync
         setDoc(doc(db, "schools", uid), { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
 
-        const currentViewTerm = loadedActiveTerm;
-        setTermData(loadedTerms);
-        setActiveTerm(currentViewTerm);
-        setViewingTerm(currentViewTerm);
+        const storedViewTerm = sessionStorage.getItem('targetViewingTerm');
+        const viewTerm = storedViewTerm && loadedTerms[storedViewTerm] ? storedViewTerm : loadedActiveTerm;
 
-        const activeTermData = loadedTerms[currentViewTerm] || { grades: {}, students: [] };
+        setTermData(loadedTerms);
+        setActiveTerm(loadedActiveTerm);
+        setViewingTerm(viewTerm);
+        sessionStorage.removeItem('targetViewingTerm');
+
+        const activeTermData = loadedTerms[viewTerm] || { grades: {}, students: [] };
         
         const effectiveInst = fetchedInstData || institution;
         const mergedMetadata = {
@@ -905,7 +908,10 @@ if (userProfile?.isSeniorSuperUser) {
           <div className="relative group shrink-0">
             <select 
               value={viewingTerm}
-              onChange={(e) => setViewingTerm(e.target.value)}
+              onChange={(e) => {
+                sessionStorage.setItem('targetViewingTerm', e.target.value);
+                window.location.reload();
+              }}
               className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
                 isReadOnly 
                   ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
