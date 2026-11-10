@@ -164,7 +164,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         {/* Admin Tabs */}
         <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar select-none no-print shadow-sm z-10">
           {[
-            { id: 'accounts', name: 'User Management', icon: Users },
+            { id: 'accounts', name: 'Class Management', icon: Users },
             { id: 'subjects', name: 'Subject Management', icon: BookOpen },
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },

@@ -602,7 +602,9 @@ export default function App() {
         }
 
         const storedViewTerm = sessionStorage.getItem('targetViewingTerm');
-        const viewTerm = storedViewTerm && loadedTerms[storedViewTerm] ? storedViewTerm : loadedActiveTerm;
+        const viewTerm = (!isSubTeacherForThisClass && storedViewTerm && loadedTerms[storedViewTerm])
+          ? storedViewTerm
+          : loadedActiveTerm;
 
         setTermData(loadedTerms);
         setActiveTerm(loadedActiveTerm);
@@ -784,12 +786,17 @@ export default function App() {
     }
   }, [viewingTerm, termData]);
 
-  // Enforce allowed tabs when in Subject Teacher Mode
+  // Enforce allowed tabs and lock to current term when in Subject Teacher Mode
   useEffect(() => {
-    if (isSubjectTeacherMode && activeTab !== 'gradebook' && activeTab !== 'reports') {
-      setActiveTab('gradebook');
+    if (isSubjectTeacherMode) {
+      if (viewingTerm !== activeTerm) {
+        setViewingTerm(activeTerm);
+      }
+      if (activeTab !== 'gradebook' && activeTab !== 'reports' && activeTab !== 'trends') {
+        setActiveTab('gradebook');
+      }
     }
-  }, [isSubjectTeacherMode, activeTab]);
+  }, [isSubjectTeacherMode, activeTab, viewingTerm, activeTerm]);
 
   const handleSaveMetadata = async (newMeta) => {
     if (isSubjectTeacherMode) return;
@@ -1165,7 +1172,7 @@ if (userProfile?.isSeniorSuperUser) {
   const isPrinting = printAll || !!printSingleStudent;
   const isReadOnly = viewingTerm !== activeTerm;
   const visibleTabs = isSubjectTeacherMode
-    ? MAIN_TABS.filter(t => t.id === 'gradebook' || t.id === 'reports')
+    ? MAIN_TABS.filter(t => t.id === 'gradebook' || t.id === 'reports' || t.id === 'trends')
     : MAIN_TABS;
 
   return (
@@ -1236,39 +1243,48 @@ if (userProfile?.isSeniorSuperUser) {
             </div>
           )}
 
-          {/* Term Switcher */}
-          <div className="relative group shrink-0">
-            <select 
-              value={viewingTerm}
-              onChange={(e) => {
-                if (activeClassEntry?.classUid) {
-                  sessionStorage.setItem('targetViewingClassUid', activeClassEntry.classUid);
-                }
-                sessionStorage.setItem('targetViewingTerm', e.target.value);
-                window.location.reload();
-              }}
-              className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
-                isReadOnly 
-                  ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
-                  : 'bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg focus:ring-2 focus:ring-emerald-500/20'
-              }`}
+          {/* Term Display (Subject Teachers locked to current term; Class Teachers can switch terms) */}
+          {isSubjectTeacherMode ? (
+            <div
+              className="shrink-0 text-[10px] sm:text-xs font-black tracking-wider px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl shadow-sm bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 select-none"
+              title="Current Active Term"
             >
-              {Object.keys(termData).sort().map(term => (
-                <option key={term} value={term} className="font-semibold">{term}</option>
-              ))}
-            </select>
-            <div className={`absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-300 group-hover:translate-y-[-40%] ${
-              isReadOnly ? 'text-amber-600 dark:text-amber-500' : 'text-zinc-400 dark:text-zinc-500'
-            }`}>
-              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
+              {activeTerm}
             </div>
-            {isReadOnly && (
-              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-              </span>
-            )}
-          </div>          {/* Theme Switcher */}
+          ) : (
+            <div className="relative group shrink-0">
+              <select 
+                value={viewingTerm}
+                onChange={(e) => {
+                  if (activeClassEntry?.classUid) {
+                    sessionStorage.setItem('targetViewingClassUid', activeClassEntry.classUid);
+                  }
+                  sessionStorage.setItem('targetViewingTerm', e.target.value);
+                  window.location.reload();
+                }}
+                className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
+                  isReadOnly 
+                    ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
+                    : 'bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg focus:ring-2 focus:ring-emerald-500/20'
+                }`}
+              >
+                {Object.keys(termData).sort().map(term => (
+                  <option key={term} value={term} className="font-semibold">{term}</option>
+                ))}
+              </select>
+              <div className={`absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-300 group-hover:translate-y-[-40%] ${
+                isReadOnly ? 'text-amber-600 dark:text-amber-500' : 'text-zinc-400 dark:text-zinc-500'
+              }`}>
+                <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
+              </div>
+              {isReadOnly && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </span>
+              )}
+            </div>
+          )}          {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
             className="p-1.5 sm:p-2 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -1364,12 +1380,14 @@ if (userProfile?.isSeniorSuperUser) {
             metadata={metadata}
           />
         )}
-        {!isSubjectTeacherMode && activeTab === 'trends' && (
+        {activeTab === 'trends' && (
           <TrendAnalysis
             termData={termData}
             students={students}
             metadata={metadata}
-            teacherSubjects={teacherSubjects}
+            teacherSubjects={isSubjectTeacherMode ? gradebookSubjects : teacherSubjects}
+            allocatedSubjects={gradebookSubjects}
+            isSubjectTeacherMode={isSubjectTeacherMode}
           />
         )}
         {!isSubjectTeacherMode && activeTab === 'open' && (
