@@ -1,4 +1,5 @@
-import { PROMOTION_THRESHOLD, CLASS_PROGRESSION } from '../constants/promotionMap';
+import { PROMOTION_THRESHOLD, CLASS_PROGRESSION, isJhsClass, resolveNextClass } from '../constants/promotionMap';
+export { isJhsClass, resolveNextClass };
 
 /**
  * Generates ordinal suffixes for ranks (e.g. 1 -> 1st, 2 -> 2nd, etc.).
@@ -244,7 +245,7 @@ export function computeCumulativePromotion(termData, currentStudents, subjects, 
 
     annualScore = Math.round(annualScore * 10) / 10;
     const passed = annualScore >= PROMOTION_THRESHOLD;
-    const nextClass = CLASS_PROGRESSION[classLevel] || CLASS_PROGRESSION[classLevel?.trim()] || 'the next class';
+    const nextClass = resolveNextClass(classLevel);
     const autoPromotedTo = passed
       ? `Promoted to ${nextClass}`
       : `To Repeat ${classLevel || 'current class'}`;

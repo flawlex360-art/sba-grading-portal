@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
-import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
-  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings
+  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConsolidatedView from './ConsolidatedView';
@@ -13,7 +13,7 @@ import TrendAnalysis from './TrendAnalysis';
 import ReportCard from './ReportCard';
 import Gradebook from './Gradebook';
 import { exportYearlyData } from '../utils/excelExport';
-import { computeClassResults } from '../utils/calculations';
+import { computeClassResults, isJhsClass } from '../utils/calculations';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
@@ -34,6 +34,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
   const [teachers, setTeachers] = useState([]);
   const [teachersLoading, setTeachersLoading] = useState(true);
   const [institution, setInstitution] = useState(propInstitution);
+  const [editingSubjectTeacherId, setEditingSubjectTeacherId] = useState('');
 
   useEffect(() => {
     if (propInstitution) {
@@ -164,6 +165,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar select-none no-print shadow-sm z-10">
           {[
             { id: 'accounts', name: 'User Management', icon: Users },
+            { id: 'subjects', name: 'Subject Management', icon: BookOpen },
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
             { id: 'archives', name: 'Data Archives', icon: Archive }
@@ -190,11 +192,36 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         {/* Main Container */}
         <main className="flex-1 max-w-7xl w-full mx-auto p-6 transition-all duration-300">
           
-          {adminTab === 'accounts' && <AdminAccountsTab teachers={teachers} fetchTeachersList={fetchTeachersList} fetching={teachersLoading} institution={institution} />}
-          {adminTab === 'overview' && <AdminOverviewTab teachers={teachers} />}
+          {adminTab === 'accounts' && (
+            <AdminAccountsTab
+              teachers={teachers}
+              fetchTeachersList={fetchTeachersList}
+              fetching={teachersLoading}
+              institution={institution}
+              onOpenSubjectManagement={(teacher) => {
+                setEditingSubjectTeacherId(teacher.uid);
+                setAdminTab('subjects');
+              }}
+            />
+          )}
+          {adminTab === 'subjects' && (
+            <AdminSubjectManagementTab
+              teachers={teachers}
+              fetchTeachersList={fetchTeachersList}
+              fetching={teachersLoading}
+              institution={institution}
+              initialTeacherId={editingSubjectTeacherId}
+              clearInitialTeacherId={() => setEditingSubjectTeacherId('')}
+            />
+          )}
+          {adminTab === 'overview' && (
+            <AdminOverviewTab
+              teachers={teachers.filter(t => t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher')}
+            />
+          )}
           {adminTab === 'reports' && (
             <AdminReportsTab 
-              teachers={teachers} 
+              teachers={teachers.filter(t => t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher')} 
               setPrintAll={setPrintAll} 
               setPrintSingleStudent={setPrintSingleStudent} 
               setPrintData={setPrintData}
@@ -263,7 +290,19 @@ const PRIMARY_SUBJECTS_LIST = [
   { name: "Creative Arts", key: "C. ARTS" }
 ];
 
-function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }) {
+const ALL_CLASSES_LIST = [
+  "BS. 7", "BS. 7A", "BS. 7B",
+  "BS. 8", "BS. 8A", "BS. 8B",
+  "BS. 9", "BS. 9A", "BS. 9B",
+  "BS. 1", "BS. 1A", "BS. 1B",
+  "BS. 2", "BS. 2A", "BS. 2B",
+  "BS. 3", "BS. 3A", "BS. 3B",
+  "BS. 4", "BS. 4A", "BS. 4B",
+  "BS. 5", "BS. 5A", "BS. 5B",
+  "BS. 6", "BS. 6A", "BS. 6B"
+];
+
+function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, onOpenSubjectManagement }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -356,6 +395,11 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 
 
   const handleEditClick = async (teacher) => {
+    // Route dedicated subject teachers directly to the Subject Management tab so they don't accidentally get a dummy class doc created
+    if (teacher.role === 'subject_teacher' && onOpenSubjectManagement) {
+      onOpenSubjectManagement(teacher);
+      return;
+    }
     setSelectedTeacher(teacher);
     setEditName(teacher.name === 'New Teacher' ? '' : (teacher.name || ''));
     setEditClass(teacher.assignedClass || 'BS. 7');
@@ -501,6 +545,19 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                 
                 // Step 2: Delete Firestore school grade sheet
                 await deleteDoc(doc(db, "schools", targetUid)).catch(() => {});
+
+                // Step 2b: Clean up any subject allocations on other teachers pointing to this deleted classUid
+                const affectedTeachers = teachers.filter(other => other.uid !== targetUid && other.classAllocations?.[targetUid]);
+                for (const other of affectedTeachers) {
+                  const nextAlloc = { ...(other.classAllocations || {}) };
+                  const nextKeys = { ...(other.allocationKeys || {}) };
+                  delete nextAlloc[targetUid];
+                  delete nextKeys[targetUid];
+                  await setDoc(doc(db, "teachers", other.uid), {
+                    classAllocations: nextAlloc,
+                    allocationKeys: nextKeys
+                  }, { merge: true }).catch(() => {});
+                }
                 
                 // Step 3: Delete Firebase Auth credentials so they can never log in again
                 if (teacher.email) {
@@ -665,7 +722,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                     onChange={(e) => {
                       const newClass = e.target.value;
                       setAssignedClass(newClass);
-                      const calculatedLevel = ['BS. 7', 'BS. 8', 'BS. 9'].includes(newClass) ? 'JHS' : 'Primary';
+                      const calculatedLevel = isJhsClass(newClass) ? 'JHS' : 'Primary';
                       setLevel(calculatedLevel);
                       if (calculatedLevel === 'Primary') {
                         setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
@@ -675,15 +732,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                     }}
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   >
-                    <option value="BS. 7">BS. 7</option>
-                    <option value="BS. 8">BS. 8</option>
-                    <option value="BS. 9">BS. 9</option>
-                    <option value="BS. 1">BS. 1</option>
-                    <option value="BS. 2">BS. 2</option>
-                    <option value="BS. 3">BS. 3</option>
-                    <option value="BS. 4">BS. 4</option>
-                    <option value="BS. 5">BS. 5</option>
-                    <option value="BS. 6">BS. 6</option>
+                    {ALL_CLASSES_LIST.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -871,9 +922,15 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                         <td className="px-2 py-2.5 text-left font-bold text-zinc-900 dark:text-white">{teacher.name}</td>
                         <td className="px-2 py-2.5 text-left text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">{teacher.email}</td>
                         <td className="px-2 py-2.5 font-mono text-[11px]">
-                          <span className="bg-emerald-ink/10 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 dark:border-emerald-ink/25 px-2 py-0.5 rounded text-[10px] font-bold">
-                            {teacher.assignedClass}
-                          </span>
+                          {teacher.role === 'subject_teacher' ? (
+                            <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                              Subject Teacher
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-ink/10 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 dark:border-emerald-ink/25 px-2 py-0.5 rounded text-[10px] font-bold">
+                              {teacher.assignedClass}
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
                           {teacher.level || 'JHS'}
@@ -970,7 +1027,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                       onChange={(e) => {
                         const newClass = e.target.value;
                         setEditClass(newClass);
-                        const calculatedLevel = ['BS. 7', 'BS. 8', 'BS. 9'].includes(newClass) ? 'JHS' : 'Primary';
+                        const calculatedLevel = isJhsClass(newClass) ? 'JHS' : 'Primary';
                         setEditLevel(calculatedLevel);
                         if (calculatedLevel === 'Primary') {
                           setEditSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
@@ -980,15 +1037,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
                       }}
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     >
-                      <option value="BS. 7">BS. 7</option>
-                      <option value="BS. 8">BS. 8</option>
-                      <option value="BS. 9">BS. 9</option>
-                      <option value="BS. 1">BS. 1</option>
-                      <option value="BS. 2">BS. 2</option>
-                      <option value="BS. 3">BS. 3</option>
-                      <option value="BS. 4">BS. 4</option>
-                      <option value="BS. 5">BS. 5</option>
-                      <option value="BS. 6">BS. 6</option>
+                      {ALL_CLASSES_LIST.map(cls => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -1137,6 +1188,826 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution }
 // Sub-components for Admin Tabs
 // -------------------------------------------------------------
 
+function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, institution, initialTeacherId, clearInitialTeacherId }) {
+  const [mode, setMode] = useState('existing'); // 'existing' | 'new'
+  const [selectedTeacherUid, setSelectedTeacherUid] = useState('');
+  const [teacherRoleType, setTeacherRoleType] = useState('subject_teacher'); // 'subject_teacher' | 'class_teacher'
+  const [homeClass, setHomeClass] = useState('BS. 7');
+
+  // New Subject Teacher account fields
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  // Matrix state: { [classOwnerUid]: ['MATHS', 'SCIENCE'] }
+  const [matrixSelection, setMatrixSelection] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [pendingConflicts, setPendingConflicts] = useState(null);
+
+  // Live class data for coverage & grading tracker
+  const [jhsSchoolsMap, setJhsSchoolsMap] = useState({});
+  const [coverageClassUid, setCoverageClassUid] = useState('');
+
+  // JHS teachers eligible in this school
+  const jhsTeachers = teachers.filter(t => t.level === 'JHS' || isJhsClass(t.assignedClass) || t.role === 'subject_teacher');
+
+  // Official JHS Form Master classes (excluding dedicated subject teachers, and if editing an existing teacher as dedicated subject teacher, excluding their own duplicate class doc)
+  const jhsFormClasses = teachers.filter(t => {
+    if (t.role === 'subject_teacher' || t.assignedClass === 'Subject Teacher') return false;
+    if (!isJhsClass(t.assignedClass) && t.level !== 'JHS') return false;
+    if (mode === 'existing' && teacherRoleType === 'subject_teacher' && t.uid === selectedTeacherUid) {
+      return false;
+    }
+    return true;
+  }).sort((a, b) => (a.assignedClass || '').localeCompare(b.assignedClass || ''));
+
+  // Load school documents for JHS classes to power the live grading completion tracker
+  useEffect(() => {
+    let active = true;
+    async function loadJhsSchoolDocs() {
+      const formClasses = teachers.filter(t => t.role !== 'subject_teacher' && (isJhsClass(t.assignedClass) || t.level === 'JHS'));
+      const map = {};
+      await Promise.all(formClasses.map(async (fc) => {
+        try {
+          const snap = await getDoc(doc(db, "schools", fc.uid));
+          if (snap.exists()) {
+            map[fc.uid] = snap.data();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }));
+      if (active) {
+        setJhsSchoolsMap(map);
+        if (!coverageClassUid && formClasses.length > 0) {
+          setCoverageClassUid(formClasses[0].uid);
+        }
+      }
+    }
+    if (teachers.length > 0) loadJhsSchoolDocs();
+    return () => { active = false; };
+  }, [teachers]);
+
+  // Select teacher helper
+  const handleSelectExistingTeacher = (uid) => {
+    setSelectedTeacherUid(uid);
+    setPendingConflicts(null);
+    const found = teachers.find(t => t.uid === uid);
+    if (!found) {
+      setMatrixSelection({});
+      return;
+    }
+
+    // Determine default role type: if they already have role === 'subject_teacher' or only have 1-2 subjects assigned on a duplicate class, suggest 'subject_teacher'
+    const existingAlloc = found.classAllocations || {};
+    const hasExistingAlloc = Object.keys(existingAlloc).length > 0;
+    const isLikelySubjectOnly = found.role === 'subject_teacher' ||
+      (Array.isArray(found.subjects) && found.subjects.length > 0 && found.subjects.length <= 3);
+
+    setTeacherRoleType(isLikelySubjectOnly ? 'subject_teacher' : 'class_teacher');
+    setHomeClass(isJhsClass(found.assignedClass) ? found.assignedClass : 'BS. 7');
+
+    if (hasExistingAlloc) {
+      const nextMatrix = {};
+      Object.entries(existingAlloc).forEach(([cUid, entry]) => {
+        const targetUid = entry?.classUid || cUid;
+        nextMatrix[targetUid] = (entry?.subjects || []).map(s => s.key);
+      });
+      setMatrixSelection(nextMatrix);
+    } else {
+      setMatrixSelection({});
+    }
+  };
+
+  // Handle deep-link from User Management tab
+  useEffect(() => {
+    if (initialTeacherId && teachers.some(t => t.uid === initialTeacherId)) {
+      setMode('existing');
+      handleSelectExistingTeacher(initialTeacherId);
+      if (clearInitialTeacherId) clearInitialTeacherId();
+    } else if (!selectedTeacherUid && jhsTeachers.length > 0 && mode === 'existing') {
+      handleSelectExistingTeacher(jhsTeachers[0].uid);
+    }
+  }, [initialTeacherId, teachers]);
+
+  // Find who currently holds (classUid, subjectKey) among OTHER teachers
+  const getSlotHolder = (classUid, subjectKey) => {
+    const currentEditingUid = mode === 'existing' ? selectedTeacherUid : null;
+    for (const t of teachers) {
+      if (t.uid === currentEditingUid) continue;
+      const alloc = t.classAllocations?.[classUid];
+      if (alloc && Array.isArray(alloc.subjects) && alloc.subjects.some(s => s.key === subjectKey)) {
+        return t;
+      }
+    }
+    return null;
+  };
+
+  const toggleMatrixCell = (classUid, subjectKey) => {
+    setPendingConflicts(null);
+    setMatrixSelection(prev => {
+      const currentList = prev[classUid] || [];
+      const exists = currentList.includes(subjectKey);
+      const nextList = exists
+        ? currentList.filter(k => k !== subjectKey)
+        : [...currentList, subjectKey];
+      return {
+        ...prev,
+        [classUid]: nextList
+      };
+    });
+  };
+
+  const computeConflicts = () => {
+    const conflicts = [];
+    Object.entries(matrixSelection).forEach(([classUid, subKeys]) => {
+      const clsObj = jhsFormClasses.find(c => c.uid === classUid);
+      if (!clsObj) return;
+      (subKeys || []).forEach(subKey => {
+        const holder = getSlotHolder(classUid, subKey);
+        if (holder) {
+          const subObj = JHS_SUBJECTS_LIST.find(s => s.key === subKey);
+          conflicts.push({
+            classUid,
+            className: clsObj.assignedClass,
+            subjectKey: subKey,
+            subjectName: subObj?.name || subKey,
+            holderUid: holder.uid,
+            holderName: holder.name
+          });
+        }
+      });
+    });
+    return conflicts;
+  };
+
+  const handleSaveAllocations = async (e, forceConfirmTransfer = false) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (!institution?.id) {
+      toast.error("No active institution found.");
+      return;
+    }
+
+    // Build clean classAllocations & allocationKeys maps for active JHS classes
+    const builtAllocations = {};
+    const builtKeys = {};
+    let totalSubjectsSelected = 0;
+
+    jhsFormClasses.forEach(cls => {
+      const chosenKeys = matrixSelection[cls.uid] || [];
+      if (chosenKeys.length > 0) {
+        const subObjects = JHS_SUBJECTS_LIST.filter(s => chosenKeys.includes(s.key));
+        if (subObjects.length > 0) {
+          builtAllocations[cls.uid] = {
+            classUid: cls.uid,
+            className: cls.assignedClass,
+            subjects: subObjects
+          };
+          builtKeys[cls.uid] = subObjects.map(s => s.key);
+          totalSubjectsSelected += subObjects.length;
+        }
+      }
+    });
+
+    if (mode === 'new') {
+      if (!newName.trim() || !newEmail.trim() || !newPassword) {
+        toast.error("Please enter Teacher Name, Login Email, and Password.");
+        return;
+      }
+      if (totalSubjectsSelected === 0) {
+        toast.error("Please tick at least one JHS Class & Subject in the grid below.");
+        return;
+      }
+    } else {
+      if (!selectedTeacherUid) {
+        toast.error("Please select a teacher first.");
+        return;
+      }
+    }
+
+    // Check for conflicts with other teachers
+    const conflicts = computeConflicts();
+    if (conflicts.length > 0 && !forceConfirmTransfer) {
+      setPendingConflicts(conflicts);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let targetUid = selectedTeacherUid;
+      let targetName = newName.trim();
+
+      if (mode === 'new') {
+        targetUid = await createTeacherUser(newEmail.trim(), newPassword);
+      } else {
+        const existingT = teachers.find(t => t.uid === selectedTeacherUid);
+        targetName = existingT?.name || 'Teacher';
+      }
+
+      const batch = writeBatch(db);
+
+      // 1. If there were conflicts confirmed for transfer, remove those slots from previous holders
+      if (conflicts.length > 0) {
+        const holdersToUpdate = {};
+        conflicts.forEach(c => {
+          if (!holdersToUpdate[c.holderUid]) {
+            const holderDoc = teachers.find(t => t.uid === c.holderUid);
+            holdersToUpdate[c.holderUid] = {
+              classAllocations: structuredClone(holderDoc?.classAllocations || {}),
+              allocationKeys: structuredClone(holderDoc?.allocationKeys || {})
+            };
+          }
+          const hAlloc = holdersToUpdate[c.holderUid].classAllocations[c.classUid];
+          if (hAlloc && Array.isArray(hAlloc.subjects)) {
+            hAlloc.subjects = hAlloc.subjects.filter(s => s.key !== c.subjectKey);
+            if (hAlloc.subjects.length === 0) {
+              delete holdersToUpdate[c.holderUid].classAllocations[c.classUid];
+              delete holdersToUpdate[c.holderUid].allocationKeys[c.classUid];
+            } else {
+              holdersToUpdate[c.holderUid].allocationKeys[c.classUid] = hAlloc.subjects.map(s => s.key);
+            }
+          }
+        });
+
+        Object.entries(holdersToUpdate).forEach(([hUid, updatedMaps]) => {
+          batch.set(doc(db, "teachers", hUid), updatedMaps, { merge: true });
+        });
+      }
+
+      // 2. Ensure any assigned subject (e.g. FRENCH or ARABIC) is also enabled on the target Form Master's class subject list
+      Object.entries(builtAllocations).forEach(([cUid, allocEntry]) => {
+        const formMaster = teachers.find(t => t.uid === cUid);
+        if (formMaster) {
+          const currentSubs = Array.isArray(formMaster.subjects) && formMaster.subjects.length > 0
+            ? [...formMaster.subjects]
+            : JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC');
+          let changed = false;
+          allocEntry.subjects.forEach(sub => {
+            if (!currentSubs.some(cs => cs.key === sub.key)) {
+              currentSubs.push(sub);
+              changed = true;
+            }
+          });
+          if (changed) {
+            batch.set(doc(db, "teachers", cUid), { subjects: currentSubs }, { merge: true });
+          }
+        }
+      });
+
+      // 3. Save target teacher document
+      if (mode === 'new') {
+        batch.set(doc(db, "teachers", targetUid), {
+          name: targetName,
+          email: newEmail.trim().toLowerCase(),
+          role: 'subject_teacher',
+          assignedClass: 'Subject Teacher',
+          level: 'JHS',
+          institutionId: institution.id,
+          createdDate: new Date().toISOString(),
+          classAllocations: builtAllocations,
+          allocationKeys: builtKeys
+        });
+      } else {
+        const isDedicated = teacherRoleType === 'subject_teacher';
+        batch.set(doc(db, "teachers", targetUid), {
+          role: isDedicated ? 'subject_teacher' : 'class_teacher',
+          assignedClass: isDedicated ? 'Subject Teacher' : homeClass,
+          level: 'JHS',
+          classAllocations: builtAllocations,
+          allocationKeys: builtKeys
+        }, { merge: true });
+
+        // If converted to Dedicated Subject Teacher, clean up any orphaned duplicate schools/{uid} document
+        if (isDedicated) {
+          batch.delete(doc(db, "schools", targetUid));
+        }
+      }
+
+      await batch.commit();
+      setPendingConflicts(null);
+
+      if (mode === 'new') {
+        toast.success(`Subject Teacher "${targetName}" created and allocated!`);
+        setNewName('');
+        setNewEmail('');
+        setNewPassword('');
+        setMatrixSelection({});
+      } else {
+        toast.success(`Subject allocations updated for "${targetName}"!`);
+      }
+
+      await fetchTeachersList();
+    } catch (err) {
+      console.error("Failed saving subject allocations:", err);
+      toast.error(err.message || "Failed to save subject allocations.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const allocatedTeachersList = teachers.filter(t =>
+    t.role === 'subject_teacher' ||
+    (t.classAllocations && Object.keys(t.classAllocations).length > 0)
+  );
+
+  const selectedCoverageClass = jhsFormClasses.find(c => c.uid === coverageClassUid) || jhsFormClasses[0] || null;
+  const selectedCoverageSchoolDoc = selectedCoverageClass ? jhsSchoolsMap[selectedCoverageClass.uid] : null;
+  const activeCoverageTerm = institution?.activeTerm || selectedCoverageSchoolDoc?.activeTerm || 'Term 1';
+  const activeCoverageTermData = selectedCoverageSchoolDoc?.terms?.[activeCoverageTerm] || { students: [], grades: {}, gradeMeta: {} };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
+      {/* Left 6 Columns: Creator & Matrix Allocation Editor */}
+      <div className="lg:col-span-6 space-y-4">
+        <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-emerald-ink dark:text-emerald-400" />
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white">JHS Subject Allocation Matrix</h3>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Assign multiple subjects across JHS classes (BS. 7, BS. 8, BS. 9) to a single login
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Mode Toggle */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('existing');
+                setPendingConflicts(null);
+                if (jhsTeachers.length > 0 && !selectedTeacherUid) {
+                  handleSelectExistingTeacher(jhsTeachers[0].uid);
+                }
+              }}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                mode === 'existing'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              Assign / Convert Existing Teacher
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('new');
+                setPendingConflicts(null);
+                setMatrixSelection({});
+              }}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                mode === 'new'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              + New Subject Teacher Login
+            </button>
+          </div>
+
+          <form onSubmit={(e) => handleSaveAllocations(e, false)} className="space-y-4 text-xs font-semibold">
+            {mode === 'existing' ? (
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                    Select JHS Teacher Account
+                  </label>
+                  <select
+                    value={selectedTeacherUid}
+                    onChange={(e) => handleSelectExistingTeacher(e.target.value)}
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                  >
+                    <option value="">-- Select Teacher --</option>
+                    {jhsTeachers.map(t => (
+                      <option key={t.uid} value={t.uid}>
+                        {t.name} ({t.email}) — {t.role === 'subject_teacher' ? 'Subject Teacher' : t.assignedClass}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedTeacherUid && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                        Account Role Type
+                      </label>
+                      <select
+                        value={teacherRoleType}
+                        onChange={(e) => setTeacherRoleType(e.target.value)}
+                        className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                      >
+                        <option value="subject_teacher">Dedicated Subject Teacher (No Form Class)</option>
+                        <option value="class_teacher">Form Master + Subject Teacher</option>
+                      </select>
+                    </div>
+                    {teacherRoleType === 'class_teacher' && (
+                      <div>
+                        <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                          Form Master Home Class
+                        </label>
+                        <select
+                          value={homeClass}
+                          onChange={(e) => setHomeClass(e.target.value)}
+                          className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                        >
+                          {ALL_CLASSES_LIST.filter(c => isJhsClass(c)).map(cls => (
+                            <option key={cls} value={cls}>{cls}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {teacherRoleType === 'subject_teacher' && selectedTeacherUid && (
+                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-lg p-2">
+                    Saving as <strong>Dedicated Subject Teacher</strong> will link this login directly to the ticked JHS classes below and automatically remove any duplicate blank class record for this teacher.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                    Subject Teacher Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Amlado Seyram"
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                      Login Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="maths@school.com"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                      Login Password
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 6 characters"
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Class x Subject Allocation Checkbox Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-bold">
+                  Tick Assigned JHS Classes & Subjects
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setMatrixSelection({})}
+                  className="text-[10px] text-zinc-500 hover:text-rose-500 underline"
+                >
+                  Clear All Ticks
+                </button>
+              </div>
+
+              {jhsFormClasses.length === 0 ? (
+                <div className="p-6 text-center text-xs text-zinc-500 border border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl">
+                  No JHS Form Master classes (BS. 7, BS. 8, BS. 9) found yet. Create the main class accounts in User Management first.
+                </div>
+              ) : (
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300">
+                        <th className="p-2.5 font-bold">JHS Subject</th>
+                        {jhsFormClasses.map(cls => (
+                          <th key={cls.uid} className="p-2 text-center min-w-[92px] border-l border-zinc-200 dark:border-zinc-800">
+                            <div className="font-black text-emerald-ink dark:text-emerald-400 text-[11px]">{cls.assignedClass}</div>
+                            <div className="text-[9px] font-medium text-zinc-400 truncate max-w-[90px] mx-auto" title={cls.name}>
+                              {cls.name}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
+                      {JHS_SUBJECTS_LIST.map(sub => (
+                        <tr key={sub.key} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors">
+                          <td className="p-2.5 font-semibold text-zinc-800 dark:text-zinc-200">
+                            <div>{sub.name}</div>
+                            <div className="text-[9px] text-zinc-400 font-mono">{sub.key}</div>
+                          </td>
+                          {jhsFormClasses.map(cls => {
+                            const isChecked = (matrixSelection[cls.uid] || []).includes(sub.key);
+                            const holder = getSlotHolder(cls.uid, sub.key);
+                            return (
+                              <td
+                                key={cls.uid}
+                                onClick={() => toggleMatrixCell(cls.uid, sub.key)}
+                                className={`p-2 text-center border-l border-zinc-200 dark:border-zinc-800 cursor-pointer select-none transition-colors ${
+                                  isChecked
+                                    ? 'bg-emerald-50/80 dark:bg-emerald-950/30'
+                                    : holder
+                                      ? 'bg-amber-50/40 dark:bg-amber-950/15'
+                                      : ''
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {}}
+                                  className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                />
+                                {holder && (
+                                  <div
+                                    className="text-[9px] mt-0.5 px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold truncate max-w-[85px] mx-auto"
+                                    title={`Currently assigned to ${holder.name}`}
+                                  >
+                                    {holder.name.split(' ')[0]}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Conflict Warning & Confirmation Card */}
+            {pendingConflicts && pendingConflicts.length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-900 dark:text-amber-200">
+                    <p className="font-bold">Subject Reassignment Confirmation</p>
+                    <p className="text-[11px] mt-0.5">
+                      The following class subject(s) are currently assigned to another teacher. Confirming will automatically transfer them to this teacher:
+                    </p>
+                    <ul className="list-disc list-inside mt-1.5 space-y-0.5 text-[11px] font-semibold">
+                      {pendingConflicts.map((c, idx) => (
+                        <li key={idx}>
+                          {c.className} — {c.subjectName} (from <strong>{c.holderName}</strong>)
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingConflicts(null)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={(e) => handleSaveAllocations(e, true)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                  >
+                    {saving ? "Transferring..." : "Confirm & Transfer Subjects"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!pendingConflicts && (
+              <button
+                type="submit"
+                disabled={saving || jhsFormClasses.length === 0}
+                className="w-full bg-emerald-ink hover:bg-emerald-900 disabled:opacity-50 text-white rounded-lg py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow"
+              >
+                {saving ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving Subject Allocations...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    {mode === 'new' ? 'Create Subject Teacher & Allocate' : 'Save Subject Allocations'}
+                  </>
+                )}
+              </button>
+            )}
+          </form>
+        </div>
+      </div>
+
+      {/* Right 6 Columns: Allocated Subject Teachers Directory & Live Coverage Tracker */}
+      <div className="lg:col-span-6 space-y-6">
+        {/* Card 1: Active Subject Teachers & Multi-Class Teachers */}
+        <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                Allocated JHS Subject Teachers ({allocatedTeachersList.length})
+              </h3>
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                Teachers with multi-class or subject-specific login access
+              </p>
+            </div>
+          </div>
+
+          {allocatedTeachersList.length === 0 ? (
+            <div className="p-8 text-center text-xs text-zinc-500 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
+              No subject allocations configured yet. Use the matrix on the left to assign subjects across BS. 7, BS. 8, and BS. 9.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+              {allocatedTeachersList.map(t => {
+                const allocEntries = Object.values(t.classAllocations || {});
+                return (
+                  <div
+                    key={t.uid}
+                    className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 flex flex-col gap-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-zinc-900 dark:text-white">{t.name}</span>
+                          {t.role === 'subject_teacher' ? (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 font-bold uppercase">
+                              Subject Teacher
+                            </span>
+                          ) : (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-bold uppercase">
+                              Form Master ({t.assignedClass}) + Subject
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">{t.email}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('existing');
+                          handleSelectExistingTeacher(t.uid);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-ink/10 hover:bg-emerald-ink/20 text-emerald-ink dark:text-emerald-400 border border-emerald-ink/20 flex items-center gap-1 transition-colors shrink-0"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit Matrix
+                      </button>
+                    </div>
+
+                    {allocEntries.length === 0 ? (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 italic">
+                        No classes assigned yet — click Edit Matrix to allocate subjects.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {allocEntries.map(entry => (
+                          <div
+                            key={entry.classUid}
+                            className="text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1 font-semibold"
+                          >
+                            <span className="font-black text-emerald-ink dark:text-emerald-400 mr-1.5">{entry.className}:</span>
+                            <span className="text-zinc-700 dark:text-zinc-300">
+                              {(entry.subjects || []).map(s => s.key).join(', ')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Card 2: Live JHS Class Subject Coverage & Grading Tracker */}
+        <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                Live JHS Subject Coverage & Grading Status
+              </h3>
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                Track which teacher holds each subject and whether marks have been entered ({activeCoverageTerm})
+              </p>
+            </div>
+            {jhsFormClasses.length > 0 && (
+              <select
+                value={selectedCoverageClass?.uid || ''}
+                onChange={(e) => setCoverageClassUid(e.target.value)}
+                className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-ink dark:text-emerald-400"
+              >
+                {jhsFormClasses.map(cls => (
+                  <option key={cls.uid} value={cls.uid}>
+                    {cls.assignedClass} ({cls.name})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {selectedCoverageClass ? (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
+                    <th className="p-2.5">Subject</th>
+                    <th className="p-2.5">Assigned Teacher</th>
+                    <th className="p-2.5 text-center">Grading Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
+                  {(selectedCoverageClass.subjects || JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')).map(sub => {
+                    // Find subject teacher assigned to (selectedCoverageClass.uid, sub.key)
+                    const assignedSubTeacher = teachers.find(t =>
+                      t.classAllocations?.[selectedCoverageClass.uid]?.subjects?.some(s => s.key === sub.key)
+                    );
+                    const totalLearners = (activeCoverageTermData.students || []).length;
+                    const subGradesMap = activeCoverageTermData.grades?.[sub.key] || {};
+                    const gradedLearners = (activeCoverageTermData.students || []).filter(st => {
+                      const g = subGradesMap[st.sn];
+                      return g && (g.gw1 || g.test || g.gw2 || g.proj || g.exams);
+                    }).length;
+                    const meta = activeCoverageTermData.gradeMeta?.[sub.key];
+
+                    return (
+                      <tr key={sub.key} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30">
+                        <td className="p-2.5 font-semibold text-zinc-800 dark:text-zinc-200">
+                          {sub.name} <span className="text-[10px] text-zinc-400 font-mono">({sub.key})</span>
+                        </td>
+                        <td className="p-2.5">
+                          {assignedSubTeacher ? (
+                            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                              {assignedSubTeacher.name}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-zinc-500">
+                              {selectedCoverageClass.name} <span className="text-[9px] text-zinc-400">(Form Master)</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {totalLearners === 0 ? (
+                            <span className="text-[10px] text-zinc-400">No Roster Yet</span>
+                          ) : gradedLearners >= totalLearners ? (
+                            <span
+                              className="inline-block bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold"
+                              title={meta?.updatedByName ? `Last saved by ${meta.updatedByName}` : ''}
+                            >
+                              {gradedLearners}/{totalLearners} Graded ✓
+                            </span>
+                          ) : gradedLearners > 0 ? (
+                            <span
+                              className="inline-block bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-bold"
+                              title={meta?.updatedByName ? `Last saved by ${meta.updatedByName}` : ''}
+                            >
+                              {gradedLearners}/{totalLearners} In Progress
+                            </span>
+                          ) : (
+                            <span className="inline-block bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[10px] font-semibold">
+                              0/{totalLearners} Pending
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-6 text-center text-xs text-zinc-500">
+              No JHS classes available to inspect.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminOverviewTab({ teachers }) {
   const [classData, setClassData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1183,7 +2054,7 @@ function AdminOverviewTab({ teachers }) {
       return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
     }
     // Fallback based on level
-    const isJHS = ['BS. 7', 'BS. 8', 'BS. 9'].includes(teacherProfile?.assignedClass);
+    const isJHS = isJhsClass(teacherProfile?.assignedClass);
     const fallback = isJHS
       ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
       : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
@@ -1344,7 +2215,7 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
       subjects.forEach(sub => { map[sub.name] = sub.key; });
       return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
     }
-    const isJHS = ['BS. 7', 'BS. 8', 'BS. 9'].includes(teacherProfile?.assignedClass);
+    const isJHS = isJhsClass(teacherProfile?.assignedClass);
     const fallback = isJHS
       ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
       : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };

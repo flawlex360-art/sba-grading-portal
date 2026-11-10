@@ -1,48 +1,54 @@
 # 🚀 Future Agents Handover Note
 
-**Date:** September 27, 2026
+**Date:** November 10, 2026
 **Project:** Madifor WebSBA
 **Context:** This file serves as a comprehensive state-of-the-union for any future AI agent or developer picking up this project.
 
 ## 📌 Project Architecture
 - **Frontend:** React + Vite + TailwindCSS
 - **Backend:** Firebase (Firestore + Auth + Storage)
-- **State Management:** Centralized in `App.jsx` (which pushes props down to `Dashboard.jsx`, `Gradebook.jsx`, `Roster.jsx`, `ReportEditor.jsx`, etc.)
+- **State Management:** Centralized in `src/App.jsx` (which pushes props down to `Dashboard.jsx`, `Gradebook.jsx`, `Roster.jsx`, `ReportEditor.jsx`, `AdminPanel.jsx`, etc.)
 - **Key Concepts:**
   - **`termData` state:** Gradebooks and Rosters are completely scoped/saved per-term (`Term 1`, `Term 2`, `Term 3`).
   - **`activeTerm` vs `viewingTerm`:** The school's official `activeTerm` dictates the current term. If the user changes `viewingTerm` in the UI to an older term, the app goes into a strict `isReadOnly = true` mode, preventing accidental overwrites.
-  - **Promotion Engine:** Calculates promotion logic dynamically for Primary and JHS subjects.
+  - **JHS Multi-Class & Multi-Subject Teacher Allocation (`classAllocations`):**
+    - Every class has ONE canonical `schools/{classOwnerUid}` document owned by its Class Teacher (Form Master).
+    - JHS teachers (either Dedicated Subject Teachers with `role: 'subject_teacher'` and `classAssigned: 'Subject Teacher'`, or JHS Form Masters teaching extra subjects in other JHS classes) store a `classAllocations` array on their `teachers/{uid}` document:
+      `[{ classUid, className, subjects: [...] }]`.
+    - When logged in, teachers with multiple classes get a **Class Switcher** in the header (`sessionStorage('targetViewingClassUid')`).
+    - When viewing a class where `activeClassEntry.isFormMaster === false` (`isSubjectTeacherMode === true`), navigation is strictly restricted to **`Gradebook`** (filtered to `gradebookSubjects`) and **`Report Cards`** (strictly read-only preview of all class subjects via `teacherSubjects`, with Print buttons hidden).
 
-## 🛠️ Recent Fixes & Additions (Sept 2026)
+## 🛠️ Recent Fixes & Additions (Nov 2026)
 
-### 1. The Cumulative Promotion Engine Bug
-- **Bug:** The engine in `utils/calculations.js` was previously hardcoded to only search for **JHS subjects** (e.g. "Social Studies", "Career Tech"). For Primary students taking "Our World Our People" or "History", those subjects were completely ignored, which resulted in failing scores and repeating the grade incorrectly.
-- **Fix:** Refactored `ReportEditor.jsx` to dynamically pull the active teacher's specific subject mappings (`teacherSubjects`), and pass them directly into `computeCumulativePromotion()`. Now, Primary subject scores are accurately summed and averaged.
-- **Manual Overrides:** The "PROMOTED TO" dropdown in the `ReportEditor` will respect any manual selection. Selecting `-- None --` forces it to snap back to the system's dynamic calculation.
+### 1. Critical Fix: Firestore Dotted-Key `setDoc` Bug & Multi-Writer Concurrency
+- **Root Cause Discovered (Nov 2026):** `setDoc(docRef, { ['terms.Term 3.students']: ... }, { merge: true })` does **NOT** interpret dots as nested paths in the Firebase Modular SDK (`v12.1.0`)—only `updateDoc` and `tx.update` interpret string paths or `FieldPath` objects. As a result, `setDoc` was creating literal top-level fields named `"terms.Term 3.students"` while `fetchTeacherData` read `rawData.terms['Term 3'].students`, causing newly added students (like `SETH AMEGAYI` in BS. 6 Term 3) and marks to appear to vanish after page refresh.
+- **Fix & Live Recovery:**
+  - All trapped top-level dotted fields in live Firestore were recovered and merged back into `terms[Term]` on Nov 10, 2026, and the literal dotted fields were deleted via `deleteField()`.
+  - `fetchTeacherData` in `src/App.jsx` also includes an automatic in-app self-healing check in case any legacy client writes a dotted key.
+  - **`handleSaveRoster`**, **`handleSaveGrades`**, and **`handleSaveStudentReport`** now exclusively use `runTransaction` / `updateDoc` with `new FieldPath('terms', activeTerm, ...)`—never `setDoc` with dotted string keys.
 
-### 2. Roster Syncing & "Vanishing Names" Bug
-- **Bug:** Users reported that adding a student to the Roster would show them briefly, but upon page refresh, the student would vanish.
-- **Root Cause:** A UI race condition. React state updated instantly, but the Firebase `setDoc` operation took a second to complete. Without any blocking UI, users would aggressively refresh to "verify", which aborted the pending HTTP request in the background.
-- **Fix:** Added `react-hot-toast` promises to the `Roster.jsx` `handleAdd`, `handleRemove`, and `saveEdit` functions. The UI now shows a clear "Saving student..." loading state, and only allows the user to comfortably proceed/refresh once the green "Student added successfully!" checkmark appears.
-- **Error Propagation:** Updated `App.jsx` -> `handleSaveRoster` to throw errors so that the `toast.promise` can correctly show failures.
+### 2. Multi-Writer Safety (`rosterVersion` & Per-Subject Atomic Saves)
+- **Problem:** Because JHS classes are shared between a Form Master and multiple Subject Teachers:
+  1. Adding/removing a student re-sorts the roster alphabetically and shifts `student.sn` (`1..N`). A subject teacher with a stale browser tab could otherwise save marks onto the wrong student S/N.
+  2. Saving the entire `grades` object from one teacher's browser tab would overwrite another subject teacher's concurrent marks.
+- **Fix:**
+  - `handleSaveRoster` runs inside a Firestore `runTransaction`, remaps existing `grades` on the latest server state, and increments `terms[activeTerm].rosterVersion`.
+  - `handleSaveGrades` runs inside a Firestore `runTransaction`, verifies that `serverRosterVersion === localRosterVersion` AND that every student's `sn -> name` matches the server roster (aborting with a clear toast error if the Form Master modified the roster), and writes **only** the modified subject path `new FieldPath('terms', activeTerm, 'grades', subjectKey)` plus `gradeMeta[subjectKey]` (`updatedByUid`, `updatedByName`, `updatedAt`).
 
-### 3. Hard Refresh on Term Switch
-- **Feature:** We implemented a forced `window.location.reload()` whenever the global Term Switcher dropdown is used.
-- **Why:** The SPA memory was occasionally retaining edge-case sticky state, and the local React store could drift from the Firestore truth.
-- **How it works:** The `<select>` `onChange` handler saves the target term into `sessionStorage('targetViewingTerm')`, executes the reload, and `fetchTeacherData` recovers it during boot.
+### 3. Double-Stream Class Support (`BS. 7A`, `BS. 7B`, etc.)
+- `src/constants/promotionMap.js` and `src/utils/calculations.js` now export `isJhsClass()` and `resolveNextClass()`, supporting both single-stream (`BS. 7` -> `BS. 8`) and double-stream (`BS. 7A` -> `BS. 8A`, `BS. 9B` -> `GRADUATED`) progressions.
 
-### 4. Vercel Deployment & Bots
-- **Housekeeping:** Created a `vercel-ignore-build.sh` script (located in the project root) that strictly restricts Vercel from deploying any branch except `main`. We previously experienced a Vercel outage where 100+ bot-preview branches exhausted all memory limits and quotas.
-
-## 🚀 Future Roadmap & Pending Requests
-The user (Madifor) has mentioned a few long-term roadmap items that have NOT been started yet:
-1. **Kindergarten (KG) Support:** Needs a competency-based (EE/ME/AE/EM) 4-tier rubric instead of numerical scores, developmental learning strands, and a unique KG report card layout.
-2. **Regional & Unit Director Dashboard:** Multi-school comparative performance league tables and submission compliance tracking.
-3. **Multi-Tenant Custom Grading Dictionary:** Allowing different schools to define custom grading scales (e.g. 30/70 vs 50/50 SBA/Exam weightings).
+### 4. Super Admin `Subject Management` Tab
+- Added `AdminSubjectManagementTab` in `src/components/AdminPanel.jsx`:
+  - Supports **Assign / Convert Existing Teacher** (including converting accidentally created duplicate BS. 7 teacher accounts into `Dedicated Subject Teacher` accounts and cleaning up their blank `schools/{uid}` docs) and **+ New Subject Teacher Login**.
+  - Interactive **Class × Subject Checkbox Matrix Grid** across all JHS classes/streams.
+  - **Conflict Detection & Auto-Transfer** via `writeBatch` when reassigning a `(Class, Subject)` pair from one teacher to another.
+  - **Live Subject Coverage & Grading Completion Matrix** (`x/y Graded ✓` vs `Pending`).
 
 ## ⚠️ Critical Agent Warnings
-- **Database Schema:** Be extremely careful when editing `handleSaveRoster` or `handleSaveGrades`. The entire Firestore data structure heavily relies on `terms.${activeTerm}.grades` and `terms.${activeTerm}.students`. 
-- **Array Mappings:** The grade sheets map `grades[subjectKey][studentSn]`. The `student.sn` is critical. DO NOT remove the `sortAndReindex` logic without understanding how it tracks old -> new S/Ns.
+- **NEVER use `setDoc(..., { 'a.b.c': val }, { merge: true })`!** Always use `updateDoc` or `tx.update` with `new FieldPath('a', 'b', 'c')` when updating nested fields inside `terms`.
+- **NEVER allow `role === 'subject_teacher'` to create or own a `schools/{uid}` document.** Dedicated subject teachers only read/write the `schools/{classUid}` documents listed in their `classAllocations`.
+- **Git-First Deployment:** Always deploy by committing and pushing to `main` on GitHub (`vercel-ignore-build.sh` blocks non-`main` branches).
 
-Good luck! 
+Good luck!
 - *Agent Antigravity*

@@ -14,6 +14,7 @@ export default function ReportEditor({
   teacherSubjects, 
   viewingTerm, 
   isReadOnly,
+  isSubjectTeacherView = false,
   institution,
   termData
 }) {
@@ -194,32 +195,46 @@ export default function ReportEditor({
   return (
     <div className="space-y-6">
       
-      {/* Top Action Bar: Print All */}
+      {/* Top Action Bar: Print All or Subject Teacher Read-Only Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 glass-card no-print">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Report Card Batch Manager</h2>
-          <p className="text-[10px] text-zinc-400">All changes are saved automatically. Batch print all report cards here.</p>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+            {isSubjectTeacherView ? "Learner Report Card Preview (Read-Only)" : "Report Card Batch Manager"}
+          </h2>
+          <p className="text-[10px] text-zinc-400">
+            {isSubjectTeacherView
+              ? "Subject Teacher View — You can browse learners and preview their full report cards here. Remarks and attendance are managed by the Form Master."
+              : "All changes are saved automatically. Batch print all report cards here."}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {selectedStudent && (
+        {isSubjectTeacherView ? (
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 px-3 py-1.5 rounded-lg text-[11px] font-bold">
+              View-Only Mode
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            {selectedStudent && (
+              <button
+                type="button"
+                onClick={handlePrintSingle}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print Current Report
+              </button>
+            )}
             <button
               type="button"
-              onClick={handlePrintSingle}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+              onClick={handlePrintAll}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <Printer className="w-3.5 h-3.5" />
-              Print Current Report
+              Print All Report Cards
             </button>
-          )}
-          <button
-            type="button"
-            onClick={handlePrintAll}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            Print All Report Cards
-          </button>
-        </div>
+          </div>
+        )}
       </div>
       
       {/* 2-Column Split Layout */}

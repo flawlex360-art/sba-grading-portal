@@ -14,11 +14,11 @@ import AdminPanel from './components/AdminPanel';
 import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
-import { computeClassResults } from './utils/calculations';
+import { computeClassResults, isJhsClass } from './utils/calculations';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, query, where, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
@@ -88,6 +88,13 @@ export default function App() {
   const [viewingTerm, setViewingTerm] = useState('Term 1');
   const [termData, setTermData] = useState({});
 
+  // Multi-class & Subject Teacher states
+  const [accessibleClasses, setAccessibleClasses] = useState([]);
+  const [activeClassEntry, setActiveClassEntry] = useState(null);
+  const [classOwnerProfile, setClassOwnerProfile] = useState(null);
+  const [rosterVersion, setRosterVersion] = useState(0);
+  const rosterVersionRef = useRef(0);
+
   // Database States
   const [metadata, setMetadata] = useState(null);
   const [students, setStudents] = useState([]);
@@ -95,34 +102,54 @@ export default function App() {
   const [grades, setGrades] = useState({});
   const [dropLists, setDropLists] = useState(null);
 
-  // Get active subjects based on teacher profile
+  const isSubjectTeacherMode = Boolean(
+    userProfile?.role === 'subject_teacher' ||
+    (activeClassEntry && !activeClassEntry.isFormMaster)
+  );
+  const activeSchoolDocId = activeClassEntry?.classUid || currentUser?.uid;
+
+  // Get full class subjects (for Report Cards / Broadsheet) and Gradebook subjects (scoped for Subject Teachers)
   const getTeacherSubjects = () => {
-    if (userProfile && Array.isArray(userProfile.subjects) && userProfile.subjects.length > 0) {
-      const map = {};
-      userProfile.subjects.forEach(sub => {
-        map[sub.name] = sub.key;
-      });
-      return {
-        subjectMap: map,
-        subjectsList: userProfile.subjects.map(s => s.name),
-        teacherSubjects: userProfile.subjects
-      };
+    const ownerProf = classOwnerProfile || userProfile;
+    let fullClassSubjects = [];
+
+    if (ownerProf && Array.isArray(ownerProf.subjects) && ownerProf.subjects.length > 0) {
+      fullClassSubjects = ownerProf.subjects;
+    } else {
+      const effectiveClassName = activeClassEntry?.className || metadata?.classLevel || userProfile?.assignedClass || 'BS. 7';
+      const isPrimary = ownerProf?.level === 'Primary' || (!isJhsClass(effectiveClassName) && ownerProf?.level !== 'JHS');
+      const fallbackMap = isPrimary ? DEFAULT_PRIMARY_SUBJECT_MAP : DEFAULT_JHS_SUBJECT_MAP;
+      fullClassSubjects = Object.entries(fallbackMap).map(([name, key]) => ({ name, key }));
     }
-    
-    const fallbackMap = (userProfile?.level === 'Primary') 
-      ? DEFAULT_PRIMARY_SUBJECT_MAP 
-      : DEFAULT_JHS_SUBJECT_MAP;
-      
-    const teacherSubjects = Object.entries(fallbackMap).map(([name, key]) => ({ name, key }));
+
+    // Ensure any allocated subjects for the active class are also represented in fullClassSubjects
+    if (Array.isArray(activeClassEntry?.allocatedSubjects)) {
+      activeClassEntry.allocatedSubjects.forEach(allocSub => {
+        if (allocSub?.key && !fullClassSubjects.some(s => s.key === allocSub.key)) {
+          fullClassSubjects = [...fullClassSubjects, allocSub];
+        }
+      });
+    }
+
+    const fullMap = {};
+    fullClassSubjects.forEach(sub => {
+      fullMap[sub.name] = sub.key;
+    });
+
+    // If in Subject Teacher Mode, restrict Gradebook tabs strictly to their allocated subjects for this class
+    const gradebookSubjects = (isSubjectTeacherMode && Array.isArray(activeClassEntry?.allocatedSubjects) && activeClassEntry.allocatedSubjects.length > 0)
+      ? activeClassEntry.allocatedSubjects
+      : fullClassSubjects;
 
     return {
-      subjectMap: fallbackMap,
-      subjectsList: Object.keys(fallbackMap),
-      teacherSubjects
+      subjectMap: fullMap,
+      subjectsList: fullClassSubjects.map(s => s.name),
+      teacherSubjects: fullClassSubjects,
+      gradebookSubjects
     };
   };
 
-  const { subjectMap, subjectsList, teacherSubjects } = getTeacherSubjects();
+  const { subjectMap, subjectsList, teacherSubjects, gradebookSubjects } = getTeacherSubjects();
   const [isLoading, setIsLoading] = useState(true);
 
   // API Key & Chat states
@@ -279,6 +306,43 @@ export default function App() {
   }, []);
 
   // Auth Subscription Listener
+  const buildAccessibleClasses = (profile, uid) => {
+    if (!profile || !uid) return [];
+    const list = [];
+    const allocMap = profile.classAllocations || {};
+    const isDedicatedSubjectTeacher = profile.role === 'subject_teacher';
+
+    // 1. If the teacher is a Form Master / Class Teacher, add their home class first
+    if (!isDedicatedSubjectTeacher && profile.assignedClass && profile.assignedClass !== 'Subject Teacher') {
+      const homeAlloc = allocMap[uid];
+      list.push({
+        classUid: uid,
+        className: profile.assignedClass,
+        isFormMaster: true,
+        allocatedSubjects: Array.isArray(homeAlloc?.subjects) && homeAlloc.subjects.length > 0
+          ? homeAlloc.subjects
+          : null
+      });
+    }
+
+    // 2. Add any additional JHS classes allocated to this teacher
+    Object.entries(allocMap).forEach(([targetUid, alloc]) => {
+      const cUid = alloc?.classUid || targetUid;
+      if (!cUid) return;
+      if (list.some(item => item.classUid === cUid)) return;
+      if (Array.isArray(alloc?.subjects) && alloc.subjects.length > 0) {
+        list.push({
+          classUid: cUid,
+          className: alloc.className || 'Assigned Class',
+          isFormMaster: false,
+          allocatedSubjects: alloc.subjects
+        });
+      }
+    });
+
+    return list;
+  };
+
   // Auth Subscription Listener with Strict Multi-Tenant Isolation & Self-Healing
   useEffect(() => {
     if (!auth) {
@@ -296,6 +360,11 @@ export default function App() {
       setGrades({});
       setDropLists(null);
       setTermData({});
+      setAccessibleClasses([]);
+      setActiveClassEntry(null);
+      setClassOwnerProfile(null);
+      setRosterVersion(0);
+      rosterVersionRef.current = 0;
 
       if (user) {
         setIsLoading(true);
@@ -394,7 +463,23 @@ export default function App() {
             // Teacher with valid profile
             const currentProf = profileData;
             setUserProfile(currentProf);
-            await fetchTeacherData(user.uid, userInstId);
+
+            const classesList = buildAccessibleClasses(currentProf, user.uid);
+            setAccessibleClasses(classesList);
+
+            const storedClassUid = sessionStorage.getItem('targetViewingClassUid');
+            const chosenClass = classesList.find(c => c.classUid === storedClassUid) || classesList[0] || null;
+            setActiveClassEntry(chosenClass);
+            sessionStorage.removeItem('targetViewingClassUid');
+
+            // If dedicated subject teacher has no classes allocated yet, do NOT auto-create a school doc
+            if (currentProf?.role === 'subject_teacher' && !chosenClass) {
+              setIsLoading(false);
+              return;
+            }
+
+            const targetSchoolUid = chosenClass?.classUid || user.uid;
+            await fetchTeacherData(targetSchoolUid, userInstId, currentProf, chosenClass, user.uid);
           }
         } catch (e) {
           console.error("Error loading user session:", e);
@@ -407,11 +492,10 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  const fetchTeacherData = async (uid, instId) => {
+  const fetchTeacherData = async (uid, instId, currentProf = null, chosenClass = null, authUid = null) => {
     setIsLoading(true);
     try {
       let activeInstTerm = null;
-      let instCrestUrl = null;
       let fetchedInstData = null;
 
       if (instId && instId !== 'unknown') {
@@ -421,17 +505,47 @@ export default function App() {
            fetchedInstData = { id: instSnap.id, ...instSnap.data() };
            setInstitution(fetchedInstData);
            activeInstTerm = fetchedInstData.activeTerm;
-           instCrestUrl = fetchedInstData.schoolCrestUrl;
         }
       }
 
+      // If loading another Form Master's class as a Subject Teacher, fetch the class owner's profile for full subject list
+      if (uid && authUid && uid !== authUid) {
+        try {
+          let ownerSnap;
+          try {
+            ownerSnap = await getDocFromServer(doc(db, "teachers", uid));
+          } catch {
+            ownerSnap = await getDoc(doc(db, "teachers", uid));
+          }
+          if (ownerSnap.exists()) {
+            setClassOwnerProfile(ownerSnap.data());
+          }
+        } catch (ownerErr) {
+          console.warn("Could not fetch class owner profile:", ownerErr);
+        }
+      } else {
+        setClassOwnerProfile(currentProf);
+      }
+
+      const isSubTeacherForThisClass = Boolean(
+        currentProf?.role === 'subject_teacher' ||
+        (chosenClass && !chosenClass.isFormMaster)
+      );
+
       const docRef = doc(db, "schools", uid);
-      const docSnap = await getDoc(docRef);
+      let docSnap;
+      try {
+        docSnap = await getDocFromServer(docRef);
+      } catch {
+        docSnap = await getDoc(docRef);
+      }
+
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        let loadedTerms = data.terms;
+        let loadedTerms = data.terms ? structuredClone(data.terms) : null;
         let loadedActiveTerm = activeInstTerm || data.activeTerm || "Term 1";
+        let needsMigrationWrite = false;
 
         // Auto-migrate legacy structure
         if (!loadedTerms) {
@@ -441,15 +555,51 @@ export default function App() {
               students: data.students || []
             }
           };
+          needsMigrationWrite = true;
         }
         
         // Ensure all 3 terms exist
         ['Term 1', 'Term 2', 'Term 3'].forEach(t => {
-           if (!loadedTerms[t]) loadedTerms[t] = { grades: {}, students: [] };
+          if (!loadedTerms[t]) {
+            loadedTerms[t] = { grades: {}, students: [] };
+            needsMigrationWrite = true;
+          }
         });
 
-        // Fire-and-forget migration save to keep it in sync
-        setDoc(doc(db, "schools", uid), { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
+        // Self-heal any literal dotted top-level keys ("terms.Term X.students" / "terms.Term X.grades")
+        const dottedKeys = Object.keys(data).filter(k => k.startsWith('terms.'));
+        const deleteFieldArgs = [];
+        if (dottedKeys.length > 0) {
+          dottedKeys.forEach(dk => {
+            const parts = dk.split('.');
+            const tName = parts[1];
+            const fType = parts[2];
+            if (tName && (fType === 'students' || fType === 'grades')) {
+              if (!loadedTerms[tName]) loadedTerms[tName] = { grades: {}, students: [] };
+              if (fType === 'students' && Array.isArray(data[dk])) {
+                loadedTerms[tName].students = data[dk];
+              } else if (fType === 'grades' && data[dk] && typeof data[dk] === 'object') {
+                loadedTerms[tName].grades = {
+                  ...(loadedTerms[tName].grades || {}),
+                  ...data[dk]
+                };
+              }
+              deleteFieldArgs.push(new FieldPath(dk), deleteField());
+            }
+          });
+          needsMigrationWrite = true;
+        }
+
+        // Only write to Firestore when a real migration or dotted-key recovery is needed
+        if (needsMigrationWrite && !isSubTeacherForThisClass) {
+          if (deleteFieldArgs.length > 0) {
+            updateDoc(docRef, new FieldPath('terms'), loadedTerms, new FieldPath('activeTerm'), loadedActiveTerm, ...deleteFieldArgs).catch(console.error);
+          } else {
+            setDoc(docRef, { terms: loadedTerms, activeTerm: loadedActiveTerm }, { merge: true }).catch(console.error);
+          }
+        } else if (deleteFieldArgs.length > 0) {
+          updateDoc(docRef, new FieldPath('terms'), loadedTerms, ...deleteFieldArgs).catch(console.error);
+        }
 
         const storedViewTerm = sessionStorage.getItem('targetViewingTerm');
         const viewTerm = storedViewTerm && loadedTerms[storedViewTerm] ? storedViewTerm : loadedActiveTerm;
@@ -460,10 +610,14 @@ export default function App() {
         sessionStorage.removeItem('targetViewingTerm');
 
         const activeTermData = loadedTerms[viewTerm] || { grades: {}, students: [] };
+        const currentVer = activeTermData.rosterVersion || 0;
+        setRosterVersion(currentVer);
+        rosterVersionRef.current = currentVer;
         
         const effectiveInst = fetchedInstData || institution;
         const mergedMetadata = {
           ...(data.metadata || {}),
+          classLevel: chosenClass?.className || data.metadata?.classLevel || currentProf?.assignedClass || "BS. 7",
           schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name",
           academicYear: effectiveInst?.academicYear || data.metadata?.academicYear || "2026/2027"
         };
@@ -472,36 +626,45 @@ export default function App() {
         studentsRef.current = activeTermData.students || [];
         setGrades(activeTermData.grades || {});
         let loadedDropLists = data.dropLists;
-          if (!loadedDropLists) {
-            loadedDropLists = {
-              conduct: ["Respectful", "Attentive", "Polite", "Helpful", "Confident", "Friendly"],
-              interest: ["Reading novels", "Sports", "Creative Arts", "Music", "Gardening"],
-              attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable"],
-              remark: ["Keep it up", "Good performance", "Can do better", "Needs to pay more attention in class", "Highly motivated"]
-            };
-            setDoc(doc(db, "schools", uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+        if (!loadedDropLists) {
+          loadedDropLists = {
+            conduct: ["Respectful", "Attentive", "Polite", "Helpful", "Confident", "Friendly"],
+            interest: ["Reading novels", "Sports", "Creative Arts", "Music", "Gardening"],
+            attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable"],
+            remark: ["Keep it up", "Good performance", "Can do better", "Needs to pay more attention in class", "Highly motivated"]
+          };
+          if (!isSubTeacherForThisClass) {
+            setDoc(docRef, { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
           }
+        }
         // Migration: If the user has old compound activities, migrate them automatically
         if (loadedDropLists?.interest?.includes("Reading and research")) {
-            loadedDropLists.interest = [
-              "Reading novels", "Researching topics", "Sports", "Creative Arts", "Music", "Gardening",
-              "Information Technology", "Drawing", "Painting", "Public speaking", "Debating", 
-              "Science experiments", "Solving mathematics problems", "Cultural dancing", "Drama",
-              "Handiwork", "Crafts", "Helping peers", "Teaching", "Writing", "Storytelling"
-            ];
-            // Fire-and-forget save the migrated droplists to Firestore
-            setDoc(doc(db, "schools", uid), { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+          loadedDropLists.interest = [
+            "Reading novels", "Researching topics", "Sports", "Creative Arts", "Music", "Gardening",
+            "Information Technology", "Drawing", "Painting", "Public speaking", "Debating", 
+            "Science experiments", "Solving mathematics problems", "Cultural dancing", "Drama",
+            "Handiwork", "Crafts", "Helping peers", "Teaching", "Writing", "Storytelling"
+          ];
+          if (!isSubTeacherForThisClass) {
+            setDoc(docRef, { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
+          }
         }
         setDropLists(loadedDropLists);
       } else {
-        // Fallback default templates initialized for this teacher
+        // NEVER auto-create a dummy school document for a Subject Teacher!
+        if (isSubTeacherForThisClass) {
+          toast.error("The selected class record has not been initialized by its Form Master yet.");
+          setIsLoading(false);
+          return;
+        }
+        // Fallback default templates initialized for a Form Master / Class Teacher
         const template = {
           metadata: {
-            schoolName: "My School Name",
+            schoolName: fetchedInstData?.schoolName || "My School Name",
             district: "My District",
-            classLevel: "BS. 7",
+            classLevel: currentProf?.assignedClass || "BS. 7",
             term: "1st Term",
-            academicYear: "2025/2026",
+            academicYear: fetchedInstData?.academicYear || "2026/2027",
             date: new Date().toISOString().split('T')[0],
             nextTermBegins: "",
             timesOpen: 57
@@ -511,10 +674,21 @@ export default function App() {
           terms: {
             "Term 1": {
               grades: {},
-              students: []
+              students: [],
+              rosterVersion: 0
+            },
+            "Term 2": {
+              grades: {},
+              students: [],
+              rosterVersion: 0
+            },
+            "Term 3": {
+              grades: {},
+              students: [],
+              rosterVersion: 0
             }
           },
-          activeTerm: "Term 1",
+          activeTerm: activeInstTerm || "Term 1",
           dropLists: {
             conduct: [
               "Respectful and cooperative",
@@ -570,7 +744,17 @@ export default function App() {
               "Highly motivated and dedicated learner.",
               "A promising student with a bright future."
             ],
-            classes: ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]
+            classes: [
+              "BS. 1", "BS. 1A", "BS. 1B",
+              "BS. 2", "BS. 2A", "BS. 2B",
+              "BS. 3", "BS. 3A", "BS. 3B",
+              "BS. 4", "BS. 4A", "BS. 4B",
+              "BS. 5", "BS. 5A", "BS. 5B",
+              "BS. 6", "BS. 6A", "BS. 6B",
+              "BS. 7", "BS. 7A", "BS. 7B",
+              "BS. 8", "BS. 8A", "BS. 8B",
+              "BS. 9", "BS. 9A", "BS. 9B"
+            ]
           }
         };
         await setDoc(docRef, template);
@@ -579,7 +763,6 @@ export default function App() {
         studentsRef.current = template.students;
         setGrades(template.grades);
         setDropLists(template.dropLists);
-        // End of fetchTeacherData
       }
     } catch (e) {
       console.error("Error loading school document:", e);
@@ -595,14 +778,26 @@ export default function App() {
       setGrades(activeTermData.grades || {});
       setStudents(activeTermData.students || []);
       studentsRef.current = activeTermData.students || [];
+      const ver = activeTermData.rosterVersion || 0;
+      setRosterVersion(ver);
+      rosterVersionRef.current = ver;
     }
   }, [viewingTerm, termData]);
 
+  // Enforce allowed tabs when in Subject Teacher Mode
+  useEffect(() => {
+    if (isSubjectTeacherMode && activeTab !== 'gradebook' && activeTab !== 'reports') {
+      setActiveTab('gradebook');
+    }
+  }, [isSubjectTeacherMode, activeTab]);
+
   const handleSaveMetadata = async (newMeta) => {
+    if (isSubjectTeacherMode) return;
     setMetadata(newMeta);
-    if (currentUser) {
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (currentUser && targetDocId) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { metadata: newMeta }, { merge: true });
+        await setDoc(doc(db, "schools", targetDocId), { metadata: newMeta }, { merge: true });
       } catch (e) {
         console.error("Metadata sync error:", e);
       }
@@ -610,54 +805,83 @@ export default function App() {
   };
 
   const handleSaveRoster = async (newRoster, snMap = null) => {
-    setStudents(newRoster);
-    studentsRef.current = newRoster;
-
-    let updatedGrades = { ...grades };
-    let gradesChanged = false;
-
-    if (snMap) {
-      const newGrades = {};
-      Object.keys(updatedGrades).forEach(subject => {
-        newGrades[subject] = {};
-        Object.keys(updatedGrades[subject]).forEach(oldSn => {
-          const newSn = snMap[oldSn];
-          if (newSn) {
-            newGrades[subject][newSn] = updatedGrades[subject][oldSn];
-          }
-        });
-      });
-      updatedGrades = newGrades;
-      gradesChanged = true;
-      setGrades(updatedGrades);
+    if (isSubjectTeacherMode) {
+      throw new Error("Subject teachers cannot modify the class student roster.");
     }
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (!currentUser || !targetDocId) return;
 
-    setTermData(prev => ({
-      ...prev,
-      [activeTerm]: {
-        ...(prev[activeTerm] || {}),
-        students: newRoster,
-        ...(gradesChanged ? { grades: updatedGrades } : {})
-      }
-    }));
+    const schoolRef = doc(db, "schools", targetDocId);
+    let finalGrades = { ...grades };
+    let nextVer = (rosterVersionRef.current || 0) + 1;
 
-    if (currentUser) {
-      try {
-        const payload = {
-          [`terms.${activeTerm}.students`]: newRoster
-        };
-        if (gradesChanged) {
-          payload[`terms.${activeTerm}.grades`] = updatedGrades;
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(schoolRef);
+        const sData = snap.exists() ? snap.data() : {};
+        const serverTermData = sData.terms?.[activeTerm] || {};
+        const serverGrades = serverTermData.grades || grades || {};
+        nextVer = (serverTermData.rosterVersion || 0) + 1;
+
+        if (snMap) {
+          const remapped = {};
+          Object.keys(serverGrades).forEach(subject => {
+            remapped[subject] = {};
+            Object.keys(serverGrades[subject] || {}).forEach(oldSn => {
+              const newSn = snMap[oldSn];
+              if (newSn) {
+                remapped[subject][newSn] = serverGrades[subject][oldSn];
+              }
+            });
+          });
+          finalGrades = remapped;
+          tx.update(
+            schoolRef,
+            new FieldPath('terms', activeTerm, 'students'),
+            newRoster,
+            new FieldPath('terms', activeTerm, 'grades'),
+            finalGrades,
+            new FieldPath('terms', activeTerm, 'rosterVersion'),
+            nextVer
+          );
+        } else {
+          finalGrades = serverGrades;
+          tx.update(
+            schoolRef,
+            new FieldPath('terms', activeTerm, 'students'),
+            newRoster,
+            new FieldPath('terms', activeTerm, 'rosterVersion'),
+            nextVer
+          );
         }
-        await setDoc(doc(db, "schools", currentUser.uid), payload, { merge: true });
-      } catch (e) {
-        console.error("Roster sync error:", e);
-        throw e; // re-throw so the UI knows it failed
-      }
+      });
+
+      setStudents(newRoster);
+      studentsRef.current = newRoster;
+      setGrades(finalGrades);
+      setRosterVersion(nextVer);
+      rosterVersionRef.current = nextVer;
+
+      setTermData(prev => ({
+        ...prev,
+        [activeTerm]: {
+          ...(prev[activeTerm] || {}),
+          students: newRoster,
+          grades: finalGrades,
+          rosterVersion: nextVer
+        }
+      }));
+    } catch (e) {
+      console.error("Roster sync error:", e);
+      throw e;
     }
   };
 
   const handleSaveGrades = async (subjectKey, subjectGrades) => {
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (!currentUser || !targetDocId) return;
+
+    // Optimistically update local state for smooth typing/blur
     const updatedGrades = { ...grades, [subjectKey]: subjectGrades };
     setGrades(updatedGrades);
 
@@ -669,18 +893,57 @@ export default function App() {
       }
     }));
 
-    if (currentUser) {
-      try {
-        await setDoc(doc(db, "schools", currentUser.uid), { 
-          [`terms.${activeTerm}.grades`]: updatedGrades 
-        }, { merge: true });
-      } catch (e) {
-        console.error("Grades sync error:", e);
+    try {
+      const schoolRef = doc(db, "schools", targetDocId);
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(schoolRef);
+        if (!snap.exists()) {
+          throw new Error("Class record does not exist.");
+        }
+        const sData = snap.data();
+        const serverTermData = sData.terms?.[activeTerm] || {};
+        const serverVer = serverTermData.rosterVersion || 0;
+        const serverStudents = serverTermData.students || [];
+        const localStudents = studentsRef.current || [];
+
+        // Protect against S/N reshuffling if Form Master edited the roster while Gradebook was open
+        const snChanged = serverStudents.length !== localStudents.length ||
+          serverStudents.some((st, idx) => st.sn !== localStudents[idx]?.sn || st.name !== localStudents[idx]?.name);
+
+        if ((serverVer !== rosterVersionRef.current && serverVer > 0) || snChanged) {
+          const err = new Error("ROSTER_VERSION_MISMATCH");
+          err.code = "ROSTER_VERSION_MISMATCH";
+          throw err;
+        }
+
+        const auditMeta = {
+          updatedBy: currentUser.uid,
+          updatedByName: userProfile?.name || currentUser.email || "Teacher",
+          updatedAt: new Date().toISOString()
+        };
+
+        tx.update(
+          schoolRef,
+          new FieldPath('terms', activeTerm, 'grades', subjectKey),
+          subjectGrades,
+          new FieldPath('terms', activeTerm, 'gradeMeta', subjectKey),
+          auditMeta
+        );
+      });
+    } catch (e) {
+      if (e?.code === "ROSTER_VERSION_MISMATCH" || e?.message === "ROSTER_VERSION_MISMATCH") {
+        toast.error("The Form Master just updated the class student list! Reloading fresh student list to protect grade accuracy...", { duration: 4000 });
+        sessionStorage.setItem('targetViewingClassUid', targetDocId);
+        setTimeout(() => window.location.reload(), 1500);
+        return;
       }
+      console.error("Grades sync error:", e);
+      toast.error("Failed to save marks to the server. Please check your connection.");
     }
   };
 
   const handleSaveStudentReport = async (updatedStudent) => {
+    if (isSubjectTeacherMode) return;
     // 1. Update the authoritative ref synchronously so concurrent calls see this change instantly
     const latestRoster = studentsRef.current.map(s => s.sn === updatedStudent.sn ? updatedStudent : s);
     studentsRef.current = latestRoster;
@@ -696,12 +959,15 @@ export default function App() {
       }
     }));
 
-    // 3. Send the authoritative latest roster to Firebase
-    if (currentUser) {
+    // 3. Send the authoritative latest roster to Firebase using FieldPath
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (currentUser && targetDocId) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { 
-          [`terms.${activeTerm}.students`]: latestRoster 
-        }, { merge: true });
+        await updateDoc(
+          doc(db, "schools", targetDocId),
+          new FieldPath('terms', activeTerm, 'students'),
+          latestRoster
+        );
       } catch (e) {
         console.error("Report comments sync error:", e);
       }
@@ -709,10 +975,12 @@ export default function App() {
   };
 
   const handleSaveDropLists = async (newDropLists) => {
+    if (isSubjectTeacherMode) return;
     setDropLists(newDropLists);
-    if (currentUser) {
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (currentUser && targetDocId) {
       try {
-        await setDoc(doc(db, "schools", currentUser.uid), { dropLists: newDropLists }, { merge: true });
+        await setDoc(doc(db, "schools", targetDocId), { dropLists: newDropLists }, { merge: true });
       } catch (e) {
         console.error("Droplists sync error:", e);
       }
@@ -852,6 +1120,33 @@ if (userProfile?.isSeniorSuperUser) {
     );
   }
 
+  // 3b. Dedicated Subject Teacher with no classes allocated yet
+  if (userProfile?.role === 'subject_teacher' && accessibleClasses.length === 0) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] flex flex-col items-center justify-center p-6 text-center">
+        <div className="glass-card max-w-md w-full p-8 border border-zinc-200 dark:border-zinc-800 space-y-4">
+          <img src="/icon.png" className="w-16 h-16 object-contain mx-auto" alt="Madifor logo" />
+          <h2 className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wide">
+            Subject Teacher Account Active
+          </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            Welcome, <strong>{userProfile?.name || currentUser?.email}</strong>. Your JHS Subject Teacher login is active, but no classes or subjects have been assigned to your account yet.
+          </p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-lg p-3 font-semibold">
+            Please ask your School Administrator to assign your JHS classes and subjects under the &ldquo;Subject Management&rdquo; tab.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="w-full bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-700 text-white rounded-lg py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // 4. Default Database Guard for Teachers (prevents crashes before metadata loads)
   if (!metadata || !dropLists) {
     return (
@@ -869,6 +1164,9 @@ if (userProfile?.isSeniorSuperUser) {
 
   const isPrinting = printAll || !!printSingleStudent;
   const isReadOnly = viewingTerm !== activeTerm;
+  const visibleTabs = isSubjectTeacherMode
+    ? MAIN_TABS.filter(t => t.id === 'gradebook' || t.id === 'reports')
+    : MAIN_TABS;
 
   return (
     <>
@@ -883,11 +1181,18 @@ if (userProfile?.isSeniorSuperUser) {
                 <img src="/icon.png" className="w-14 h-14 object-contain select-none shrink-0" alt="Madifor logo" />
               )}
           <div className="min-w-0">
-            <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">
-              SBA Portal
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">
+                SBA Portal
+              </h1>
+              {isSubjectTeacherMode && (
+                <span className="text-[9px] bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider shrink-0">
+                  Subject Teacher
+                </span>
+              )}
+            </div>
             <p className="text-[9px] sm:text-[10px] text-zinc-400 font-bold uppercase leading-tight line-clamp-2 sm:line-clamp-none">
-              {metadata.schoolName} — {metadata.classLevel}
+              {metadata.schoolName} — {activeClassEntry?.className || metadata.classLevel}
             </p>
           </div>
         </div>
@@ -900,15 +1205,45 @@ if (userProfile?.isSeniorSuperUser) {
               {userProfile?.name || "Teacher"}
             </span>
             <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">
-              {userProfile?.assignedClass || metadata.classLevel}
+              {isSubjectTeacherMode
+                ? `${activeClassEntry?.className || metadata.classLevel} (${(activeClassEntry?.allocatedSubjects || []).map(s => s.key).join(', ')})`
+                : (userProfile?.assignedClass || metadata.classLevel)}
             </span>
           </div>
+
+          {/* Class Switcher (Shown when teacher has access to multiple classes or is a Subject Teacher) */}
+          {(accessibleClasses.length > 1 || userProfile?.role === 'subject_teacher') && (
+            <div className="relative group shrink-0">
+              <select
+                value={activeClassEntry?.classUid || ''}
+                onChange={(e) => {
+                  sessionStorage.setItem('targetViewingClassUid', e.target.value);
+                  sessionStorage.setItem('targetViewingTerm', viewingTerm);
+                  window.location.reload();
+                }}
+                title="Switch Assigned Class"
+                className="appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-3.5 sm:pr-8 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-zinc-900 text-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 hover:shadow-md"
+              >
+                {accessibleClasses.map(cls => (
+                  <option key={cls.classUid} value={cls.classUid} className="font-semibold text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900">
+                    {cls.className} {cls.isFormMaster ? '(Form Master)' : `(${(cls.allocatedSubjects || []).length} Subj)`}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-1.5 sm:right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-700 dark:text-emerald-400">
+                <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />
+              </div>
+            </div>
+          )}
 
           {/* Term Switcher */}
           <div className="relative group shrink-0">
             <select 
               value={viewingTerm}
               onChange={(e) => {
+                if (activeClassEntry?.classUid) {
+                  sessionStorage.setItem('targetViewingClassUid', activeClassEntry.classUid);
+                }
                 sessionStorage.setItem('targetViewingTerm', e.target.value);
                 window.location.reload();
               }}
@@ -950,20 +1285,22 @@ if (userProfile?.isSeniorSuperUser) {
             <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
-          {/* Floating Assistant Trigger */}
-          <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="bg-emerald-ink hover:bg-emerald-900 shrink-0 text-white rounded-lg p-1.5 sm:p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
-          >
-            <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden md:inline">Ask AI</span>
-          </button>
+          {/* Floating Assistant Trigger (Hidden in Subject Teacher mode) */}
+          {!isSubjectTeacherMode && (
+            <button
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="bg-emerald-ink hover:bg-emerald-900 shrink-0 text-white rounded-lg p-1.5 sm:p-2 flex items-center gap-1.5 text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden md:inline">Ask AI</span>
+            </button>
+          )}
         </div>
       </header>
 
       {/* 2. Secondary Tab Switcher */}
       <nav className="bg-white dark:bg-[#0c0c0f] border-b border-zinc-200 dark:border-zinc-800 px-3 md:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar select-none no-print">
-        {MAIN_TABS.map(tab => {
+        {visibleTabs.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -985,7 +1322,7 @@ if (userProfile?.isSeniorSuperUser) {
 
       {/* 3. Main Scrollable Container */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 transition-all duration-300">
-        {activeTab === 'dashboard' && (
+        {!isSubjectTeacherMode && activeTab === 'dashboard' && (
           <Dashboard
             metadata={metadata}
             students={students}
@@ -998,7 +1335,7 @@ if (userProfile?.isSeniorSuperUser) {
             viewingTerm={viewingTerm}
           />
         )}
-        {activeTab === 'roster' && (
+        {!isSubjectTeacherMode && activeTab === 'roster' && (
           <Roster
             students={students}
             metadata={metadata}
@@ -1014,12 +1351,12 @@ if (userProfile?.isSeniorSuperUser) {
             students={students}
             gradesStore={grades}
             onSave={handleSaveGrades}
-            teacherSubjects={teacherSubjects}
+            teacherSubjects={gradebookSubjects}
             apiKey={apiKey}
             isReadOnly={isReadOnly}
           />
         )}
-        {activeTab === 'positions' && (
+        {!isSubjectTeacherMode && activeTab === 'positions' && (
           <ConsolidatedView
             computedResults={computedResults}
             teacherSubjects={teacherSubjects}
@@ -1027,7 +1364,7 @@ if (userProfile?.isSeniorSuperUser) {
             metadata={metadata}
           />
         )}
-        {activeTab === 'trends' && (
+        {!isSubjectTeacherMode && activeTab === 'trends' && (
           <TrendAnalysis
             termData={termData}
             students={students}
@@ -1035,7 +1372,7 @@ if (userProfile?.isSeniorSuperUser) {
             teacherSubjects={teacherSubjects}
           />
         )}
-        {activeTab === 'open' && (
+        {!isSubjectTeacherMode && activeTab === 'open' && (
           <ConsolidatedRecords
             students={students}
             gradesStore={grades}
@@ -1054,12 +1391,13 @@ if (userProfile?.isSeniorSuperUser) {
             onPrintSingle={handlePrintSingle}
             teacherSubjects={teacherSubjects}
             viewingTerm={viewingTerm}
-            isReadOnly={isReadOnly}
+            isReadOnly={isReadOnly || isSubjectTeacherMode}
+            isSubjectTeacherView={isSubjectTeacherMode}
             institution={institution}
             termData={termData}
           />
         )}
-        {activeTab === 'droplists' && (
+        {!isSubjectTeacherMode && activeTab === 'droplists' && (
           <DropLists
             dropLists={dropLists}
             onSave={handleSaveDropLists}
@@ -1071,19 +1409,21 @@ if (userProfile?.isSeniorSuperUser) {
         SBA portal by Madifor Technologies (0592664865)
       </footer>
       {/* 4. Floating Chat Panel */}
-      <ChatPanel
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        apiKey={apiKey}
-        contextData={{
-          metadata: {
-            ...metadata,
-            schoolName: institution?.name || metadata?.schoolName || 'Unknown School'
-          },
-          students: students,
-          grades: grades
-        }}
-      />
+      {!isSubjectTeacherMode && (
+        <ChatPanel
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          apiKey={apiKey}
+          contextData={{
+            metadata: {
+              ...metadata,
+              schoolName: institution?.name || metadata?.schoolName || 'Unknown School'
+            },
+            students: students,
+            grades: grades
+          }}
+        />
+      )}
 
 
 
