@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
 import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -271,7 +271,8 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       const archivePromises = [];
       
       for (const tDoc of snapTeachers.docs) {
-        if (tDoc.data().isAdmin || tDoc.data().isSeniorSuperUser) continue;
+        const tData = tDoc.data();
+        if (tData.isAdmin || tData.isSeniorSuperUser || tData.role === 'subject_teacher' || tData.assignedClass === 'Subject Teacher') continue;
         
         const teacherUid = tDoc.id;
         const sDoc = await getDoc(doc(db, "schools", teacherUid));
@@ -286,8 +287,8 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                 academicYear,
                 term: termToArchive,
                 teacherId: teacherUid,
-                teacherName: tDoc.data().name,
-                subList: sData.subList || [],
+                teacherName: tData.name,
+                subList: tData.subjects || sData.subList || [],
                 grades: termData.grades || {},
                 students: termData.students || [],
                 archivedAt: new Date().toISOString()
@@ -341,16 +342,18 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       
       const wipePromises = [];
       for (const tDoc of snapTeachers.docs) {
-        if (tDoc.data().isAdmin || tDoc.data().isSeniorSuperUser) continue;
+        const tData = tDoc.data();
+        if (tData.isAdmin || tData.isSeniorSuperUser || tData.role === 'subject_teacher' || tData.assignedClass === 'Subject Teacher') continue;
         const teacherUid = tDoc.id;
         wipePromises.push(
-          setDoc(doc(db, "schools", teacherUid), {
+          updateDoc(doc(db, "schools", teacherUid), {
             terms: {
-              "Term 1": { students: [], grades: {} },
-              "Term 2": { students: [], grades: {} },
-              "Term 3": { students: [], grades: {} }
-            }
-          }, { merge: true })
+              "Term 1": { students: [], grades: {}, rosterVersion: 0 },
+              "Term 2": { students: [], grades: {}, rosterVersion: 0 },
+              "Term 3": { students: [], grades: {}, rosterVersion: 0 }
+            },
+            activeTerm: "Term 1"
+          }).catch(() => {})
         );
       }
       await Promise.all(wipePromises);

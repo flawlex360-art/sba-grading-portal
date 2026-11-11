@@ -66,12 +66,19 @@ export default function ReportEditor({
     }, {});
   }, [termData, students, teacherSubjects, metadata.classLevel, viewingTerm]);
 
-  // Set first student as default if none selected
+  // Set first student as default if none selected or if students list changed to another class/term
   useEffect(() => {
-    if (students.length > 0 && !selectedStudent) {
+    if (students.length === 0) {
+      setSelectedStudent(null);
+      return;
+    }
+    const matching = selectedStudent
+      ? students.find(s => s.sn === selectedStudent.sn && s.name === selectedStudent.name)
+      : null;
+    if (!matching) {
       handleSelectStudent(students[0]);
     }
-  }, [students, selectedStudent]);
+  }, [students]);
 
   // Load student values into form
   const handleSelectStudent = (student) => {

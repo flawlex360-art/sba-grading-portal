@@ -136,8 +136,8 @@ export default function App() {
       fullMap[sub.name] = sub.key;
     });
 
-    // If in Subject Teacher Mode, restrict Gradebook tabs strictly to their allocated subjects for this class
-    const gradebookSubjects = (isSubjectTeacherMode && Array.isArray(activeClassEntry?.allocatedSubjects) && activeClassEntry.allocatedSubjects.length > 0)
+    // Restrict Gradebook tabs to allocated subjects when present (for Subject Teachers or JHS Form Masters with subject allocations)
+    const gradebookSubjects = (Array.isArray(activeClassEntry?.allocatedSubjects) && activeClassEntry.allocatedSubjects.length > 0)
       ? activeClassEntry.allocatedSubjects
       : fullClassSubjects;
 
@@ -1025,20 +1025,21 @@ export default function App() {
       const archiveId = `${currentUser.uid}_${metadata.academicYear.replace(/[^a-z0-9]/gi, '_')}`;
       await setDoc(doc(db, "archives", archiveId), snapshot);
 
-      // 3. Wipe current state
+      // 3. Wipe current state (use updateDoc so top-level `terms` is replaced rather than deep-merged)
       const emptyTerms = {
-        "Term 1": { grades: {}, students: [] },
-        "Term 2": { grades: {}, students: [] },
-        "Term 3": { grades: {}, students: [] }
+        "Term 1": { grades: {}, students: [], rosterVersion: 0 },
+        "Term 2": { grades: {}, students: [], rosterVersion: 0 },
+        "Term 3": { grades: {}, students: [], rosterVersion: 0 }
       };
 
       const newMeta = { ...metadata, academicYear: newAcademicYear };
+      const targetDocId = activeSchoolDocId || currentUser.uid;
 
-      await setDoc(doc(db, "schools", currentUser.uid), {
+      await updateDoc(doc(db, "schools", targetDocId), {
         terms: emptyTerms,
         metadata: newMeta,
         activeTerm: "Term 1"
-      }, { merge: true });
+      });
 
       // Update React State
       setTermData(emptyTerms);
@@ -1048,6 +1049,8 @@ export default function App() {
       setGrades({});
       setStudents([]);
       studentsRef.current = [];
+      setRosterVersion(0);
+      rosterVersionRef.current = 0;
 
       toast.success("Gradebook reset successfully. Previous year archived.");
     } catch (e) {

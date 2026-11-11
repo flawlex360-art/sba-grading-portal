@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
-import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
@@ -246,6 +246,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
                 teacherSubjects={printData.teacherSubjects}
                 currentUser={printData.currentUser}
                 institution={institution}
+                viewingTerm={printData.metadata?.term}
               />
             ))
           ) : (
@@ -255,6 +256,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
               calculatedScores={printData.computedResults}
               teacherSubjects={printData.teacherSubjects}
               currentUser={printData.currentUser}
+              institution={institution}
+              viewingTerm={printData.metadata?.term}
             />
           )}
         </div>
@@ -461,21 +464,16 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
         subjects: finalEditSubjects
       }, { merge: true });
 
-      // 3. Update schools/{uid} metadata doc
+      // 3. Update schools/{uid} metadata doc without overwriting nested terms/grades
       const schoolDocRef = doc(db, "schools", selectedTeacher.uid);
       const schoolDocSnap = await getDoc(schoolDocRef);
       
-      let updatedSchoolData = {};
       if (schoolDocSnap.exists()) {
         const currentData = schoolDocSnap.data();
-        
-        let newActiveTerm = institution?.activeTerm || currentData.activeTerm || "Term 1";
-        let newTerms = currentData.terms || { [newActiveTerm]: { grades: currentData.grades || {}, students: currentData.students || [] } };
+        const newActiveTerm = institution?.activeTerm || currentData.activeTerm || "Term 1";
 
-        updatedSchoolData = {
-          ...currentData,
+        await setDoc(schoolDocRef, {
           activeTerm: newActiveTerm,
-          terms: newTerms,
           metadata: {
             ...(currentData.metadata || {}),
             schoolName: institution?.schoolName || editSchoolName.trim(),
@@ -485,9 +483,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
             academicYear: institution?.academicYear || editAcademicYear.trim(),
             teacherName: finalEditName
           }
-        };
+        }, { merge: true });
       } else {
-        updatedSchoolData = getInitialSchoolData(
+        const updatedSchoolData = getInitialSchoolData(
           finalEditName,
           editClass,
           institution?.schoolName || editSchoolName.trim(),
@@ -495,8 +493,22 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
           institution?.activeTerm || 'Term 1',
           institution?.academicYear || editAcademicYear.trim()
         );
+        await setDoc(schoolDocRef, updatedSchoolData);
       }
-      await setDoc(schoolDocRef, updatedSchoolData);
+
+      // 4. If class name changed, sync className inside any subject teachers' classAllocations pointing to this Form Master
+      if (selectedTeacher.assignedClass !== editClass) {
+        const holders = teachers.filter(other => other.classAllocations?.[selectedTeacher.uid]);
+        for (const holder of holders) {
+          const nextAlloc = structuredClone(holder.classAllocations || {});
+          if (nextAlloc[selectedTeacher.uid]) {
+            nextAlloc[selectedTeacher.uid].className = editClass;
+            await updateDoc(doc(db, "teachers", holder.uid), {
+              classAllocations: nextAlloc
+            }).catch(() => {});
+          }
+        }
+      }
 
       setEditSuccess("Teacher configuration updated successfully!");
       
@@ -553,10 +565,10 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                   const nextKeys = { ...(other.allocationKeys || {}) };
                   delete nextAlloc[targetUid];
                   delete nextKeys[targetUid];
-                  await setDoc(doc(db, "teachers", other.uid), {
+                  await updateDoc(doc(db, "teachers", other.uid), {
                     classAllocations: nextAlloc,
                     allocationKeys: nextKeys
-                  }, { merge: true }).catch(() => {});
+                  }).catch(() => {});
                 }
                 
                 // Step 3: Delete Firebase Auth credentials so they can never log in again
@@ -1403,11 +1415,30 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
       } else {
         const existingT = teachers.find(t => t.uid === selectedTeacherUid);
         targetName = existingT?.name || 'Teacher';
+
+        // Safety check: if converting an existing teacher to 'Dedicated Subject Teacher', verify their schools/{uid} doc has 0 students
+        if (teacherRoleType === 'subject_teacher' && existingT?.role !== 'subject_teacher') {
+          const checkSnap = await getDoc(doc(db, "schools", targetUid));
+          if (checkSnap.exists()) {
+            const sData = checkSnap.data();
+            const totalLearners = ['Term 1', 'Term 2', 'Term 3'].reduce((sum, tName) => {
+              return sum + (sData.terms?.[tName]?.students?.length || 0);
+            }, 0) + (sData.students?.length || 0);
+            if (totalLearners > 0) {
+              toast.error(
+                `Cannot convert "${targetName}" to a Dedicated Subject Teacher because their class (${existingT?.assignedClass || 'Form Class'}) already has enrolled learners! Please select "JHS Form Master + Extra Classes" instead.`,
+                { duration: 6000 }
+              );
+              setSaving(false);
+              return;
+            }
+          }
+        }
       }
 
       const batch = writeBatch(db);
 
-      // 1. If there were conflicts confirmed for transfer, remove those slots from previous holders
+      // 1. If there were conflicts confirmed for transfer, remove those slots from previous holders using batch.update so deleted keys are removed
       if (conflicts.length > 0) {
         const holdersToUpdate = {};
         conflicts.forEach(c => {
@@ -1431,7 +1462,7 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
         });
 
         Object.entries(holdersToUpdate).forEach(([hUid, updatedMaps]) => {
-          batch.set(doc(db, "teachers", hUid), updatedMaps, { merge: true });
+          batch.update(doc(db, "teachers", hUid), updatedMaps);
         });
       }
 
@@ -1450,12 +1481,12 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
             }
           });
           if (changed) {
-            batch.set(doc(db, "teachers", cUid), { subjects: currentSubs }, { merge: true });
+            batch.update(doc(db, "teachers", cUid), { subjects: currentSubs });
           }
         }
       });
 
-      // 3. Save target teacher document
+      // 3. Save target teacher document (use batch.update for existing teachers so unticked classAllocations keys are cleanly replaced)
       if (mode === 'new') {
         batch.set(doc(db, "teachers", targetUid), {
           name: targetName,
@@ -1470,15 +1501,15 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
         });
       } else {
         const isDedicated = teacherRoleType === 'subject_teacher';
-        batch.set(doc(db, "teachers", targetUid), {
+        batch.update(doc(db, "teachers", targetUid), {
           role: isDedicated ? 'subject_teacher' : 'class_teacher',
           assignedClass: isDedicated ? 'Subject Teacher' : homeClass,
           level: 'JHS',
           classAllocations: builtAllocations,
           allocationKeys: builtKeys
-        }, { merge: true });
+        });
 
-        // If converted to Dedicated Subject Teacher, clean up any orphaned duplicate schools/{uid} document
+        // If converted to Dedicated Subject Teacher, clean up any orphaned blank duplicate schools/{uid} document
         if (isDedicated) {
           batch.delete(doc(db, "schools", targetUid));
         }
@@ -2148,7 +2179,10 @@ function AdminOverviewTab({ teachers }) {
       {classData.map(c => (
         <div 
           key={c.uid}
-          onClick={() => setSelectedClass(c)}
+          onClick={() => {
+            setSelectedTerm(c.schoolData?.activeTerm || 'Term 1');
+            setSelectedClass(c);
+          }}
           className="glass-card p-5 border border-zinc-200 dark:border-zinc-800/80 rounded-xl hover:border-emerald-ink/30 cursor-pointer transition-all hover:shadow-lg dark:hover:shadow-emerald-ink/5 group"
         >
           <div className="flex justify-between items-start mb-3">
@@ -2308,6 +2342,7 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
               teacherSubjects={tSubjects}
               viewingTerm={selectedTerm}
               isReadOnly={true}
+              termData={classData.terms}
            />
         </div>
       )}

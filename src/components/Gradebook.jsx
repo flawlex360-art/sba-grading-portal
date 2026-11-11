@@ -25,6 +25,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   const [activeRow, setActiveRow] = useState(null);
   
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const isDirtyRef = useRef(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -87,6 +88,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
       });
 
       setLocalGrades(updatedGrades);
+      isDirtyRef.current = true;
       toast.success(`AI scan complete! Successfully filled marks for ${records.length} students. Verify the cells and click 'Save Changes' to finalize.`);
     } catch (err) {
       console.error(err);
@@ -140,6 +142,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
       if (field === 'proj' && (parsedVal < 0 || parsedVal > 30)) return; // PROJ
     }
 
+    isDirtyRef.current = true;
     setLocalGrades(prev => ({
       ...prev,
       [sn]: {
@@ -150,6 +153,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   };
 
   const saveCurrentGrades = async (currentTabKey = activeTab.key, currentGrades = localGrades) => {
+    isDirtyRef.current = false;
     const formattedGrades = {};
     Object.keys(currentGrades).forEach(sn => {
       const g = currentGrades[sn];
@@ -166,6 +170,9 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
 
   const handleTabSwitch = (tab) => {
     if (tab.key === activeTab.key) return;
+    if (isDirtyRef.current && !isReadOnly) {
+      saveCurrentGrades(activeTab.key, localGrades);
+    }
     setActiveTab(tab);
   };
 
@@ -178,6 +185,7 @@ export default function Gradebook({ students, gradesStore, onSave, teacherSubjec
   };
 
   const handleBlur = () => {
+    if (!isDirtyRef.current || isReadOnly) return;
     saveCurrentGrades(activeTab.key, localGrades);
   };
 

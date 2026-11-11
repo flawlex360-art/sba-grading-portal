@@ -1,4 +1,4 @@
-import { PROMOTION_THRESHOLD, CLASS_PROGRESSION, isJhsClass, resolveNextClass } from '../constants/promotionMap';
+import { PROMOTION_THRESHOLD, CLASS_PROGRESSION, isJhsClass, resolveNextClass } from '../constants/promotionMap.js';
 export { isJhsClass, resolveNextClass };
 
 /**
