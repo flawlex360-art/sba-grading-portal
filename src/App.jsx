@@ -427,6 +427,10 @@ export default function App() {
           // ═══════════════════════════════════════════════════════
           if (!profileSnap.exists() && !instData) {
             console.warn(`SECURITY: Deleted account login blocked for ${user.email} (${user.uid})`);
+            sessionStorage.setItem(
+              'auth_deleted_error',
+              'Invalid login credentials. This account has been deleted by an administrator and can no longer be used.'
+            );
             await signOut(auth);
             setCurrentUser(null);
             setUserProfile(null);
@@ -1085,7 +1089,23 @@ export default function App() {
 
   // 2. Authentication Gate: If no user is logged in, show Login Screen
   if (!currentUser) {
-    return <Login onLoginSuccess={(user) => setCurrentUser(user)} />;
+    return (
+      <>
+        <Login onLoginSuccess={(user) => setCurrentUser(user)} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: '#18181b',
+              color: '#fff',
+              fontSize: '14px',
+              borderRadius: '12px',
+              border: '1px solid #27272a'
+            }
+          }}
+        />
+      </>
+    );
   }
 
   // 3. System Routing: If user is Senior Super User, show the System Dashboard

@@ -23,6 +23,11 @@ export default function Login({ onLoginSuccess }) {
   const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
+    const deletedErr = sessionStorage.getItem('auth_deleted_error');
+    if (deletedErr) {
+      setError(deletedErr);
+      sessionStorage.removeItem('auth_deleted_error');
+    }
     const checkSystemExists = async () => {
       try {
         const q = query(collection(db, "teachers"), where("isSeniorSuperUser", "==", true));
@@ -93,6 +98,29 @@ export default function Login({ onLoginSuccess }) {
     setError('');
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Pre-check that the account still exists in Firestore (prevents deleted teachers from briefly signing in and out)
+      if (normalizedEmail !== 'system@flawlex.com') {
+        const [tSnap, iSnap] = await Promise.all([
+          getDocs(query(collection(db, "teachers"), where("email", "==", normalizedEmail))),
+          getDocs(query(collection(db, "institutions"), where("adminEmail", "==", normalizedEmail)))
+        ]);
+
+        if (tSnap.empty && iSnap.empty) {
+          const newAttempts = failedAttempts + 1;
+          setFailedAttempts(newAttempts);
+          if (newAttempts >= 5) {
+            setLockoutTimer(60);
+            setError("Too many failed attempts. Account temporarily locked for 1 minute.");
+          } else {
+            setError(`Invalid login credentials. This account does not exist or has been removed by an administrator. (${5 - newAttempts} attempts remaining)`);
+          }
+          setLoading(false);
+          return;
+        }
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       // Reset on success
       setFailedAttempts(0);
