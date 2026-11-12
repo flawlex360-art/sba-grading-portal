@@ -14,6 +14,8 @@ import {
   updateDoc, 
   collection, 
   getDocs,
+  query,
+  where,
   enableIndexedDbPersistence
 } from 'firebase/firestore';
 
@@ -96,6 +98,35 @@ export const createTeacherUser = async (email, password) => {
     
     return user.uid;
   } catch (e) {
+    // If the email is already in Firebase Auth because the teacher was previously created and deleted from Firestore,
+    // automatically reclaim their orphaned Auth UID when the Admin re-registers them with their password!
+    if (e.code === 'auth/email-already-in-use' && db) {
+      try {
+        const normalizedEmail = email.trim().toLowerCase();
+        const [tSnap, iSnap] = await Promise.all([
+          getDocs(query(collection(db, "teachers"), where("email", "==", normalizedEmail))),
+          getDocs(query(collection(db, "institutions"), where("adminEmail", "==", normalizedEmail)))
+        ]);
+
+        if (tSnap.empty && iSnap.empty) {
+          const reclaimedCred = await signInWithEmailAndPassword(tempAuth, email.trim(), password);
+          const reclaimedUid = reclaimedCred.user.uid;
+          await signOut(tempAuth);
+          await deleteApp(tempApp);
+          return reclaimedUid;
+        }
+      } catch (reclaimErr) {
+        try {
+          await deleteApp(tempApp);
+        } catch (_) {}
+        if (reclaimErr.code === 'auth/invalid-credential' || reclaimErr.code === 'auth/wrong-password') {
+          throw new Error(
+            "This email was previously registered and deleted. To re-activate this exact email, please enter the original password it used before deletion."
+          );
+        }
+        throw reclaimErr;
+      }
+    }
     try {
       await deleteApp(tempApp);
     } catch (_) {}

@@ -574,12 +574,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                 // Step 3: Delete Firebase Auth credentials so they can never log in again
                 if (teacher.email) {
                   try {
-                    // Note: Auth deletion requires backend Admin SDK since password is unknown
-                    await deleteTeacherAccount(teacher.email, "").catch(() => {});
+                    await deleteTeacherAccount(teacher.email, teacher.authPass || "").catch(() => {});
                   } catch (authErr) {
                     console.warn(`Auth cleanup for ${teacher.email}:`, authErr.message);
-                    // Even if Auth delete fails, the server-side security guard in App.jsx 
-                    // will block login because teachers/{uid} doc no longer exists
                   }
                 }
 
@@ -632,6 +629,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       const teacherInfo = {
         name: finalName,
         email: email.trim().toLowerCase(),
+        authPass: password,
         assignedClass: assignedClass,
         createdDate: new Date().toISOString(),
         level: level,
@@ -1491,6 +1489,7 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
         batch.set(doc(db, "teachers", targetUid), {
           name: targetName,
           email: newEmail.trim().toLowerCase(),
+          authPass: newPassword,
           role: 'subject_teacher',
           assignedClass: 'Subject Teacher',
           level: 'JHS',
@@ -1499,6 +1498,8 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
           classAllocations: builtAllocations,
           allocationKeys: builtKeys
         });
+        // If reclaiming an email that was previously a Class Teacher before being deleted, remove any leftover blank school doc
+        batch.delete(doc(db, "schools", targetUid));
       } else {
         const isDedicated = teacherRoleType === 'subject_teacher';
         batch.update(doc(db, "teachers", targetUid), {
