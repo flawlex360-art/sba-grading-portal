@@ -1360,7 +1360,7 @@ if (userProfile?.isSeniorSuperUser) {
       </nav>
 
       {/* 3. Main Scrollable Container */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 transition-all duration-300">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto p-2.5 sm:p-6 transition-all duration-300">
         {!isSubjectTeacherMode && activeTab === 'dashboard' && (
           <Dashboard
             metadata={metadata}
@@ -1379,9 +1379,6 @@ if (userProfile?.isSeniorSuperUser) {
             students={students}
             metadata={metadata}
             onSave={handleSaveRoster}
-            onImport={(newStudents, snMap) => {
-              handleSaveRoster(newStudents, snMap);
-            }}
             isReadOnly={isReadOnly}
           />
         )}
