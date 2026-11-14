@@ -40,12 +40,12 @@ const getDirectImageUrl = (url) => {
 const MAIN_TABS = [
   { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
   { id: 'roster', name: 'Roster', icon: Users },
-  { id: 'parents', name: 'Parents & SMS', icon: MessageSquare },
   { id: 'gradebook', name: 'Gradebook', icon: FileSpreadsheet },
   { id: 'positions', name: 'Class Overview', icon: Award },
   { id: 'open', name: 'Records (OPEN)', icon: FileCode },
   { id: 'reports', name: 'Report Cards', icon: FileCode },
-  { id: 'trends', name: 'Progress & Trends', icon: TrendingUp }
+  { id: 'trends', name: 'Progress & Trends', icon: TrendingUp },
+  { id: 'parents', name: 'Parents & SMS', icon: MessageSquare }
 ];
 
 const DEFAULT_JHS_SUBJECT_MAP = {
