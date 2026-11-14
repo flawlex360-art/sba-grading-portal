@@ -174,7 +174,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       const schoolName = "Volta Demonstration School";
       const id = "volta-demo-" + Date.now();
       
-      const adminUid = await createTeacherUser(adminEmail, adminPassword);
+      const adminUid = await createTeacherUser(adminEmail, adminPassword, {
+        displayName: "Admin",
+        institutionId: id,
+      });
       await setDoc(doc(db, "institutions", id), {
         schoolName,
         adminEmail,
@@ -208,7 +211,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
 
       for (const cls of classes) {
         toast.loading(`Creating ${cls.className}...`, { id: "demo" });
-        const teacherUid = await createTeacherUser(cls.email, adminPassword);
+        const teacherUid = await createTeacherUser(cls.email, adminPassword, {
+          displayName: `${cls.className} Teacher`,
+          institutionId: id,
+        });
         const isKg = cls.level === SCHOOL_LEVELS.KG;
 
         await setDoc(doc(db, "teachers", teacherUid), {
@@ -332,7 +338,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       toast.loading("Creating Super User account...", { id: "create-school" });
       
       // 1. Create the Firebase Auth User for the Admin
-      const adminUid = await createTeacherUser(adminEmail.trim().toLowerCase(), adminPassword.trim());
+      const adminUid = await createTeacherUser(adminEmail.trim().toLowerCase(), adminPassword.trim(), {
+        displayName: "Admin",
+        institutionId: id,
+      });
 
       const presetObj = SMS_PACKAGE_PRESETS.find((p) => p.id === initialSmsPackageId) || SMS_PACKAGE_PRESETS[1];
       const allocatedCredits = Math.max(0, Math.round(Number(initialSmsCredits) || 0));
@@ -568,18 +577,23 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                     const teacherUid = tDoc.id;
                     const teacherData = tDoc.data();
                     
-                    if (teacherData.email && teacherData.password) {
-                      // Note: Deleting from Auth without Admin SDK is impossible if password isn't known.
-                      // We will rely on Firebase Admin SDK or Cloud Functions in the future for Auth deletion.
-                      await deleteTeacherAccount(teacherData.email, teacherData.password).catch(() => {});
-                    }
+                    // Delete Firebase Auth account FIRST while Firestore record verifies institution ownership
+                    await deleteTeacherAccount(
+                      teacherData.email || '',
+                      teacherData.authPass || teacherData.password || '',
+                      { targetUid: teacherUid, institutionId: id }
+                    ).catch(() => {});
                     
                     await deleteDoc(doc(db, "schools", teacherUid)).catch(() => {});
                     await deleteDoc(doc(db, "teachers", teacherUid)).catch(() => {});
                   }
                   
-                  if (inst.adminProfile?.email && inst.adminProfile?.password) {
-                    await deleteTeacherAccount(inst.adminProfile.email, inst.adminProfile.password).catch(() => {});
+                  if (inst.adminProfile?.email || inst.adminEmail) {
+                    await deleteTeacherAccount(
+                      inst.adminProfile?.email || inst.adminEmail,
+                      inst.adminProfile?.authPass || inst.adminProfile?.password || '',
+                      { targetUid: inst.adminProfile?.uid || '', institutionId: id }
+                    ).catch(() => {});
                   }
                   
                   await deleteDoc(doc(db, "institutions", id));

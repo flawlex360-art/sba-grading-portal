@@ -73,43 +73,106 @@ if (isConfigValid(firebaseConfig)) {
 }
 
 /**
- * Creates a new teacher account credential using an in-memory secondary app.
- * This ensures the currently logged-in Admin is NOT automatically signed out.
+ * Calls the server-side Firebase Admin Auth endpoint (`/api/manage-auth-user`) using the
+ * signed-in administrator's Firebase ID Token. Returns `{ fallbackToClient: true }` when the
+ * server endpoint or Admin SDK service account is unavailable (e.g., local Vite dev without API).
  */
-export const createTeacherUser = async (email, password) => {
+const callAdminAuthApi = async (payload) => {
+  const activeUser = auth?.currentUser;
+  if (!activeUser || typeof activeUser.getIdToken !== 'function') {
+    return { fallbackToClient: true, reason: 'NO_ACTIVE_SESSION' };
+  }
+
+  let res;
+  try {
+    const idToken = await activeUser.getIdToken();
+    res = await fetch('/api/manage-auth-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkErr) {
+    return { fallbackToClient: true, reason: 'NETWORK_ERROR', serverMessage: networkErr?.message };
+  }
+
+  const contentType = String(res.headers?.get?.('content-type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) {
+    return { fallbackToClient: true, reason: 'NON_JSON_ENDPOINT' };
+  }
+
+  const data = await res.json().catch(() => null);
+  if (
+    res.status === 404 ||
+    res.status === 503 ||
+    data?.code === 'SERVICE_NOT_CONFIGURED'
+  ) {
+    return {
+      fallbackToClient: true,
+      reason: data?.code || `HTTP_${res.status}`,
+      serverMessage: data?.error || '',
+    };
+  }
+
+  if (!res.ok || !data?.ok) {
+    const err = new Error(data?.error || `Authentication service failed (${res.status}).`);
+    err.code = data?.code || `http/${res.status}`;
+    throw err;
+  }
+
+  return { fallbackToClient: false, data };
+};
+
+/**
+ * Creates a new teacher or admin account in Firebase Authentication.
+ * Prefers the server-side `/api/manage-auth-user` endpoint (which automatically purges and
+ * recreates orphaned emails with any new password) and falls back to the client SDK when unconfigured.
+ */
+export const createTeacherUser = async (email, password, options = {}) => {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const apiRes = await callAdminAuthApi({
+    action: 'create',
+    email: cleanEmail,
+    password,
+    displayName: options?.displayName || '',
+    institutionId: options?.institutionId || '',
+  });
+
+  if (!apiRes.fallbackToClient && apiRes.data?.uid) {
+    return apiRes.data.uid;
+  }
+
   const config = getFirebaseConfig();
   if (!isConfigValid(config)) {
     throw new Error("Firebase configuration is missing or invalid. Please configure it in the Dashboard settings first.");
   }
   
-  // Create a unique temporary secondary app instance
+  // Fallback when server Admin SDK is not yet configured: create using secondary app instance
   const tempAppName = `TempTeacherCreator-${Date.now()}`;
   const tempApp = initializeApp(config, tempAppName);
   const tempAuth = getAuth(tempApp);
   
   try {
-    const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(tempAuth, cleanEmail, password);
     const user = userCredential.user;
     
-    // Sign out from the temporary app instance immediately
     await signOut(tempAuth);
-    // Delete the temporary app to release resources
     await deleteApp(tempApp);
     
     return user.uid;
   } catch (e) {
-    // If the email is already in Firebase Auth because the teacher was previously created and deleted from Firestore,
-    // automatically reclaim their orphaned Auth UID when the Admin re-registers them with their password!
+    // Same-password orphan reclaim fallback when Admin SDK env var isn't set yet
     if (e.code === 'auth/email-already-in-use' && db) {
       try {
-        const normalizedEmail = email.trim().toLowerCase();
         const [tSnap, iSnap] = await Promise.all([
-          getDocs(query(collection(db, "teachers"), where("email", "==", normalizedEmail))),
-          getDocs(query(collection(db, "institutions"), where("adminEmail", "==", normalizedEmail)))
+          getDocs(query(collection(db, "teachers"), where("email", "==", cleanEmail))),
+          getDocs(query(collection(db, "institutions"), where("adminEmail", "==", cleanEmail)))
         ]);
 
         if (tSnap.empty && iSnap.empty) {
-          const reclaimedCred = await signInWithEmailAndPassword(tempAuth, email.trim(), password);
+          const reclaimedCred = await signInWithEmailAndPassword(tempAuth, cleanEmail, password);
           const reclaimedUid = reclaimedCred.user.uid;
           await signOut(tempAuth);
           await deleteApp(tempApp);
@@ -121,7 +184,7 @@ export const createTeacherUser = async (email, password) => {
         } catch (_) {}
         if (reclaimErr.code === 'auth/invalid-credential' || reclaimErr.code === 'auth/wrong-password') {
           throw new Error(
-            "This email was previously registered and deleted. To re-activate this exact email, please enter the original password it used before deletion."
+            "This email already exists in Firebase Auth with a different password (Admin SDK not configured on server). Enter its previous password or configure FIREBASE_SERVICE_ACCOUNT_JSON in Vercel."
           );
         }
         throw reclaimErr;
@@ -159,7 +222,48 @@ export const updateTeacherPassword = async (email, oldPassword, newPassword) => 
   }
 };
 
-export const deleteTeacherAccount = async (email, password) => {
+/**
+ * Resets a teacher's Firebase Authentication password via the server Admin SDK endpoint.
+ */
+export const resetTeacherPassword = async (targetUid, newPassword, institutionId = '') => {
+  const apiRes = await callAdminAuthApi({
+    action: 'reset-password',
+    targetUid,
+    newPassword,
+    institutionId,
+  });
+
+  if (apiRes.fallbackToClient) {
+    throw new Error(
+      apiRes.serverMessage ||
+        'Direct admin password reset requires FIREBASE_SERVICE_ACCOUNT_JSON configured on the server.'
+    );
+  }
+
+  return apiRes.data;
+};
+
+/**
+ * Deletes a teacher or school admin login from Firebase Authentication.
+ * Uses the server Admin SDK first (requires no user password); falls back to client SDK only when unconfigured.
+ */
+export const deleteTeacherAccount = async (email, password = '', options = {}) => {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const apiRes = await callAdminAuthApi({
+    action: 'delete',
+    targetUid: options?.targetUid || '',
+    email: cleanEmail,
+    institutionId: options?.institutionId || '',
+  });
+
+  if (!apiRes.fallbackToClient) {
+    return { ok: true, method: 'admin-sdk', ...(apiRes.data || {}) };
+  }
+
+  if (!cleanEmail || !password) {
+    return { ok: false, method: 'client-fallback-skipped' };
+  }
+
   const config = getFirebaseConfig();
   if (!isConfigValid(config)) {
     throw new Error("Firebase configuration is missing or invalid.");
@@ -170,10 +274,11 @@ export const deleteTeacherAccount = async (email, password) => {
   const tempAuth = getAuth(tempApp);
   
   try {
-    const userCredential = await signInWithEmailAndPassword(tempAuth, email, password);
+    const userCredential = await signInWithEmailAndPassword(tempAuth, cleanEmail, password);
     const { deleteUser } = await import('firebase/auth');
     await deleteUser(userCredential.user);
     await deleteApp(tempApp);
+    return { ok: true, method: 'client-fallback' };
   } catch (e) {
     try {
       await deleteApp(tempApp);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
+import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount, resetTeacherPassword } from '../utils/firebase';
 import { collection, doc, setDoc, updateDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
@@ -332,6 +332,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
   const [editAcademicYear, setEditAcademicYear] = useState('');
   const [editLevel, setEditLevel] = useState('JHS');
   const [editSelectedSubjects, setEditSelectedSubjects] = useState([]);
+  const [editNewPassword, setEditNewPassword] = useState('');
   
   const [editLoading, setEditLoading] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -422,6 +423,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
     );
     setEditSelectedSubjects(activeSubjects.map(s => s.key));
     setEditLoading(true);
+    setEditNewPassword('');
     setEditError('');
     setEditSuccess('');
 
@@ -463,6 +465,16 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
 
     try {
       const finalEditName = editName.trim() || 'New Teacher';
+      const trimmedNewPass = editNewPassword.trim();
+
+      if (trimmedNewPass) {
+        if (trimmedNewPass.length < 6) {
+          setEditError("New password must be at least 6 characters long.");
+          setSavingEdit(false);
+          return;
+        }
+        await resetTeacherPassword(selectedTeacher.uid, trimmedNewPass, institution?.id || '');
+      }
 
       // 2. Update teachers/{uid} doc
       const resolvedEditLevel = resolveSchoolLevel(editClass, editLevel);
@@ -565,13 +577,26 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
               toast.dismiss(t.id);
               const loadingId = toast.loading(`Deleting "${teacher.name}"...`);
               try {
-                // Step 1: Delete Firestore teacher profile (MUST succeed)
+                // Step 1: Delete Firebase Auth login FIRST (while teachers/{targetUid} exists so server verifies institution ownership)
+                try {
+                  await deleteTeacherAccount(teacher.email || '', teacher.authPass || '', {
+                    targetUid,
+                    institutionId: institution?.id || '',
+                  });
+                } catch (authErr) {
+                  console.warn(`Auth cleanup for ${teacher.email}:`, authErr.message);
+                  if (authErr?.code && !String(authErr.code).startsWith('auth/')) {
+                    throw authErr;
+                  }
+                }
+
+                // Step 2: Delete Firestore teacher profile (MUST succeed)
                 await deleteDoc(doc(db, "teachers", targetUid));
                 
-                // Step 2: Delete Firestore school grade sheet
+                // Step 3: Delete Firestore school grade sheet
                 await deleteDoc(doc(db, "schools", targetUid)).catch(() => {});
 
-                // Step 2b: Clean up any subject allocations on other teachers pointing to this deleted classUid
+                // Step 4: Clean up any subject allocations on other teachers pointing to this deleted classUid
                 const affectedTeachers = teachers.filter(other => other.uid !== targetUid && other.classAllocations?.[targetUid]);
                 for (const other of affectedTeachers) {
                   const nextAlloc = { ...(other.classAllocations || {}) };
@@ -583,20 +608,11 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                     allocationKeys: nextKeys
                   }).catch(() => {});
                 }
-                
-                // Step 3: Delete Firebase Auth credentials so they can never log in again
-                if (teacher.email) {
-                  try {
-                    await deleteTeacherAccount(teacher.email, teacher.authPass || "").catch(() => {});
-                  } catch (authErr) {
-                    console.warn(`Auth cleanup for ${teacher.email}:`, authErr.message);
-                  }
-                }
 
-                // Step 4: ONLY update UI after server confirms deletion
+                // Step 5: ONLY update UI after server confirms deletion
                 await fetchTeachersList();
                 toast.dismiss(loadingId);
-                toast.success(`"${teacher.name}" permanently deleted!`);
+                toast.success(`"${teacher.name}" permanently deleted from system and authentication!`);
               } catch (err) {
                 console.error("Delete failed:", err);
                 toast.dismiss(loadingId);
@@ -631,8 +647,11 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
         return;
       }
 
-      // 1. Create Login credentials in Firebase Authentication via secondary app
-      const teacherUid = await createTeacherUser(email.trim(), password);
+      // 1. Create Login credentials in Firebase Authentication (via Admin SDK endpoint when configured)
+      const teacherUid = await createTeacherUser(email.trim(), password, {
+        displayName: finalName,
+        institutionId: institution.id,
+      });
       
       // 2. Create the teacher profile document in Firestore 'teachers'
       const resolvedLevel = resolveSchoolLevel(assignedClass, level);
@@ -1111,6 +1130,17 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                       <option value={SCHOOL_LEVELS.PRIMARY}>Primary School</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Reset Password (Optional)</label>
+                    <input
+                      type="text"
+                      value={editNewPassword}
+                      onChange={(e) => setEditNewPassword(e.target.value)}
+                      placeholder="Leave blank to keep current"
+                      minLength={6}
+                      className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink font-mono text-xs"
+                    />
+                  </div>
                 </div>
 
                 {/* Edit Subject Selection Checkboxes */}
@@ -1417,7 +1447,10 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
       let targetName = newName.trim();
 
       if (mode === 'new') {
-        targetUid = await createTeacherUser(newEmail.trim(), newPassword);
+        targetUid = await createTeacherUser(newEmail.trim(), newPassword, {
+          displayName: newName.trim(),
+          institutionId: institution.id,
+        });
       } else {
         const existingT = teachers.find(t => t.uid === selectedTeacherUid);
         targetName = existingT?.name || 'Teacher';
