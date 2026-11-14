@@ -35,7 +35,6 @@ import {
   getSchoolSmsPackageSummary,
   interpolateSmsTemplate,
   isValidGhanaPhone,
-  maskApiKey,
   normalizeParentName,
   normalizePhoneInput,
   normalizeSmsSenderId,
@@ -736,7 +735,7 @@ export default function ParentsSmsTab({
     if (gatewayDraft.provider !== 'simulation' && isSchoolManaged) {
       if (!schoolSmsSummary?.isGatewayReady && !serverStatus?.configured) {
         toast.error(
-          `${institution.schoolName} has no SMS API key or Sender ID configured yet. Ask your School Admin or Super Admin.`
+          `SMS service is not yet activated for ${institution.schoolName}. Ask your Senior Super User to configure SMS.`
         );
         return;
       }
@@ -770,14 +769,18 @@ export default function ParentsSmsTab({
             id: `sms-${Date.now()}`,
             timestamp: new Date().toLocaleString(),
             category: 'Gateway Test SMS',
-            gateway: `${res.mode} (${activeSenderId || 'No Sender'})`,
+            gateway: isSchoolManaged ? res.mode : `${res.mode} (${activeSenderId || 'No Sender'})`,
             recipientCount: 1,
             deliveredCount: 1,
             creditsUsed: res.creditsConsumed || 0,
-            sampleMessage: res.dispatches?.[0]?.message || `Test SMS (${activeSenderId})`,
+            sampleMessage: res.dispatches?.[0]?.message || 'Test SMS',
           });
         }
-        toast.success(`Test SMS delivered to ${testPhone} via ${activeSenderId}!`);
+        toast.success(
+          isSchoolManaged
+            ? `Test SMS delivered to ${testPhone}!`
+            : `Test SMS delivered to ${testPhone} via ${activeSenderId}!`
+        );
       }
     } catch (err) {
       toast.error(`Test SMS error: ${err.message}`);
@@ -798,7 +801,7 @@ export default function ParentsSmsTab({
     if (gatewayDraft.provider !== 'simulation' && isSchoolManaged) {
       if (!schoolSmsSummary?.isGatewayReady && !serverStatus?.configured) {
         toast.error(
-          `${institution.schoolName} does not have an SMS API key or Sender ID configured yet. Ask your School Admin or Super Admin to set it up.`
+          `SMS service is not yet activated for ${institution.schoolName}. Ask your Senior Super User to configure SMS.`
         );
         return;
       }
@@ -870,7 +873,7 @@ export default function ParentsSmsTab({
           id: `sms-${Date.now()}`,
           timestamp: new Date().toLocaleString(),
           category: tplLabel,
-          gateway: `${result.mode} (${activeSenderId || 'Default'})`,
+          gateway: isSchoolManaged ? result.mode : `${result.mode} (${activeSenderId || 'Default'})`,
           recipientCount: result.total,
           deliveredCount: result.deliveredCount,
           creditsUsed: result.creditsConsumed || 0,
@@ -880,14 +883,16 @@ export default function ParentsSmsTab({
 
       if (result.failedCount > 0) {
         const firstReason = result.failures?.[0]?.reason;
-        const msg = `Sent ${result.deliveredCount}/${result.total} SMS via ${activeSenderId} (${result.failedCount} failed${firstReason ? `: ${firstReason}` : ''}).`;
+        const senderNote = isSchoolManaged ? '' : ` via ${activeSenderId}`;
+        const msg = `Sent ${result.deliveredCount}/${result.total} SMS${senderNote} (${result.failedCount} failed${firstReason ? `: ${firstReason}` : ''}).`;
         if (result.deliveredCount === 0) toast.error(msg);
         else toast.success(msg);
       } else {
         const creditsNote =
           result.creditsConsumed > 0 ? ` (${result.creditsConsumed} credits used)` : '';
+        const senderNote = isSchoolManaged ? '' : ` via ${activeSenderId}`;
         toast.success(
-          `Successfully sent ${result.deliveredCount} personalized SMS via ${activeSenderId}${creditsNote}!`
+          `Successfully sent ${result.deliveredCount} personalized SMS${senderNote}${creditsNote}!`
         );
       }
     } catch (err) {
@@ -1017,12 +1022,18 @@ export default function ParentsSmsTab({
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {gatewayDraft.provider === 'simulation'
-                ? 'Simulation Mode'
-                : activeSenderId
-                  ? 'mNotify Live'
-                  : 'SMS Key Not Set'}{' '}
-              • <strong className="font-mono">{activeSenderId || 'Unset'}</strong>
+              {gatewayDraft.provider === 'simulation' ? (
+                'Simulation Mode'
+              ) : isSchoolManaged ? (
+                schoolSmsSummary?.isGatewayReady || serverStatus?.configured
+                  ? 'SMS Ready'
+                  : 'SMS Not Activated'
+              ) : (
+                <>
+                  {activeSenderId ? 'mNotify Live' : 'SMS Key Not Set'} •{' '}
+                  <strong className="font-mono">{activeSenderId || 'Unset'}</strong>
+                </>
+              )}
             </span>
 
             <button
@@ -1040,7 +1051,7 @@ export default function ParentsSmsTab({
               className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold inline-flex items-center gap-1.5 touch-manipulation"
             >
               <Settings className="w-3.5 h-3.5" />
-              {isSchoolManaged ? 'Gateway & Package' : 'Gateway Settings'}
+              {isSchoolManaged ? 'SMS Package' : 'Gateway Settings'}
             </button>
           </div>
         </div>
@@ -1155,12 +1166,12 @@ export default function ParentsSmsTab({
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Settings className="w-4 h-4 text-emerald-700" />
                 {isSchoolManaged
-                  ? `${institution.schoolName} — School SMS Gateway & Package`
+                  ? `${institution.schoolName} — School SMS Package`
                   : 'mNotify SMS Gateway Configuration'}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isSchoolManaged
-                  ? 'API Key, Sender ID, and SMS package credits are scoped strictly to this school and managed by your School Admin or Senior Super User.'
+                  ? 'SMS package credits and gateway settings are managed centrally by the Senior Super User.'
                   : serverStatus?.configured
                     ? 'Server proxy /api/send-sms has a cloud key ready — you can leave API Key blank or enter your own class/school mNotify key.'
                     : 'Enter your mNotify API key for live texts, or use Simulation Mode to preview and log deliveries at zero cost.'}
@@ -1178,19 +1189,15 @@ export default function ParentsSmsTab({
 
           {isSchoolManaged && schoolSmsSummary ? (
             <div className="space-y-4 text-xs">
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid sm:grid-cols-3 gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase">Sender ID</div>
-                  <div className="text-sm font-mono font-extrabold text-slate-900 mt-1">
-                    {schoolSmsSummary.senderId || 'Not Configured'}
-                  </div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase">School API Key</div>
-                  <div className="text-sm font-mono font-bold text-slate-900 mt-1">
-                    {schoolSmsSummary.hasApiKey
-                      ? maskApiKey(schoolSmsSummary.apiKey)
-                      : 'Not Configured'}
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">SMS Service</div>
+                  <div
+                    className={`text-sm font-extrabold mt-1 ${
+                      schoolSmsSummary.isGatewayReady ? 'text-emerald-700' : 'text-amber-700'
+                    }`}
+                  >
+                    {schoolSmsSummary.isGatewayReady ? 'Active & Ready' : 'Not Activated'}
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
@@ -1749,7 +1756,8 @@ export default function ParentsSmsTab({
                 <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 shrink-0">
-                      <Eye className="w-3.5 h-3.5" /> Live SMS Preview ({activeSenderId})
+                      <Eye className="w-3.5 h-3.5" />{' '}
+                      {isSchoolManaged ? 'Live SMS Preview' : `Live SMS Preview (${activeSenderId})`}
                     </span>
                     {eligibleRecipients.length > 0 && (
                       <select
@@ -1803,7 +1811,7 @@ export default function ParentsSmsTab({
                     <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <span>
-                        {institution.schoolName} does not have an mNotify API key or Sender ID configured yet. Ask your School Admin or Senior Super User to configure SMS settings.
+                        SMS service is not activated yet for {institution.schoolName}. Ask your Senior Super User to activate SMS settings.
                       </span>
                     </div>
                   ) : schoolSmsSummary.isExhausted ? (

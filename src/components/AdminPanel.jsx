@@ -170,7 +170,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
             { id: 'archives', name: 'Data Archives', icon: Archive },
-            { id: 'sms', name: 'SMS & Package', icon: MessageSquare }
+            { id: 'sms', name: 'SMS Package', icon: MessageSquare }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = adminTab === tab.id;

@@ -164,13 +164,15 @@ export default function SchoolSmsConfigPanel({
       });
 
       if (res.deliveredCount > 0) {
+        const walletNote =
+          canManagePackage &&
+          res.latestMnotifyCreditLeft !== null &&
+          res.latestMnotifyCreditLeft !== undefined
+            ? ` • mNotify wallet left: ${res.latestMnotifyCreditLeft}`
+            : '';
         setTestResult({
           ok: true,
-          message: `Test SMS delivered via ${cleanSender}${
-            res.latestMnotifyCreditLeft !== null && res.latestMnotifyCreditLeft !== undefined
-              ? ` • mNotify wallet left: ${res.latestMnotifyCreditLeft}`
-              : ''
-          }`,
+          message: `Test SMS delivered via ${cleanSender}${walletNote}`,
         });
       } else {
         const reason = res.failures?.[0]?.reason || 'Delivery failed';
@@ -188,6 +190,7 @@ export default function SchoolSmsConfigPanel({
 
   const handleSave = async (e) => {
     e?.preventDefault?.();
+    if (!canManagePackage) return;
     setFeedback(null);
 
     const cleanKey = apiKey.trim();
@@ -350,13 +353,26 @@ export default function SchoolSmsConfigPanel({
         )}
 
         {!canManagePackage && (
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            SMS credit allocations and package top-ups are managed by the Platform Super Admin. You can update your school&apos;s own mNotify API Key and approved Sender ID below.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-[11px]">
+            <span className="text-zinc-500 dark:text-zinc-400">
+              SMS package credits and gateway settings are managed by the Senior Super User.
+            </span>
+            <span
+              className={`px-2 py-0.5 rounded-full font-bold ${
+                summary.isGatewayReady
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+              }`}
+            >
+              {summary.isGatewayReady ? 'SMS Service: Active' : 'SMS Service: Pending Setup'}
+            </span>
+          </div>
         )}
       </div>
 
-      {/* mNotify Credentials */}
+      {/* mNotify Credentials & Verification (Senior Super User only) */}
+      {canManagePackage && (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
@@ -485,6 +501,8 @@ export default function SchoolSmsConfigPanel({
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* Package Allocation Section (Senior Super User only) */}
       {canManagePackage && (
@@ -595,7 +613,9 @@ export default function SchoolSmsConfigPanel({
         </div>
       )}
 
-      {/* Optional Test Dispatch */}
+      {/* Optional Test Dispatch & Save (Senior Super User only) */}
+      {canManagePackage && (
+      <>
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 bg-zinc-50/60 dark:bg-zinc-950/40 space-y-2.5">
         <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
           Send Quick Test SMS (Verifies Key + {normalizeSmsSenderId(senderId) || 'Sender ID'})
@@ -671,6 +691,8 @@ export default function SchoolSmsConfigPanel({
           {saving ? 'Saving...' : 'Save School SMS Settings'}
         </button>
       </div>
+      </>
+      )}
     </form>
   );
 }
