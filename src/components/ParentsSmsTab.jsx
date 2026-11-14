@@ -21,17 +21,21 @@ import {
   Settings,
   UserPlus,
   RotateCcw,
+  Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   DEFAULT_MNOTIFY_SENDER_ID,
   SBA_SMS_TEMPLATES,
+  calculateSmsUnits,
   checkSmsServerStatus,
   dispatchParentSmsBatch,
   formatGhanaPhone,
   formatSmsName,
+  getSchoolSmsPackageSummary,
   interpolateSmsTemplate,
   isValidGhanaPhone,
+  maskApiKey,
   normalizeParentName,
   normalizePhoneInput,
   normalizeSmsSenderId,
@@ -76,6 +80,8 @@ export default function ParentsSmsTab({
   onSaveParentContacts,
   gatewayConfig = {},
   onSaveGatewayConfig,
+  institution = null,
+  onRecordSmsUsage,
   smsLogs = [],
   onAddSmsLog,
   onGoToRoster,
@@ -128,31 +134,43 @@ export default function ParentsSmsTab({
   const [sendingTest, setSendingTest] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
 
+  const isSchoolManaged = Boolean(institution?.id);
+  const schoolSmsSummary = useMemo(
+    () => (isSchoolManaged ? getSchoolSmsPackageSummary(institution) : null),
+    [isSchoolManaged, institution]
+  );
+
   const [gatewayDraft, setGatewayDraft] = useState(() => ({
     provider: gatewayConfig?.provider || 'mnotify',
-    senderId: normalizeSmsSenderId(gatewayConfig?.senderId || DEFAULT_MNOTIFY_SENDER_ID),
+    senderId: normalizeSmsSenderId(
+      (isSchoolManaged ? institution?.smsConfig?.senderId : gatewayConfig?.senderId) ||
+        DEFAULT_MNOTIFY_SENDER_ID
+    ),
     apiKey: gatewayConfig?.apiKey || '',
     dispatchSecret: gatewayConfig?.dispatchSecret || '',
   }));
 
   useEffect(() => {
-    setGatewayDraft({
-      provider: gatewayConfig?.provider || 'mnotify',
-      senderId: normalizeSmsSenderId(gatewayConfig?.senderId || DEFAULT_MNOTIFY_SENDER_ID),
+    setGatewayDraft((prev) => ({
+      provider: gatewayConfig?.provider || prev.provider || 'mnotify',
+      senderId: normalizeSmsSenderId(
+        (isSchoolManaged ? institution?.smsConfig?.senderId : gatewayConfig?.senderId) ||
+          DEFAULT_MNOTIFY_SENDER_ID
+      ),
       apiKey: gatewayConfig?.apiKey || '',
       dispatchSecret: gatewayConfig?.dispatchSecret || '',
-    });
-  }, [gatewayConfig]);
+    }));
+  }, [gatewayConfig, isSchoolManaged, institution?.smsConfig?.senderId]);
 
   useEffect(() => {
     let active = true;
-    checkSmsServerStatus().then((status) => {
+    checkSmsServerStatus(institution?.id || '').then((status) => {
       if (active && status) setServerStatus(status);
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [institution?.id]);
 
   // Refs for focus progression & safe auto-save / unmount flush
   const parentNameRefs = useRef({});
@@ -682,31 +700,41 @@ export default function ParentsSmsTab({
   }, [messageBody, previewStudent, metadata, viewingTerm]);
 
   const activeSenderId = normalizeSmsSenderId(
-    gatewayDraft?.senderId || DEFAULT_MNOTIFY_SENDER_ID
+    (isSchoolManaged ? schoolSmsSummary?.senderId : gatewayDraft?.senderId) ||
+      DEFAULT_MNOTIFY_SENDER_ID
   );
 
-  const liveGatewayConfig = useMemo(
-    () => ({
+  const liveGatewayConfig = useMemo(() => {
+    const isLocalVite =
+      typeof window !== 'undefined' &&
+      ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    return {
       provider: gatewayDraft.provider || 'mnotify',
       senderId: activeSenderId,
-      apiKey: gatewayDraft.apiKey || '',
+      institutionId: institution?.id || '',
+      apiKey: isSchoolManaged
+        ? isLocalVite
+          ? schoolSmsSummary?.apiKey || ''
+          : ''
+        : gatewayDraft.apiKey || '',
       dispatchSecret: gatewayDraft.dispatchSecret || '',
-    }),
-    [gatewayDraft, activeSenderId]
-  );
+    };
+  }, [gatewayDraft, activeSenderId, isSchoolManaged, institution?.id, schoolSmsSummary?.apiKey]);
 
   const handleSaveGateway = async () => {
     const cleanConfig = {
       ...gatewayDraft,
-      senderId: normalizeSmsSenderId(gatewayDraft.senderId),
-      apiKey: String(gatewayDraft.apiKey || '').trim(),
+      senderId: isSchoolManaged ? activeSenderId : normalizeSmsSenderId(gatewayDraft.senderId),
+      apiKey: isSchoolManaged ? '' : String(gatewayDraft.apiKey || '').trim(),
       dispatchSecret: String(gatewayDraft.dispatchSecret || '').trim(),
     };
     setGatewayDraft(cleanConfig);
     if (onSaveGatewayConfig) {
       await onSaveGatewayConfig(cleanConfig);
     }
-    toast.success(`SMS gateway settings saved (${cleanConfig.senderId})`);
+    toast.success(
+      `SMS preferences saved (${cleanConfig.provider === 'simulation' ? 'Simulation Mode' : activeSenderId || 'mNotify'})`
+    );
     setShowGatewayPanel(false);
   };
 
@@ -715,25 +743,47 @@ export default function ParentsSmsTab({
       toast.error('Enter a valid Ghanaian phone number (e.g. 0244123456).');
       return;
     }
+    if (gatewayDraft.provider !== 'simulation' && isSchoolManaged) {
+      if (!schoolSmsSummary?.isGatewayReady && !serverStatus?.configured) {
+        toast.error(
+          `${institution.schoolName} has no SMS API key or Sender ID configured yet. Ask your School Admin or Super Admin.`
+        );
+        return;
+      }
+      if (schoolSmsSummary?.isExhausted) {
+        toast.error(
+          `${institution.schoolName} has 0 SMS package credits remaining. Ask Senior Super User to top up.`
+        );
+        return;
+      }
+    }
     setSendingTest(true);
     try {
       const res = await sendSingleTestSms({
         phone: testPhone,
         metadata,
         gatewayConfig: liveGatewayConfig,
+        smsPackage: isSchoolManaged ? schoolSmsSummary : null,
+        institutionId: institution?.id || '',
       });
       if (res.failedCount > 0) {
         const reason = res.failures?.[0]?.reason || 'Delivery failed';
         toast.error(`Test SMS failed: ${reason}`);
       } else {
+        if (res.creditsConsumed > 0 && res.mode !== 'Simulation Mode' && onRecordSmsUsage) {
+          await onRecordSmsUsage(res.creditsConsumed, {
+            latestMnotifyCreditLeft: res.latestMnotifyCreditLeft,
+          });
+        }
         if (onAddSmsLog) {
           onAddSmsLog({
             id: `sms-${Date.now()}`,
             timestamp: new Date().toLocaleString(),
             category: 'Gateway Test SMS',
-            gateway: `${res.mode} (${activeSenderId})`,
+            gateway: `${res.mode} (${activeSenderId || 'No Sender'})`,
             recipientCount: 1,
             deliveredCount: 1,
+            creditsUsed: res.creditsConsumed || 0,
             sampleMessage: res.dispatches?.[0]?.message || `Test SMS (${activeSenderId})`,
           });
         }
@@ -755,6 +805,20 @@ export default function ParentsSmsTab({
       toast.error('SMS message cannot be empty.');
       return;
     }
+    if (gatewayDraft.provider !== 'simulation' && isSchoolManaged) {
+      if (!schoolSmsSummary?.isGatewayReady && !serverStatus?.configured) {
+        toast.error(
+          `${institution.schoolName} does not have an SMS API key or Sender ID configured yet. Ask your School Admin or Super Admin to set it up.`
+        );
+        return;
+      }
+      if (schoolSmsSummary?.isExhausted) {
+        toast.error(
+          `${institution.schoolName} has exhausted its SMS package credits (0 left). Ask Senior Super User to top up.`
+        );
+        return;
+      }
+    }
 
     setIsSendingSms(true);
     try {
@@ -764,7 +828,15 @@ export default function ParentsSmsTab({
         metadata,
         viewingTerm,
         gatewayConfig: liveGatewayConfig,
+        smsPackage: isSchoolManaged ? schoolSmsSummary : null,
+        institutionId: institution?.id || '',
       });
+
+      if (result.creditsConsumed > 0 && result.mode !== 'Simulation Mode' && onRecordSmsUsage) {
+        await onRecordSmsUsage(result.creditsConsumed, {
+          latestMnotifyCreditLeft: result.latestMnotifyCreditLeft,
+        });
+      }
 
       const tplLabel =
         SBA_SMS_TEMPLATES.find((t) => t.id === selectedTemplateId)?.label || 'Custom Broadcast';
@@ -774,9 +846,10 @@ export default function ParentsSmsTab({
           id: `sms-${Date.now()}`,
           timestamp: new Date().toLocaleString(),
           category: tplLabel,
-          gateway: `${result.mode} (${activeSenderId})`,
+          gateway: `${result.mode} (${activeSenderId || 'Default'})`,
           recipientCount: result.total,
           deliveredCount: result.deliveredCount,
+          creditsUsed: result.creditsConsumed || 0,
           sampleMessage: result.dispatches?.[0]?.message || messageBody,
         });
       }
@@ -787,8 +860,10 @@ export default function ParentsSmsTab({
         if (result.deliveredCount === 0) toast.error(msg);
         else toast.success(msg);
       } else {
+        const creditsNote =
+          result.creditsConsumed > 0 ? ` (${result.creditsConsumed} credits used)` : '';
         toast.success(
-          `Successfully sent ${result.deliveredCount} personalized SMS via ${activeSenderId}!`
+          `Successfully sent ${result.deliveredCount} personalized SMS via ${activeSenderId}${creditsNote}!`
         );
       }
     } catch (err) {
@@ -888,16 +963,39 @@ export default function ParentsSmsTab({
           </div>
 
           <div className="flex items-center flex-wrap gap-2">
+            {isSchoolManaged && schoolSmsSummary && (
+              <span
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border ${
+                  !schoolSmsSummary.hasPackage || schoolSmsSummary.isExhausted
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : schoolSmsSummary.isLowBalance
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" />
+                {schoolSmsSummary.enforceQuota
+                  ? `${schoolSmsSummary.creditsRemaining.toLocaleString()} / ${schoolSmsSummary.creditsAllocated.toLocaleString()} SMS Left`
+                  : `${schoolSmsSummary.packageName} (Unlimited)`}
+              </span>
+            )}
+
             <span
               className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border ${
                 gatewayDraft.provider === 'simulation'
                   ? 'bg-amber-50 text-amber-800 border-amber-200'
-                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : isSchoolManaged && !schoolSmsSummary?.isGatewayReady && !serverStatus?.configured
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {gatewayDraft.provider === 'simulation' ? 'Simulation Mode' : 'mNotify Live'} •{' '}
-              <strong className="font-mono">{activeSenderId}</strong>
+              {gatewayDraft.provider === 'simulation'
+                ? 'Simulation Mode'
+                : activeSenderId
+                  ? 'mNotify Live'
+                  : 'SMS Key Not Set'}{' '}
+              • <strong className="font-mono">{activeSenderId || 'Unset'}</strong>
             </span>
 
             <button
@@ -915,7 +1013,7 @@ export default function ParentsSmsTab({
               className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold inline-flex items-center gap-1.5 touch-manipulation"
             >
               <Settings className="w-3.5 h-3.5" />
-              Gateway Settings
+              {isSchoolManaged ? 'Gateway & Package' : 'Gateway Settings'}
             </button>
           </div>
         </div>
@@ -1029,12 +1127,16 @@ export default function ParentsSmsTab({
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <Settings className="w-4 h-4 text-emerald-700" />
-                mNotify SMS Gateway Configuration
+                {isSchoolManaged
+                  ? `${institution.schoolName} — School SMS Gateway & Package`
+                  : 'mNotify SMS Gateway Configuration'}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                {serverStatus?.serverKeyConfigured
-                  ? 'Server proxy /api/send-sms has a cloud key ready — you can leave API Key blank or enter your own class/school mNotify key.'
-                  : 'Enter your mNotify API key for live texts, or use Simulation Mode to preview and log deliveries at zero cost.'}
+                {isSchoolManaged
+                  ? 'API Key, Sender ID, and SMS package credits are scoped strictly to this school and managed by your School Admin or Senior Super User.'
+                  : serverStatus?.configured
+                    ? 'Server proxy /api/send-sms has a cloud key ready — you can leave API Key blank or enter your own class/school mNotify key.'
+                    : 'Enter your mNotify API key for live texts, or use Simulation Mode to preview and log deliveries at zero cost.'}
               </p>
             </div>
             <button
@@ -1047,72 +1149,143 @@ export default function ParentsSmsTab({
             </button>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div>
-              <label className="block font-bold text-slate-600 mb-1">Gateway Mode</label>
-              <select
-                value={gatewayDraft.provider}
-                onChange={(e) => setGatewayDraft((prev) => ({ ...prev, provider: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
-              >
-                <option value="mnotify">mNotify Live SMS</option>
-                <option value="simulation">Simulation Mode (No Cost)</option>
-              </select>
-            </div>
+          {isSchoolManaged && schoolSmsSummary ? (
+            <div className="space-y-4 text-xs">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">Sender ID</div>
+                  <div className="text-sm font-mono font-extrabold text-slate-900 mt-1">
+                    {schoolSmsSummary.senderId || 'Not Configured'}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">School API Key</div>
+                  <div className="text-sm font-mono font-bold text-slate-900 mt-1">
+                    {schoolSmsSummary.hasApiKey
+                      ? maskApiKey(schoolSmsSummary.apiKey)
+                      : 'Not Configured'}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">SMS Package</div>
+                  <div className="text-sm font-bold text-indigo-700 mt-1">
+                    {schoolSmsSummary.packageName}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">Credits Left</div>
+                  <div className="text-sm font-extrabold text-emerald-700 mt-1">
+                    {schoolSmsSummary.enforceQuota
+                      ? `${schoolSmsSummary.creditsRemaining.toLocaleString()} / ${schoolSmsSummary.creditsAllocated.toLocaleString()}`
+                      : 'Unlimited'}
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="block font-bold text-slate-600 mb-1">Sender ID (Max 11 chars)</label>
-              <input
-                type="text"
-                maxLength={11}
-                value={gatewayDraft.senderId}
-                onChange={(e) => setGatewayDraft((prev) => ({ ...prev, senderId: e.target.value }))}
-                placeholder={DEFAULT_MNOTIFY_SENDER_ID}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
-              />
+              <div className="grid sm:grid-cols-2 gap-3 items-end">
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">
+                    Class Testing Mode
+                  </label>
+                  <select
+                    value={gatewayDraft.provider}
+                    onChange={(e) =>
+                      setGatewayDraft((prev) => ({ ...prev, provider: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+                  >
+                    <option value="mnotify">mNotify Live SMS (Uses School Package)</option>
+                    <option value="simulation">Simulation Mode (No Cost / Practice)</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGatewayPanel(false)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveGateway}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800"
+                  >
+                    Save Mode
+                  </button>
+                </div>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">Gateway Mode</label>
+                  <select
+                    value={gatewayDraft.provider}
+                    onChange={(e) => setGatewayDraft((prev) => ({ ...prev, provider: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+                  >
+                    <option value="mnotify">mNotify Live SMS</option>
+                    <option value="simulation">Simulation Mode (No Cost)</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="block font-bold text-slate-600 mb-1">mNotify API Key (Optional)</label>
-              <input
-                type="password"
-                value={gatewayDraft.apiKey}
-                onChange={(e) => setGatewayDraft((prev) => ({ ...prev, apiKey: e.target.value }))}
-                placeholder="Uses cloud proxy key if blank"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
-              />
-            </div>
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">Sender ID (Max 11 chars)</label>
+                  <input
+                    type="text"
+                    maxLength={11}
+                    value={gatewayDraft.senderId}
+                    onChange={(e) => setGatewayDraft((prev) => ({ ...prev, senderId: e.target.value }))}
+                    placeholder="e.g. SchoolSBA"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                </div>
 
-            <div>
-              <label className="block font-bold text-slate-600 mb-1">Server Dispatch PIN (Optional)</label>
-              <input
-                type="password"
-                value={gatewayDraft.dispatchSecret}
-                onChange={(e) =>
-                  setGatewayDraft((prev) => ({ ...prev, dispatchSecret: e.target.value }))
-                }
-                placeholder="Only if configured on server"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
-              />
-            </div>
-          </div>
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">mNotify API Key</label>
+                  <input
+                    type="password"
+                    value={gatewayDraft.apiKey}
+                    onChange={(e) => setGatewayDraft((prev) => ({ ...prev, apiKey: e.target.value }))}
+                    placeholder="Enter mNotify API key"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowGatewayPanel(false)}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveGateway}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800"
-            >
-              Save Gateway Settings
-            </button>
-          </div>
+                <div>
+                  <label className="block font-bold text-slate-600 mb-1">Server Dispatch PIN (Optional)</label>
+                  <input
+                    type="password"
+                    value={gatewayDraft.dispatchSecret}
+                    onChange={(e) =>
+                      setGatewayDraft((prev) => ({ ...prev, dispatchSecret: e.target.value }))
+                    }
+                    placeholder="Only if configured on server"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-base sm:text-xs font-mono text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGatewayPanel(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGateway}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800"
+                >
+                  Save Gateway Settings
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1601,7 +1774,51 @@ export default function ParentsSmsTab({
                   <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
                     {previewText}
                   </p>
+                  {gatewayDraft.provider !== 'simulation' && (
+                    <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 border-t border-emerald-200/70">
+                      <span>
+                        Est. SMS credits:{' '}
+                        <strong>
+                          {selectedCount * Math.max(1, calculateSmsUnits(previewText || messageBody))}
+                        </strong>{' '}
+                        ({Math.max(1, calculateSmsUnits(previewText || messageBody))} unit/parent)
+                      </span>
+                      {isSchoolManaged && schoolSmsSummary && (
+                        <span
+                          className={
+                            schoolSmsSummary.isExhausted
+                              ? 'text-rose-700 font-bold'
+                              : 'text-emerald-800 font-bold'
+                          }
+                        >
+                          School Balance:{' '}
+                          {schoolSmsSummary.enforceQuota
+                            ? `${schoolSmsSummary.creditsRemaining.toLocaleString()} credits left`
+                            : 'Unlimited'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {gatewayDraft.provider !== 'simulation' &&
+                  isSchoolManaged &&
+                  schoolSmsSummary &&
+                  (!schoolSmsSummary.isGatewayReady && !serverStatus?.configured ? (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {institution.schoolName} does not have an mNotify API key or Sender ID configured yet. Ask your School Admin or Senior Super User to configure SMS settings.
+                      </span>
+                    </div>
+                  ) : schoolSmsSummary.isExhausted ? (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {institution.schoolName} has 0 SMS package credits remaining. Ask your Senior Super User to top up the school&apos;s SMS package.
+                      </span>
+                    </div>
+                  ) : null)}
 
                 {/* Send Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-2.5">

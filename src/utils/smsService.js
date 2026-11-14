@@ -5,11 +5,20 @@
  */
 import {
   DEFAULT_MNOTIFY_SENDER_ID,
+  calculateSmsUnits,
   evaluateMnotifyResponse,
+  getSchoolSmsPackageSummary,
+  maskApiKey,
   normalizeSmsSenderId,
 } from './mnotifyHelpers.js';
 
-export { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId };
+export {
+  DEFAULT_MNOTIFY_SENDER_ID,
+  calculateSmsUnits,
+  getSchoolSmsPackageSummary,
+  maskApiKey,
+  normalizeSmsSenderId,
+};
 
 export const SBA_SMS_TEMPLATES = [
   {
@@ -211,17 +220,125 @@ export function interpolateSmsTemplate(template, context = {}) {
 }
 
 /**
- * Checks whether Vercel /api/send-sms environment or cloud credentials are active.
+ * Checks whether Vercel /api/send-sms school credentials and package quota are active.
  */
-export async function checkSmsServerStatus() {
+export async function checkSmsServerStatus(institutionId = '') {
   try {
-    const res = await fetch('/api/send-sms', { method: 'GET' });
+    const cleanId = String(institutionId || '').trim();
+    const qs = cleanId ? `?institutionId=${encodeURIComponent(cleanId)}` : '';
+    const res = await fetch(`/api/send-sms${qs}`, { method: 'GET' });
     if (!res.ok) return null;
     const contentType = res.headers?.get?.('content-type') || '';
     if (contentType && !contentType.includes('application/json')) return null;
     return await res.json();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Verifies an mNotify API key, retrieves live wallet balance, and checks Sender ID approval status.
+ */
+export async function verifySchoolSmsGateway({
+  institutionId = '',
+  apiKey = '',
+  senderId = '',
+} = {}) {
+  const cleanKey = String(apiKey || '').trim();
+  const cleanSender = normalizeSmsSenderId(senderId);
+
+  try {
+    const res = await fetch('/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'verify',
+        institutionId: String(institutionId || '').trim(),
+        apiKey: cleanKey,
+        senderId: cleanSender,
+      }),
+    });
+
+    if (res.status !== 404 && res.status !== 405) {
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+      if (!res.ok || !data?.ok) {
+        return {
+          ok: false,
+          keyValid: false,
+          error: data?.error || `Verification failed (HTTP ${res.status})`,
+        };
+      }
+      return data;
+    }
+  } catch (err) {
+    if (!String(err?.message || '').includes('Failed to fetch') && !cleanKey) {
+      return { ok: false, keyValid: false, error: err?.message || 'Verification failed' };
+    }
+  }
+
+  // Direct mNotify fallback during local Vite dev when /api/send-sms is not running
+  if (!cleanKey) {
+    return {
+      ok: false,
+      keyValid: false,
+      error: 'Local /api/send-sms proxy unavailable. Provide an mNotify API key to verify.',
+    };
+  }
+
+  try {
+    const balRes = await fetch(
+      `https://api.mnotify.com/api/balance/sms?key=${encodeURIComponent(cleanKey)}`
+    );
+    const balData = await balRes.json().catch(() => ({}));
+    if (!balRes.ok || String(balData?.status || '').toLowerCase() !== 'success') {
+      return {
+        ok: false,
+        keyValid: false,
+        error: balData?.message || `mNotify rejected key (HTTP ${balRes.status})`,
+      };
+    }
+
+    let senderStatus = 'unchecked';
+    let senderPurpose = '';
+    if (cleanSender) {
+      try {
+        const sndRes = await fetch(
+          `https://api.mnotify.com/api/senderid/status/?key=${encodeURIComponent(cleanKey)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender_name: cleanSender }),
+          }
+        );
+        const sndData = await sndRes.json().catch(() => ({}));
+        if (sndRes.ok && sndData?.summary) {
+          senderStatus = String(sndData.summary.status || 'approved').toLowerCase();
+          senderPurpose = String(sndData.summary.purpose || '');
+        } else if (sndRes.status === 404) {
+          senderStatus = 'not_found';
+        }
+      } catch {
+        senderStatus = 'check_failed';
+      }
+    }
+
+    return {
+      ok: true,
+      keyValid: true,
+      mnotifyBalance: Number(balData.balance ?? 0),
+      bonus: Number(balData.bonus ?? 0),
+      wallet: String(balData.wallet ?? '0'),
+      senderId: cleanSender,
+      senderStatus,
+      senderPurpose,
+    };
+  } catch (err) {
+    return { ok: false, keyValid: false, error: err?.message || 'Failed reaching mNotify' };
   }
 }
 
@@ -236,12 +353,14 @@ export async function dispatchParentSmsBatch({
   metadata = {},
   viewingTerm = 'Term 1',
   gatewayConfig = {},
+  smsPackage = null,
+  institutionId = '',
 }) {
   const provider = gatewayConfig?.provider || 'mnotify';
   const apiKey = String(gatewayConfig?.apiKey || '').trim();
   const dispatchSecret = String(gatewayConfig?.dispatchSecret || '').trim();
   const rawSenderId = normalizeSmsSenderId(gatewayConfig?.senderId);
-  const fallbackSenderId = rawSenderId || DEFAULT_MNOTIFY_SENDER_ID;
+  const resolvedInstId = String(institutionId || gatewayConfig?.institutionId || '').trim();
 
   const dispatches = recipients.map((rec) => {
     const formattedPhone = formatGhanaPhone(rec.parentPhone);
@@ -272,6 +391,7 @@ export async function dispatchParentSmsBatch({
       phone: formattedPhone,
       rawPhone: rec.parentPhone || '',
       message: personalizedBody,
+      units: Math.max(1, calculateSmsUnits(personalizedBody)),
     };
   });
 
@@ -289,9 +409,37 @@ export async function dispatchParentSmsBatch({
         total: dispatches.length,
         deliveredCount: 0,
         failedCount: failures.length,
+        creditsConsumed: 0,
+        totalUnitsEstimated: 0,
+        latestMnotifyCreditLeft: null,
         failures,
         dispatches,
       };
+    }
+
+    if (!rawSenderId) {
+      throw new Error(
+        'No approved mNotify Sender ID is configured for this school. Set one (max 11 characters) in school SMS settings.'
+      );
+    }
+
+    const totalUnitsEstimated = validDispatches.reduce((sum, d) => sum + d.units, 0);
+
+    if (smsPackage && smsPackage.enforceQuota !== false) {
+      const remaining = Math.max(
+        0,
+        Number(smsPackage.creditsRemaining ?? (smsPackage.creditsAllocated || 0) - (smsPackage.creditsUsed || 0))
+      );
+      if (smsPackage.hasPackage === false) {
+        throw new Error(
+          'No active SMS package is assigned to this school. Ask Senior Super User to assign SMS package credits.'
+        );
+      }
+      if (remaining < totalUnitsEstimated) {
+        throw new Error(
+          `Insufficient school SMS credits: ${totalUnitsEstimated} SMS credits required, but only ${remaining} remaining.`
+        );
+      }
     }
 
     if (provider === 'mnotify') {
@@ -300,6 +448,7 @@ export async function dispatchParentSmsBatch({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            institutionId: resolvedInstId,
             provider,
             senderId: rawSenderId,
             apiKey,
@@ -324,11 +473,15 @@ export async function dispatchParentSmsBatch({
           }
 
           const proxyFailures = Array.isArray(proxyData.failures) ? proxyData.failures : [];
+          const delivered = Number(proxyData.deliveredCount ?? proxyData.sentCount ?? 0);
           return {
             mode: provider,
             total: dispatches.length,
-            deliveredCount: proxyData.deliveredCount || 0,
+            deliveredCount: delivered,
             failedCount: failures.length + proxyFailures.length,
+            creditsConsumed: Number(proxyData.creditsConsumed ?? 0),
+            totalUnitsEstimated,
+            latestMnotifyCreditLeft: proxyData.latestMnotifyCreditLeft ?? null,
             failures: [...failures, ...proxyFailures],
             dispatches,
           };
@@ -342,11 +495,13 @@ export async function dispatchParentSmsBatch({
 
     if (!apiKey) {
       throw new Error(
-        'Server /api/send-sms proxy is unavailable locally. Send from the deployed site or enter an mNotify API key in Gateway Settings.'
+        'Server /api/send-sms proxy is unavailable locally and no school mNotify API key was supplied.'
       );
     }
 
     let deliveredCount = 0;
+    let creditsConsumed = 0;
+    let latestMnotifyCreditLeft = null;
     for (const item of validDispatches) {
       try {
         const res = await fetch(
@@ -359,7 +514,7 @@ export async function dispatchParentSmsBatch({
             },
             body: JSON.stringify({
               recipient: [item.phone],
-              sender: fallbackSenderId,
+              sender: rawSenderId,
               message: item.message,
               is_schedule: false,
               schedule_date: '',
@@ -374,9 +529,14 @@ export async function dispatchParentSmsBatch({
         }
         const evalResult = evaluateMnotifyResponse(res.ok, data);
         if (!evalResult.ok) {
-          throw new Error(evalResult.reason || `HTTP ${res.status}`);
+          throw new Error(evalResult.errorMessage || evalResult.reason || `HTTP ${res.status}`);
         }
         deliveredCount += 1;
+        const used = Number(data?.summary?.credit_used);
+        creditsConsumed += Number.isFinite(used) && used > 0 ? used : item.units;
+        if (data?.summary?.credit_left !== undefined && data?.summary?.credit_left !== null) {
+          latestMnotifyCreditLeft = Number(data.summary.credit_left);
+        }
       } catch (err) {
         failures.push({ ...item, reason: err.message });
       }
@@ -387,12 +547,15 @@ export async function dispatchParentSmsBatch({
       total: dispatches.length,
       deliveredCount,
       failedCount: failures.length,
+      creditsConsumed,
+      totalUnitsEstimated,
+      latestMnotifyCreditLeft,
       failures,
       dispatches,
     };
   }
 
-  // Simulation Mode fallback for zero-cost verification
+  // Simulation Mode fallback for zero-cost verification (does not consume real credits)
   await new Promise((resolve) => setTimeout(resolve, 400));
   const validDispatches = dispatches.filter((d) => /^233\d{9}$/.test(d.phone));
   const invalidDispatches = dispatches.filter((d) => !/^233\d{9}$/.test(d.phone));
@@ -402,6 +565,9 @@ export async function dispatchParentSmsBatch({
     total: dispatches.length,
     deliveredCount: validDispatches.length,
     failedCount: invalidDispatches.length,
+    creditsConsumed: 0,
+    totalUnitsEstimated: validDispatches.reduce((sum, d) => sum + d.units, 0),
+    latestMnotifyCreditLeft: null,
     failures: invalidDispatches.map((d) => ({
       ...d,
       reason: 'Invalid or missing Ghanaian phone number',
@@ -413,10 +579,17 @@ export async function dispatchParentSmsBatch({
 /**
  * Dispatches a single quick verification SMS using the configured gateway & Sender ID.
  */
-export async function sendSingleTestSms({ phone, metadata = {}, gatewayConfig = {} }) {
+export async function sendSingleTestSms({
+  phone,
+  metadata = {},
+  gatewayConfig = {},
+  smsPackage = null,
+  institutionId = '',
+}) {
   const schoolName = String(metadata?.schoolName || 'SBA Portal').trim() || 'SBA Portal';
   const senderLabel = normalizeSmsSenderId(gatewayConfig?.senderId);
-  const testBody = `Test SMS from ${schoolName} (${senderLabel}). Parent SMS alert system is working properly.`;
+  const senderTag = senderLabel ? ` (${senderLabel})` : '';
+  const testBody = `Test SMS from ${schoolName}${senderTag}. Parent SMS alert system is working properly.`;
 
   return dispatchParentSmsBatch({
     recipients: [
@@ -431,5 +604,7 @@ export async function sendSingleTestSms({ phone, metadata = {}, gatewayConfig = 
     metadata,
     viewingTerm: metadata?.term || 'Term 1',
     gatewayConfig,
+    smsPackage,
+    institutionId,
   });
 }

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
-import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive } from 'lucide-react';
+import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
+import { SMS_PACKAGE_PRESETS, getSchoolSmsPackageSummary, normalizeSmsSenderId } from '../utils/mnotifyHelpers';
 
 export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [institutions, setInstitutions] = useState([]);
@@ -13,6 +15,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [editSchoolName, setEditSchoolName] = useState('');
   const [editCrestUrl, setEditCrestUrl] = useState('');
   const [editAcademicYear, setEditAcademicYear] = useState('');
+  const [smsModalInst, setSmsModalInst] = useState(null);
   // Form State
   const [schoolName, setSchoolName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
@@ -20,6 +23,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [activeTerm, setActiveTerm] = useState('Term 1');
   const [academicYear, setAcademicYear] = useState('2026/2027');
   const [schoolCrestUrl, setSchoolCrestUrl] = useState('');
+  const [initialSmsApiKey, setInitialSmsApiKey] = useState('');
+  const [initialSmsSenderId, setInitialSmsSenderId] = useState('');
+  const [initialSmsPackageId, setInitialSmsPackageId] = useState('standard_500');
+  const [initialSmsCredits, setInitialSmsCredits] = useState('500');
   
   const fetchInstitutions = async () => {
     setLoading(true);
@@ -229,6 +236,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       // 1. Create the Firebase Auth User for the Admin
       const adminUid = await createTeacherUser(adminEmail.trim().toLowerCase(), adminPassword.trim());
 
+      const presetObj = SMS_PACKAGE_PRESETS.find((p) => p.id === initialSmsPackageId) || SMS_PACKAGE_PRESETS[1];
+      const allocatedCredits = Math.max(0, Math.round(Number(initialSmsCredits) || 0));
+      const nowIso = new Date().toISOString();
+
       // 2. Create the Institution Document
       await setDoc(doc(db, "institutions", id), {
         schoolName: schoolName.trim(),
@@ -237,7 +248,22 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         academicYear: academicYear.trim() || "2026/2027",
         schoolCrestUrl: schoolCrestUrl.trim(),
         gradingFormula: 'default',
-        createdAt: new Date().toISOString()
+        smsConfig: {
+          provider: 'mnotify',
+          apiKey: initialSmsApiKey.trim(),
+          senderId: normalizeSmsSenderId(initialSmsSenderId),
+          updatedAt: nowIso,
+        },
+        smsPackage: {
+          packageId: presetObj.id,
+          packageName: presetObj.label,
+          creditsAllocated: allocatedCredits,
+          creditsUsed: 0,
+          enforceQuota: true,
+          lastTopUpAt: nowIso,
+          updatedAt: nowIso,
+        },
+        createdAt: nowIso
       });
       
       // 3. Save the Super User profile in the 'teachers' collection
@@ -246,7 +272,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         name: "Admin",
         email: adminEmail.trim().toLowerCase(),
         institutionId: id,
-        createdDate: new Date().toISOString()
+        createdDate: nowIso
       });
       
       toast.success("School and Super User created successfully!", { id: "create-school" });
@@ -256,6 +282,10 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       setAdminPassword('');
       setSchoolCrestUrl('');
       setActiveTerm('Term 1');
+      setInitialSmsApiKey('');
+      setInitialSmsSenderId('');
+      setInitialSmsPackageId('standard_500');
+      setInitialSmsCredits('500');
       fetchInstitutions();
     } catch (err) {
       console.error(err);
@@ -537,6 +567,37 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                     <option value="Term 3">Term 3</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">mNotify API Key (Optional)</label>
+                  <input value={initialSmsApiKey} onChange={e => setInitialSmsApiKey(e.target.value)} placeholder="Per-school mNotify API key" className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Approved Sender ID (Max 11 chars)</label>
+                  <input maxLength={11} value={initialSmsSenderId} onChange={e => setInitialSmsSenderId(e.target.value.slice(0, 11))} placeholder="e.g. Ve-KuatiRC" className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">SMS Package Tier</label>
+                  <select
+                    value={initialSmsPackageId}
+                    onChange={e => {
+                      const nextId = e.target.value;
+                      setInitialSmsPackageId(nextId);
+                      const found = SMS_PACKAGE_PRESETS.find((p) => p.id === nextId);
+                      if (found && typeof found.credits === 'number') {
+                        setInitialSmsCredits(String(found.credits));
+                      }
+                    }}
+                    className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs"
+                  >
+                    {SMS_PACKAGE_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Allocated SMS Credits</label>
+                  <input type="number" min={0} value={initialSmsCredits} onChange={e => { setInitialSmsPackageId('custom'); setInitialSmsCredits(e.target.value); }} className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono" />
+                </div>
                 <div className="md:col-span-2 flex justify-end mt-2">
                   <button type="submit" className="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg shadow transition-colors">
                     Save School
@@ -547,7 +608,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         )}
 
         <div className="glass-card rounded-xl border border-zinc-200 dark:border-zinc-800/80 overflow-x-auto w-full">
-          <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[960px]">
             <thead>
               <tr className="bg-zinc-100 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 font-semibold">
                 <th className="px-4 py-3">School Name</th>
@@ -555,17 +616,18 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                 <th className="px-4 py-3">Crest</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Academic Year</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Active Term</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">SMS &amp; Package</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-12 text-zinc-500">Loading schools...</td>
+                  <td colSpan="7" className="text-center py-12 text-zinc-500">Loading schools...</td>
                 </tr>
               ) : institutions.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-12 text-zinc-500">No schools registered yet.</td>
+                  <td colSpan="7" className="text-center py-12 text-zinc-500">No schools registered yet.</td>
                 </tr>
               ) : (
                 institutions.map(inst => (
@@ -649,8 +711,50 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                           <option value="Term 3">Term 3</option>
                         </select>
                       </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const smsInfo = getSchoolSmsPackageSummary(inst);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setSmsModalInst(inst)}
+                              className={`text-left px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors w-full max-w-[200px] ${
+                                !smsInfo.isGatewayReady
+                                  ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
+                                  : smsInfo.isExhausted
+                                    ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'
+                              }`}
+                            >
+                              <div className="font-bold flex items-center justify-between gap-1.5">
+                                <span className="truncate font-mono">
+                                  {smsInfo.senderId || 'Setup SMS'}
+                                </span>
+                                <span className="text-[10px] shrink-0">
+                                  {smsInfo.hasApiKey ? 'Key ✓' : 'No Key'}
+                                </span>
+                              </div>
+                              <div className="text-[10px] opacity-80 truncate mt-0.5">
+                                {smsInfo.enforceQuota
+                                  ? `${smsInfo.creditsRemaining.toLocaleString()} / ${smsInfo.creditsAllocated.toLocaleString()} SMS left`
+                                  : 'Unlimited quota'}
+                              </div>
+                            </button>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSmsModalInst(inst);
+                            }}
+                            className="p-1.5 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                            title="Configure School SMS API Key & Package"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
                           {editingInstId === inst.id ? (
                             <>
                               <button 
@@ -709,7 +813,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                     {/* Expanded Content: Teacher Accounts */}
                     {expandedInstId === inst.id && (
                       <tr className="bg-zinc-50/50 dark:bg-zinc-900/20 border-b border-zinc-200 dark:border-zinc-800/50">
-                        <td colSpan="5" className="p-0">
+                        <td colSpan="7" className="p-0">
                           <div className="px-10 py-4">
                             <h4 className="text-[11px] uppercase tracking-wider font-bold text-zinc-500 mb-3 flex items-center gap-2">
                               Enrolled Teachers / Admins ({inst.teachers?.length || 0})
@@ -745,6 +849,33 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
           </table>
         </div>
       </main>
+
+      {/* Per-School SMS API Key & Package Modal */}
+      {smsModalInst && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={() => setSmsModalInst(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SchoolSmsConfigPanel
+              institution={smsModalInst}
+              canManagePackage={true}
+              onClose={() => setSmsModalInst(null)}
+              onSaved={(updatedPayload) => {
+                setInstitutions((prev) =>
+                  prev.map((item) =>
+                    item.id === smsModalInst.id ? { ...item, ...updatedPayload } : item
+                  )
+                );
+                setSmsModalInst((prev) => (prev ? { ...prev, ...updatedPayload } : null));
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

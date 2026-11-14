@@ -4,7 +4,7 @@ import { collection, doc, setDoc, updateDoc, getDocs, getDoc, deleteDoc, writeBa
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
-  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen
+  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen, MessageSquare
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConsolidatedView from './ConsolidatedView';
@@ -12,6 +12,7 @@ import ReportEditor from './ReportEditor';
 import TrendAnalysis from './TrendAnalysis';
 import ReportCard from './ReportCard';
 import Gradebook from './Gradebook';
+import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults, isJhsClass } from '../utils/calculations';
 
@@ -168,7 +169,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             { id: 'subjects', name: 'Subject Management', icon: BookOpen },
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
-            { id: 'archives', name: 'Data Archives', icon: Archive }
+            { id: 'archives', name: 'Data Archives', icon: Archive },
+            { id: 'sms', name: 'SMS & Package', icon: MessageSquare }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = adminTab === tab.id;
@@ -229,6 +231,23 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             />
           )}
           {adminTab === 'archives' && <AdminArchivesTab institution={institution} />}
+          {adminTab === 'sms' && (
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
+              {institution?.id ? (
+                <SchoolSmsConfigPanel
+                  institution={institution}
+                  canManagePackage={false}
+                  onSaved={(updated) =>
+                    setInstitution((prev) => (prev ? { ...prev, ...updated } : prev))
+                  }
+                />
+              ) : (
+                <div className="text-sm text-zinc-500 py-8 text-center">
+                  Loading school SMS configuration...
+                </div>
+              )}
+            </div>
+          )}
           
         </main>
       </div>

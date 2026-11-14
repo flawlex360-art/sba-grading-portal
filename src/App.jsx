@@ -19,7 +19,7 @@ import { computeClassResults, isJhsClass } from './utils/calculations';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
 import { normalizeStudentName } from './utils/rosterHelpers';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -507,6 +507,22 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!institution?.id) return undefined;
+    const unsub = onSnapshot(
+      doc(db, "institutions", institution.id),
+      (snap) => {
+        if (snap.exists()) {
+          setInstitution({ id: snap.id, ...snap.data() });
+        }
+      },
+      (err) => {
+        console.warn("Institution live listener skipped:", err?.message || err);
+      }
+    );
+    return () => unsub();
+  }, [institution?.id]);
 
   const fetchTeacherData = async (uid, instId, currentProf = null, chosenClass = null, authUid = null) => {
     setIsLoading(true);
@@ -1042,6 +1058,43 @@ export default function App() {
     }
   };
 
+  const handleRecordSmsUsage = async (creditsConsumed = 0, extra = {}) => {
+    const delta = Math.max(0, Math.round(Number(creditsConsumed) || 0));
+    if (!institution?.id || delta <= 0) return;
+
+    const instRef = doc(db, "institutions", institution.id);
+    const nowIso = new Date().toISOString();
+    try {
+      const updatedPkg = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(instRef);
+        const current = snap.exists() ? snap.data() : {};
+        const prevPkg =
+          current?.smsPackage && typeof current.smsPackage === 'object' ? current.smsPackage : {};
+        const nextUsed = Math.max(0, Math.round(Number(prevPkg.creditsUsed || 0) + delta));
+        const nextPkg = {
+          ...prevPkg,
+          packageId: prevPkg.packageId || 'custom',
+          packageName: prevPkg.packageName || 'School Package',
+          creditsAllocated: Math.max(0, Math.round(Number(prevPkg.creditsAllocated) || 0)),
+          creditsUsed: nextUsed,
+          enforceQuota: prevPkg.enforceQuota !== false,
+          lastUsedAt: nowIso,
+          updatedAt: nowIso,
+          ...(extra?.latestMnotifyCreditLeft !== null && extra?.latestMnotifyCreditLeft !== undefined
+            ? { lastMnotifyBalance: Number(extra.latestMnotifyCreditLeft) }
+            : {}),
+        };
+        tx.set(instRef, { smsPackage: nextPkg }, { merge: true });
+        return nextPkg;
+      });
+      setInstitution((prev) =>
+        prev && prev.id === institution.id ? { ...prev, smsPackage: updatedPkg } : prev
+      );
+    } catch (e) {
+      console.error("SMS credit deduction error:", e);
+    }
+  };
+
   const handleSaveGrades = async (subjectKey, subjectGrades) => {
     const targetDocId = activeSchoolDocId || currentUser?.uid;
     if (!currentUser || !targetDocId) return;
@@ -1546,6 +1599,8 @@ if (userProfile?.isSeniorSuperUser) {
             onSaveParentContacts={handleSaveParentContacts}
             gatewayConfig={smsGatewayConfig}
             onSaveGatewayConfig={handleSaveSmsGatewayConfig}
+            institution={institution}
+            onRecordSmsUsage={handleRecordSmsUsage}
             smsLogs={smsLogs}
             onAddSmsLog={handleAddSmsLog}
             onGoToRoster={() => setActiveTab('roster')}
