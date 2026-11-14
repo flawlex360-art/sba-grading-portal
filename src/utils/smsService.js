@@ -24,7 +24,7 @@ export const SBA_SMS_TEMPLATES = [
   {
     id: 'term_report',
     label: 'End-of-Term Report Alert',
-    body: "Dear {parent_name}, {student_name}'s {term} report for {class} is ready. Overall Score: {total_score} (Avg: {average}%, Position: {position}). Remark: {remark}. - {school_name}",
+    body: "Dear {parent_name}, {student_name} {term} ({class}): Score {total_score}, Avg {average}%, Pos {position}. Report: {report_link} - {school_name}",
   },
   {
     id: 'pta_reminder',
@@ -209,6 +209,7 @@ export function interpolateSmsTemplate(template, context = {}) {
     '{remark}': String(context.remark || 'Keep up the good effort').trim() || 'Keep up the good effort',
     '{reopening_date}': formatSmsDateDisplay(context.reopeningDate),
     '{pta_date}': formatSmsDateDisplay(context.ptaDate),
+    '{report_link}': String(context.reportLink || '').trim() || 'Link generated on send',
     '{school_name}': String(context.schoolName || 'Our School').trim() || 'Our School',
   };
 
@@ -381,6 +382,7 @@ export async function dispatchParentSmsBatch({
       remark: rec.remarks || rec.remark,
       reopeningDate: metadata?.nextTermBegins,
       ptaDate: metadata?.ptaDate,
+      reportLink: rec.reportLink,
       schoolName: metadata?.schoolName,
     });
 
@@ -390,6 +392,8 @@ export async function dispatchParentSmsBatch({
       parentName: rec.parentName,
       phone: formattedPhone,
       rawPhone: rec.parentPhone || '',
+      reportToken: rec.reportToken || '',
+      reportLink: rec.reportLink || '',
       message: personalizedBody,
       units: Math.max(1, calculateSmsUnits(personalizedBody)),
     };

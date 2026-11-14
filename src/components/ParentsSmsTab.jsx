@@ -42,6 +42,10 @@ import {
   parsePastedParentContacts,
   sendSingleTestSms,
 } from '../utils/smsService';
+import {
+  PARENT_REPORT_TTL_DAYS,
+  buildParentReportUrl,
+} from '../utils/parentReportHelpers';
 
 const QUICK_TOKEN_CHIPS = [
   '{parent_name}',
@@ -49,6 +53,7 @@ const QUICK_TOKEN_CHIPS = [
   '{total_score}',
   '{average}',
   '{position}',
+  '{report_link}',
   '{maths_score}',
   '{science_score}',
   '{attendance}',
@@ -84,6 +89,8 @@ export default function ParentsSmsTab({
   onRecordSmsUsage,
   smsLogs = [],
   onAddSmsLog,
+  onPublishParentReports,
+  onDeleteParentReports,
   onGoToRoster,
   isReadOnly = false,
 }) {
@@ -415,6 +422,8 @@ export default function ParentsSmsTab({
           overallTotal: res ? overallTotal : undefined,
           averageScore: res ? averageScore : undefined,
           overallRank: res?.overallRank || '-',
+          classSize: computedResults?.length || students?.length || 0,
+          subjects: subjectsObj,
           mathsScore: findSubjectScore(subjectsObj, ['math']),
           scienceScore: findSubjectScore(subjectsObj, ['science']),
           englishScore: findSubjectScore(subjectsObj, ['english']),
@@ -675,6 +684,7 @@ export default function ParentsSmsTab({
       remark: previewStudent.remarks,
       reopeningDate: metadata?.nextTermBegins,
       ptaDate: metadata?.ptaDate,
+      reportLink: buildParentReportUrl('k8x2m9pqab'),
       schoolName: metadata?.schoolName,
     });
   }, [messageBody, previewStudent, metadata, viewingTerm]);
@@ -801,9 +811,32 @@ export default function ParentsSmsTab({
     }
 
     setIsSendingSms(true);
+    let createdReportTokens = [];
     try {
+      let recipientsWithLinks = targetRecipients;
+      const wantsReportLink = messageBody.includes('{report_link}');
+
+      if (wantsReportLink) {
+        const isLiveProvider = liveGatewayConfig?.provider !== 'simulation';
+        if (isLiveProvider && onPublishParentReports) {
+          const validTargets = targetRecipients.filter((r) => isValidGhanaPhone(r.parentPhone));
+          const published = await onPublishParentReports(validTargets);
+          createdReportTokens = published?.createdTokens || [];
+          recipientsWithLinks = targetRecipients.map((rec) => ({
+            ...rec,
+            reportToken: published?.linksBySn?.[rec.sn]?.token || '',
+            reportLink: published?.linksBySn?.[rec.sn]?.url || '',
+          }));
+        } else {
+          recipientsWithLinks = targetRecipients.map((rec) => ({
+            ...rec,
+            reportLink: buildParentReportUrl(`sim${String(rec.sn || 1).padStart(7, '0')}`),
+          }));
+        }
+      }
+
       const result = await dispatchParentSmsBatch({
-        recipients: targetRecipients,
+        recipients: recipientsWithLinks,
         messageTemplate: messageBody,
         metadata,
         viewingTerm,
@@ -811,6 +844,17 @@ export default function ParentsSmsTab({
         smsPackage: isSchoolManaged ? schoolSmsSummary : null,
         institutionId: institution?.id || '',
       });
+
+      // Clean up unused snapshots for any recipients whose SMS failed to send
+      if (createdReportTokens.length > 0 && onDeleteParentReports) {
+        const tokensToRevoke =
+          result.deliveredCount === 0
+            ? createdReportTokens
+            : (result.failures || []).map((f) => f.reportToken).filter(Boolean);
+        if (tokensToRevoke.length > 0) {
+          onDeleteParentReports(tokensToRevoke).catch(console.warn);
+        }
+      }
 
       if (result.creditsConsumed > 0 && result.mode !== 'Simulation Mode' && onRecordSmsUsage) {
         await onRecordSmsUsage(result.creditsConsumed, {
@@ -847,6 +891,9 @@ export default function ParentsSmsTab({
         );
       }
     } catch (err) {
+      if (createdReportTokens.length > 0 && onDeleteParentReports) {
+        onDeleteParentReports(createdReportTokens).catch(console.warn);
+      }
       toast.error(`SMS dispatch error: ${err.message}`);
     } finally {
       setIsSendingSms(false);
@@ -1691,6 +1738,11 @@ export default function ParentsSmsTab({
                       </button>
                     ))}
                   </div>
+                  {messageBody.includes('{report_link}') && (
+                    <p className="mt-2 text-[11px] font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-200/80 rounded-lg px-2.5 py-1.5">
+                      Each SMS includes a unique mobile result link valid for {PARENT_REPORT_TTL_DAYS} days (automatically deactivated &amp; cleaned up afterward).
+                    </p>
+                  )}
                 </div>
 
                 {/* Live Interpolated Preview */}

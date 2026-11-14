@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, FileSpreadsheet, Award, FileCode, Settings, Sun
 import Dashboard from './components/Dashboard';
 import Roster from './components/Roster';
 import ParentsSmsTab from './components/ParentsSmsTab';
+import PublicParentReportView from './components/PublicParentReportView';
 import Gradebook from './components/Gradebook';
 import ConsolidatedView from './components/ConsolidatedView';
 import ConsolidatedRecords from './components/ConsolidatedRecords';
@@ -18,8 +19,17 @@ import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults, isJhsClass } from './utils/calculations';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
 import { normalizeStudentName } from './utils/rosterHelpers';
+import {
+  PARENT_REPORT_TTL_MS,
+  buildParentReportSnapshot,
+  buildParentReportUrl,
+  generateReportToken,
+  getParentReportDocId,
+  parseReportTokenFromPathname,
+  partitionExpiredReportLinks,
+} from './utils/parentReportHelpers';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot, writeBatch, Timestamp } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -73,6 +83,9 @@ const DEFAULT_PRIMARY_SUBJECT_MAP = {
 };
 
 export default function App() {
+  const publicReportToken =
+    typeof window !== 'undefined' ? parseReportTokenFromPathname(window.location.pathname) : null;
+
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem('school_active_tab') || 'dashboard';
   });
@@ -113,12 +126,47 @@ export default function App() {
   });
   const [smsLogs, setSmsLogs] = useState([]);
   const smsLogsRef = useRef([]);
+  const activeParentReportLinksRef = useRef([]);
 
   const isSubjectTeacherMode = Boolean(
     userProfile?.role === 'subject_teacher' ||
     (activeClassEntry && !activeClassEntry.isFormMaster)
   );
   const activeSchoolDocId = activeClassEntry?.classUid || currentUser?.uid;
+
+  // Opportunistically batch-delete expired 30-day parent report snapshots without background crons
+  const cleanupExpiredParentReports = async (targetDocId, rawLinks = activeParentReportLinksRef.current) => {
+    const { activeLinks, expiredTokens } = partitionExpiredReportLinks(rawLinks, Date.now());
+    activeParentReportLinksRef.current = activeLinks;
+    if (!db || !(auth?.currentUser || currentUser) || !targetDocId || expiredTokens.length === 0) {
+      return activeLinks;
+    }
+
+    try {
+      const toDeleteNow = expiredTokens.slice(0, 100);
+      const remainingExpiredSet = new Set(expiredTokens.slice(100));
+      const keptRemaining = (Array.isArray(rawLinks) ? rawLinks : []).filter((item) =>
+        remainingExpiredSet.has(String(item?.token || '').trim().toLowerCase())
+      );
+      const nextTracking = [...activeLinks, ...keptRemaining];
+
+      const batch = writeBatch(db);
+      toDeleteNow.forEach((tok) => {
+        const snapDocId = getParentReportDocId(tok);
+        if (snapDocId) {
+          batch.delete(doc(db, 'schools', snapDocId));
+        }
+      });
+      batch.update(doc(db, 'schools', targetDocId), {
+        activeParentReportLinks: nextTracking,
+      });
+      await batch.commit();
+      activeParentReportLinksRef.current = activeLinks;
+    } catch (err) {
+      console.warn('Expired parent report cleanup warning:', err);
+    }
+    return activeLinks;
+  };
 
   // Get full class subjects (for Report Cards / Broadsheet) and Gradebook subjects (scoped for Subject Teachers)
   const getTeacherSubjects = () => {
@@ -357,6 +405,10 @@ export default function App() {
 
   // Auth Subscription Listener with Strict Multi-Tenant Isolation & Self-Healing
   useEffect(() => {
+    if (publicReportToken) {
+      setIsLoading(false);
+      return;
+    }
     if (!auth) {
       setIsLoading(false);
       return;
@@ -377,6 +429,7 @@ export default function App() {
       setClassOwnerProfile(null);
       setRosterVersion(0);
       rosterVersionRef.current = 0;
+      activeParentReportLinksRef.current = [];
 
       if (user) {
         setIsLoading(true);
@@ -631,6 +684,14 @@ export default function App() {
           }
         } else if (deleteFieldArgs.length > 0) {
           updateDoc(docRef, new FieldPath('terms'), loadedTerms, ...deleteFieldArgs).catch(console.error);
+        }
+
+        const rawReportLinks = Array.isArray(data.activeParentReportLinks) ? data.activeParentReportLinks : [];
+        if (isSubTeacherForThisClass) {
+          const { activeLinks } = partitionExpiredReportLinks(rawReportLinks, Date.now());
+          activeParentReportLinksRef.current = activeLinks;
+        } else {
+          cleanupExpiredParentReports(uid, rawReportLinks).catch(console.warn);
         }
 
         const storedViewTerm = sessionStorage.getItem('targetViewingTerm');
@@ -1058,6 +1119,137 @@ export default function App() {
     }
   };
 
+  const handlePublishParentReports = async (targetLearners = []) => {
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (!db || !currentUser || !targetDocId || !Array.isArray(targetLearners) || targetLearners.length === 0) {
+      return { linksBySn: {}, createdTokens: [] };
+    }
+
+    const nowMs = Date.now();
+    const cleanActiveLinks = await cleanupExpiredParentReports(targetDocId, activeParentReportLinksRef.current);
+    const existingTokensSet = new Set(cleanActiveLinks.map((item) => item.token));
+
+    const linksBySn = {};
+    const createdTokens = [];
+    const newTrackingEntries = [];
+    const writeOps = [];
+
+    for (const learner of targetLearners) {
+      let token = '';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const candidate = generateReportToken(10);
+        if (!existingTokensSet.has(candidate)) {
+          token = candidate;
+          existingTokensSet.add(candidate);
+          break;
+        }
+      }
+      if (!token) token = generateReportToken(12);
+
+      const snapshotData = buildParentReportSnapshot({
+        learner,
+        metadata,
+        institution,
+        viewingTerm,
+        teacherUid: currentUser.uid,
+        token,
+        nowMs,
+      });
+      snapshotData.expireAt = Timestamp.fromMillis(snapshotData.expiresAtMs);
+
+      const snapDocId = getParentReportDocId(token);
+      if (!snapDocId) continue;
+
+      writeOps.push({ snapDocId, snapshotData });
+      createdTokens.push(token);
+      linksBySn[learner.sn] = {
+        token,
+        url: buildParentReportUrl(token),
+      };
+      newTrackingEntries.push({
+        token,
+        expiresAtMs: snapshotData.expiresAtMs,
+        studentSn: learner.sn,
+        term: snapshotData.term,
+      });
+    }
+
+    // Write snapshots in chunks (safe well under Firestore 500-write batch limit)
+    for (let i = 0; i < writeOps.length; i += 200) {
+      const chunk = writeOps.slice(i, i + 200);
+      const batch = writeBatch(db);
+      chunk.forEach(({ snapDocId, snapshotData }) => {
+        batch.set(doc(db, 'schools', snapDocId), snapshotData);
+      });
+      await batch.commit();
+    }
+
+    // Maintain bounded tracking list on teacher/class doc and purge any old overflow snapshots
+    const { activeLinks: finalActiveLinks, expiredTokens: overflowTokens } = partitionExpiredReportLinks(
+      [...cleanActiveLinks, ...newTrackingEntries],
+      nowMs
+    );
+    activeParentReportLinksRef.current = finalActiveLinks;
+
+    try {
+      if (overflowTokens.length > 0) {
+        const purgeBatch = writeBatch(db);
+        overflowTokens.slice(0, 100).forEach((oldTok) => {
+          const oldDocId = getParentReportDocId(oldTok);
+          if (oldDocId) purgeBatch.delete(doc(db, 'schools', oldDocId));
+        });
+        purgeBatch.update(doc(db, 'schools', targetDocId), {
+          activeParentReportLinks: finalActiveLinks,
+        });
+        await purgeBatch.commit();
+      } else {
+        await updateDoc(doc(db, 'schools', targetDocId), {
+          activeParentReportLinks: finalActiveLinks,
+        });
+      }
+    } catch (err) {
+      console.warn('Parent report tracking update warning:', err);
+    }
+
+    return { linksBySn, createdTokens };
+  };
+
+  const handleDeleteParentReports = async (tokens = []) => {
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    const cleanTokens = [...new Set(
+      (Array.isArray(tokens) ? tokens : [])
+        .map((t) => String(t || '').trim().toLowerCase())
+        .filter((t) => Boolean(getParentReportDocId(t)))
+    )];
+
+    if (!db || !currentUser || !targetDocId || cleanTokens.length === 0) return;
+
+    try {
+      const deleteSet = new Set(cleanTokens);
+      const nextTracking = (activeParentReportLinksRef.current || []).filter(
+        (item) => !deleteSet.has(String(item?.token || '').trim().toLowerCase())
+      );
+      activeParentReportLinksRef.current = nextTracking;
+
+      for (let i = 0; i < cleanTokens.length; i += 200) {
+        const chunk = cleanTokens.slice(i, i + 200);
+        const batch = writeBatch(db);
+        chunk.forEach((tok) => {
+          const snapDocId = getParentReportDocId(tok);
+          if (snapDocId) batch.delete(doc(db, 'schools', snapDocId));
+        });
+        if (i + 200 >= cleanTokens.length) {
+          batch.update(doc(db, 'schools', targetDocId), {
+            activeParentReportLinks: nextTracking,
+          });
+        }
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('Failed to delete unused parent report snapshots:', err);
+    }
+  };
+
   const handleRecordSmsUsage = async (creditsConsumed = 0, extra = {}) => {
     const delta = Math.max(0, Math.round(Number(creditsConsumed) || 0));
     if (!institution?.id || delta <= 0) return;
@@ -1281,6 +1473,11 @@ export default function App() {
       }
     }
   };
+
+  // 0. Public mobile Parent Report route (/r/<token>) — bypasses teacher login
+  if (publicReportToken) {
+    return <PublicParentReportView token={publicReportToken} />;
+  }
 
   // 1. Loading screen
   if (isLoading) {
@@ -1603,6 +1800,8 @@ if (userProfile?.isSeniorSuperUser) {
             onRecordSmsUsage={handleRecordSmsUsage}
             smsLogs={smsLogs}
             onAddSmsLog={handleAddSmsLog}
+            onPublishParentReports={handlePublishParentReports}
+            onDeleteParentReports={handleDeleteParentReports}
             onGoToRoster={() => setActiveTab('roster')}
             isReadOnly={isReadOnly}
           />
