@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Users, FileSpreadsheet, Award, FileCode, Settings, Sun, Moon, Bot, Key, LogOut, Shield, ChevronDown, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Users, FileSpreadsheet, Award, FileCode, Settings, Sun, Moon, Bot, Key, LogOut, Shield, ChevronDown, TrendingUp, MessageSquare } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Roster from './components/Roster';
+import ParentsSmsTab from './components/ParentsSmsTab';
 import Gradebook from './components/Gradebook';
 import ConsolidatedView from './components/ConsolidatedView';
 import ConsolidatedRecords from './components/ConsolidatedRecords';
@@ -15,6 +16,8 @@ import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults, isJhsClass } from './utils/calculations';
+import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
+import { normalizeStudentName } from './utils/rosterHelpers';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
 import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
@@ -37,6 +40,7 @@ const getDirectImageUrl = (url) => {
 const MAIN_TABS = [
   { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
   { id: 'roster', name: 'Roster', icon: Users },
+  { id: 'parents', name: 'Parents & SMS', icon: MessageSquare },
   { id: 'gradebook', name: 'Gradebook', icon: FileSpreadsheet },
   { id: 'positions', name: 'Class Overview', icon: Award },
   { id: 'open', name: 'Records (OPEN)', icon: FileCode },
@@ -101,6 +105,14 @@ export default function App() {
   const studentsRef = useRef([]);
   const [grades, setGrades] = useState({});
   const [dropLists, setDropLists] = useState(null);
+  const [smsGatewayConfig, setSmsGatewayConfig] = useState({
+    provider: 'mnotify',
+    senderId: DEFAULT_MNOTIFY_SENDER_ID,
+    apiKey: '',
+    dispatchSecret: ''
+  });
+  const [smsLogs, setSmsLogs] = useState([]);
+  const smsLogsRef = useRef([]);
 
   const isSubjectTeacherMode = Boolean(
     userProfile?.role === 'subject_teacher' ||
@@ -656,6 +668,24 @@ export default function App() {
           }
         }
         setDropLists(loadedDropLists);
+        if (data.smsGatewayConfig && typeof data.smsGatewayConfig === 'object') {
+          setSmsGatewayConfig({
+            provider: data.smsGatewayConfig.provider || 'mnotify',
+            senderId: normalizeSmsSenderId(data.smsGatewayConfig.senderId || DEFAULT_MNOTIFY_SENDER_ID),
+            apiKey: data.smsGatewayConfig.apiKey || '',
+            dispatchSecret: data.smsGatewayConfig.dispatchSecret || ''
+          });
+        } else {
+          setSmsGatewayConfig({
+            provider: 'mnotify',
+            senderId: DEFAULT_MNOTIFY_SENDER_ID,
+            apiKey: '',
+            dispatchSecret: ''
+          });
+        }
+        const loadedSmsLogs = Array.isArray(data.smsLogs) ? data.smsLogs : [];
+        setSmsLogs(loadedSmsLogs);
+        smsLogsRef.current = loadedSmsLogs;
       } else {
         // NEVER auto-create a dummy school document for a Subject Teacher!
         if (isSubTeacherForThisClass) {
@@ -769,6 +799,14 @@ export default function App() {
         studentsRef.current = template.students;
         setGrades(template.grades);
         setDropLists(template.dropLists);
+        setSmsGatewayConfig({
+          provider: 'mnotify',
+          senderId: DEFAULT_MNOTIFY_SENDER_ID,
+          apiKey: '',
+          dispatchSecret: ''
+        });
+        setSmsLogs([]);
+        smsLogsRef.current = [];
       }
     } catch (e) {
       console.error("Error loading school document:", e);
@@ -885,6 +923,122 @@ export default function App() {
     } catch (e) {
       console.error("Roster sync error:", e);
       throw e;
+    }
+  };
+
+  const handleSaveParentContacts = async (contactUpdatesBySn) => {
+    if (isSubjectTeacherMode) {
+      throw new Error("Subject teachers cannot modify parent contacts.");
+    }
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (!currentUser || !targetDocId) return;
+    if (!contactUpdatesBySn || Object.keys(contactUpdatesBySn).length === 0) return;
+
+    const schoolRef = doc(db, "schools", targetDocId);
+    let updatedTermStudentsMap = {};
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(schoolRef);
+        const sData = snap.exists() ? snap.data() : {};
+        const serverTerms = sData.terms ? structuredClone(sData.terms) : {};
+        const activeStudents = Array.isArray(serverTerms[activeTerm]?.students)
+          ? serverTerms[activeTerm].students
+          : (studentsRef.current || []);
+
+        const contactByNormName = new Map();
+        const nextActiveStudents = activeStudents.map((stu) => {
+          const patch = contactUpdatesBySn[stu.sn];
+          if (!patch) return stu;
+          const cleanNameKey = normalizeStudentName(stu.name);
+          if (cleanNameKey) {
+            contactByNormName.set(cleanNameKey, {
+              parentName: patch.parentName || '',
+              parentPhone: patch.parentPhone || ''
+            });
+          }
+          return {
+            ...stu,
+            parentName: patch.parentName || '',
+            parentPhone: patch.parentPhone || ''
+          };
+        });
+
+        updatedTermStudentsMap[activeTerm] = nextActiveStudents;
+        const fieldPathUpdates = [
+          new FieldPath('terms', activeTerm, 'students'),
+          nextActiveStudents
+        ];
+
+        // Propagate parent contacts by matching learner name across all other terms cleanly
+        Object.keys(serverTerms).forEach((termKey) => {
+          if (termKey === activeTerm) return;
+          const list = serverTerms[termKey]?.students;
+          if (!Array.isArray(list) || list.length === 0 || contactByNormName.size === 0) return;
+          let modified = false;
+          const nextList = list.map((stu) => {
+            const matchPatch = contactByNormName.get(normalizeStudentName(stu.name));
+            if (!matchPatch) return stu;
+            modified = true;
+            return {
+              ...stu,
+              parentName: matchPatch.parentName,
+              parentPhone: matchPatch.parentPhone
+            };
+          });
+          if (modified) {
+            updatedTermStudentsMap[termKey] = nextList;
+            fieldPathUpdates.push(new FieldPath('terms', termKey, 'students'), nextList);
+          }
+        });
+
+        tx.update(schoolRef, ...fieldPathUpdates);
+      });
+
+      const activeUpdated = updatedTermStudentsMap[activeTerm];
+      if (activeUpdated) {
+        setStudents(activeUpdated);
+        studentsRef.current = activeUpdated;
+      }
+      setTermData((prev) => {
+        const next = { ...prev };
+        Object.entries(updatedTermStudentsMap).forEach(([tKey, tStudents]) => {
+          next[tKey] = {
+            ...(next[tKey] || {}),
+            students: tStudents
+          };
+        });
+        return next;
+      });
+    } catch (e) {
+      console.error("Parent contacts sync error:", e);
+      throw e;
+    }
+  };
+
+  const handleSaveSmsGatewayConfig = async (nextConfig) => {
+    setSmsGatewayConfig(nextConfig);
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (currentUser && targetDocId) {
+      try {
+        await setDoc(doc(db, "schools", targetDocId), { smsGatewayConfig: nextConfig }, { merge: true });
+      } catch (e) {
+        console.error("SMS gateway sync error:", e);
+      }
+    }
+  };
+
+  const handleAddSmsLog = async (newLog) => {
+    const updatedLogs = [newLog, ...(smsLogsRef.current || [])].slice(0, 50);
+    smsLogsRef.current = updatedLogs;
+    setSmsLogs(updatedLogs);
+    const targetDocId = activeSchoolDocId || currentUser?.uid;
+    if (currentUser && targetDocId) {
+      try {
+        await setDoc(doc(db, "schools", targetDocId), { smsLogs: updatedLogs }, { merge: true });
+      } catch (e) {
+        console.error("SMS log sync error:", e);
+      }
     }
   };
 
@@ -1379,6 +1533,22 @@ if (userProfile?.isSeniorSuperUser) {
             students={students}
             metadata={metadata}
             onSave={handleSaveRoster}
+            isReadOnly={isReadOnly}
+          />
+        )}
+        {!isSubjectTeacherMode && activeTab === 'parents' && (
+          <ParentsSmsTab
+            students={students}
+            computedResults={computedResults}
+            teacherSubjects={teacherSubjects}
+            metadata={metadata}
+            viewingTerm={viewingTerm}
+            onSaveParentContacts={handleSaveParentContacts}
+            gatewayConfig={smsGatewayConfig}
+            onSaveGatewayConfig={handleSaveSmsGatewayConfig}
+            smsLogs={smsLogs}
+            onAddSmsLog={handleAddSmsLog}
+            onGoToRoster={() => setActiveTab('roster')}
             isReadOnly={isReadOnly}
           />
         )}
