@@ -18,7 +18,7 @@ import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
-import { SCHOOL_LEVELS, DEFAULT_KG_SUBJECT_MAP, resolveSchoolLevel } from './constants/curriculum';
+import { SCHOOL_LEVELS, DEFAULT_KG_SUBJECT_MAP, resolveSchoolLevel, isJhsClass } from './constants/curriculum';
 import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from './constants/dropList';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
 import {
@@ -355,32 +355,43 @@ export default function App() {
     const isDedicatedSubjectTeacher = profile.role === 'subject_teacher';
 
     // 1. If the teacher is a Form Master / Class Teacher, add their home class first
+    // Note: KG (KG 1–2) and Primary (BS. 1–6) are strictly Class Teaching (allocatedSubjects: null)
     if (!isDedicatedSubjectTeacher && profile.assignedClass && profile.assignedClass !== 'Subject Teacher') {
-      const homeAlloc = allocMap[uid];
+      const homeIsJhs = isJhsClass(profile.assignedClass);
+      const homeAlloc = homeIsJhs ? allocMap[uid] : null;
       list.push({
         classUid: uid,
         className: profile.assignedClass,
         isFormMaster: true,
-        allocatedSubjects: Array.isArray(homeAlloc?.subjects) && homeAlloc.subjects.length > 0
+        allocatedSubjects: homeIsJhs && Array.isArray(homeAlloc?.subjects) && homeAlloc.subjects.length > 0
           ? homeAlloc.subjects
           : null
       });
     }
 
-    // 2. Add any additional JHS classes allocated to this teacher
-    Object.entries(allocMap).forEach(([targetUid, alloc]) => {
-      const cUid = alloc?.classUid || targetUid;
-      if (!cUid) return;
-      if (list.some(item => item.classUid === cUid)) return;
-      if (Array.isArray(alloc?.subjects) && alloc.subjects.length > 0) {
-        list.push({
-          classUid: cUid,
-          className: alloc.className || 'Assigned Class',
-          isFormMaster: false,
-          allocatedSubjects: alloc.subjects
-        });
-      }
-    });
+    // 2. Add any additional JHS classes allocated to this teacher (strictly JHS classes only)
+    const canHaveSubjectAllocations =
+      isDedicatedSubjectTeacher ||
+      !profile.assignedClass ||
+      profile.assignedClass === 'Subject Teacher' ||
+      isJhsClass(profile.assignedClass);
+
+    if (canHaveSubjectAllocations) {
+      Object.entries(allocMap).forEach(([targetUid, alloc]) => {
+        const cUid = alloc?.classUid || targetUid;
+        if (!cUid) return;
+        if (list.some(item => item.classUid === cUid)) return;
+        if (alloc?.className && !isJhsClass(alloc.className)) return;
+        if (Array.isArray(alloc?.subjects) && alloc.subjects.length > 0) {
+          list.push({
+            classUid: cUid,
+            className: alloc.className || 'Assigned Class',
+            isFormMaster: false,
+            allocatedSubjects: alloc.subjects
+          });
+        }
+      });
+    }
 
     return list;
   };

@@ -20,6 +20,7 @@ import {
   SCHOOL_LEVELS,
   ALL_CLASSES_LIST,
   JHS_SUBJECTS_LIST,
+  isJhsClass,
   resolveSchoolLevel,
   getDefaultSubjectsListForLevel,
   getInitialSelectedSubjectKeysForLevel,
@@ -964,7 +965,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                           )}
                         </td>
                         <td className="px-2 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
-                          {teacher.level || 'JHS'}
+                          {resolveSchoolLevel(teacher.assignedClass, teacher.level)}
                         </td>
                         <td className="px-2 py-2.5 text-zinc-550 dark:text-zinc-400 font-semibold text-[10px]">
                           <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded">
@@ -1234,13 +1235,15 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
   const [jhsSchoolsMap, setJhsSchoolsMap] = useState({});
   const [coverageClassUid, setCoverageClassUid] = useState('');
 
-  // JHS teachers eligible in this school
-  const jhsTeachers = teachers.filter(t => t.level === 'JHS' || isJhsClass(t.assignedClass) || t.role === 'subject_teacher');
+  // Strictly JHS teachers & dedicated subject teachers eligible in this school (KG 1–2 and BS. 1–6 are Class Teaching only)
+  const jhsTeachers = teachers.filter(
+    t => t.role === 'subject_teacher' || t.assignedClass === 'Subject Teacher' || isJhsClass(t.assignedClass)
+  );
 
-  // Official JHS Form Master classes (excluding dedicated subject teachers, and if editing an existing teacher as dedicated subject teacher, excluding their own duplicate class doc)
+  // Official JHS Form Master classes (strictly BS. 7, BS. 8, BS. 9 and their streams; excludes KG & Primary class teaching)
   const jhsFormClasses = teachers.filter(t => {
     if (t.role === 'subject_teacher' || t.assignedClass === 'Subject Teacher') return false;
-    if (!isJhsClass(t.assignedClass) && t.level !== 'JHS') return false;
+    if (!isJhsClass(t.assignedClass)) return false;
     if (mode === 'existing' && teacherRoleType === 'subject_teacher' && t.uid === selectedTeacherUid) {
       return false;
     }
@@ -1251,7 +1254,9 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
   useEffect(() => {
     let active = true;
     async function loadJhsSchoolDocs() {
-      const formClasses = teachers.filter(t => t.role !== 'subject_teacher' && (isJhsClass(t.assignedClass) || t.level === 'JHS'));
+      const formClasses = teachers.filter(
+        t => t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher' && isJhsClass(t.assignedClass)
+      );
       const map = {};
       await Promise.all(formClasses.map(async (fc) => {
         try {
@@ -1554,10 +1559,18 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
     }
   };
 
-  const allocatedTeachersList = teachers.filter(t =>
-    t.role === 'subject_teacher' ||
-    (t.classAllocations && Object.keys(t.classAllocations).length > 0)
-  );
+  const allocatedTeachersList = teachers.filter(t => {
+    const isJhsOrSubject =
+      t.role === 'subject_teacher' ||
+      t.assignedClass === 'Subject Teacher' ||
+      isJhsClass(t.assignedClass);
+    if (!isJhsOrSubject) return false;
+    if (t.role === 'subject_teacher') return true;
+    const jhsEntries = Object.values(t.classAllocations || {}).filter(
+      entry => entry && (!entry.className || isJhsClass(entry.className))
+    );
+    return jhsEntries.length > 0;
+  });
 
   const selectedCoverageClass = jhsFormClasses.find(c => c.uid === coverageClassUid) || jhsFormClasses[0] || null;
   const selectedCoverageSchoolDoc = selectedCoverageClass ? jhsSchoolsMap[selectedCoverageClass.uid] : null;
@@ -1789,9 +1802,9 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
                                 {holder && (
                                   <div
                                     className="text-[9px] mt-0.5 px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold truncate max-w-[85px] mx-auto"
-                                    title={`Currently assigned to ${holder.name}`}
+                                    title={`Currently assigned to ${holder.name || 'Teacher'}`}
                                   >
-                                    {holder.name.split(' ')[0]}
+                                    {(holder.name || 'Teacher').split(' ')[0]}
                                   </div>
                                 )}
                               </td>
@@ -1889,7 +1902,9 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
           ) : (
             <div className="space-y-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
               {allocatedTeachersList.map(t => {
-                const allocEntries = Object.values(t.classAllocations || {});
+                const allocEntries = Object.values(t.classAllocations || {}).filter(
+                  entry => entry && (!entry.className || isJhsClass(entry.className))
+                );
                 return (
                   <div
                     key={t.uid}
@@ -1987,7 +2002,10 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
-                  {(selectedCoverageClass.subjects || JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')).map(sub => {
+                  {(Array.isArray(selectedCoverageClass.subjects) && selectedCoverageClass.subjects.length > 0
+                    ? selectedCoverageClass.subjects
+                    : JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')
+                  ).map(sub => {
                     // Find subject teacher assigned to (selectedCoverageClass.uid, sub.key)
                     const assignedSubTeacher = teachers.find(t =>
                       t.classAllocations?.[selectedCoverageClass.uid]?.subjects?.some(s => s.key === sub.key)

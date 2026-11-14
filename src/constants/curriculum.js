@@ -1,5 +1,7 @@
 import { isJhsClass } from './promotionMap.js';
 
+export { isJhsClass };
+
 export const SCHOOL_LEVELS = {
   KG: 'KG',
   PRIMARY: 'Primary',
@@ -85,7 +87,19 @@ export function isKgClass(className = '') {
 }
 
 /**
+ * Checks whether a class name belongs to Primary school (BS. 1 through BS. 6 and streams).
+ * @param {string} className
+ * @returns {boolean}
+ */
+export function isPrimaryClass(className = '') {
+  return /^(BS\.?\s*[1-6]|Basic\s*[1-6]|Primary\s*[1-6]|Class\s*[1-6]|P\.?\s*[1-6])(\b|[A-Z])/i.test(
+    String(className || '').trim()
+  );
+}
+
+/**
  * Resolves the authoritative school level ('KG', 'Primary', or 'JHS') from class name and/or profile level.
+ * Class name always takes precedence over a potentially stale explicitLevel when className is a known KG, Primary, or JHS class.
  * @param {string} className
  * @param {string} [explicitLevel]
  * @returns {'KG'|'Primary'|'JHS'}
@@ -94,10 +108,20 @@ export function resolveSchoolLevel(className = '', explicitLevel = '') {
   const cleanClass = String(className || '').trim();
   const cleanLevel = String(explicitLevel || '').trim().toUpperCase();
 
-  if (isKgClass(cleanClass) || cleanLevel === 'KG' || cleanLevel === 'KINDERGARTEN') {
+  if (isKgClass(cleanClass)) {
     return SCHOOL_LEVELS.KG;
   }
-  if (isJhsClass(cleanClass) || cleanLevel === 'JHS') {
+  if (isJhsClass(cleanClass)) {
+    return SCHOOL_LEVELS.JHS;
+  }
+  if (isPrimaryClass(cleanClass)) {
+    return SCHOOL_LEVELS.PRIMARY;
+  }
+
+  if (cleanLevel === 'KG' || cleanLevel === 'KINDERGARTEN') {
+    return SCHOOL_LEVELS.KG;
+  }
+  if (cleanLevel === 'JHS') {
     return SCHOOL_LEVELS.JHS;
   }
   return SCHOOL_LEVELS.PRIMARY;
