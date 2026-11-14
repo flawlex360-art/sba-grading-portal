@@ -4,9 +4,10 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Cell
 } from 'recharts';
+import { KG_PROFICIENCY_SCALE, SCHOOL_LEVELS, resolveSchoolLevel } from '../constants/curriculum';
 
-// Helper to calculate subject averages
-const calculateSubjectAverages = (computedResults, teacherSubjects) => {
+// Helper to calculate subject averages (or KG learning area mastery indices)
+const calculateSubjectAverages = (computedResults, teacherSubjects = []) => {
   if (!computedResults || computedResults.length === 0) return [];
 
   const subjectTotals = {};
@@ -19,7 +20,7 @@ const calculateSubjectAverages = (computedResults, teacherSubjects) => {
 
   computedResults.forEach(student => {
     teacherSubjects.forEach(sub => {
-      const res = student.subjects[sub.name];
+      const res = student.subjects?.[sub.name];
       if (res && typeof res.total === 'number') {
         subjectTotals[sub.name] += res.total;
         subjectCounts[sub.name] += 1;
@@ -29,24 +30,47 @@ const calculateSubjectAverages = (computedResults, teacherSubjects) => {
 
   return teacherSubjects.map(sub => {
     const total = subjectTotals[sub.name] || 0;
-    const count = subjectCounts[sub.name] || 1;
+    const count = subjectCounts[sub.name] || 0;
     return {
       subject: sub.key || sub.name.substring(0, 8),
       fullSubject: sub.name,
-      average: Number((total / count).toFixed(1))
+      average: count > 0 ? Number((total / count).toFixed(1)) : 0
     };
   });
 };
 
-// Helper to calculate grade distribution across all subjects
-const calculateGradeDistribution = (computedResults, teacherSubjects) => {
+// Helper to calculate grade / KG proficiency distribution across all subjects/areas
+const calculateGradeDistribution = (computedResults, teacherSubjects = [], metadata = {}) => {
   if (!computedResults || computedResults.length === 0) return [];
+
+  const isKg =
+    resolveSchoolLevel(metadata?.classLevel, metadata?.level) === SCHOOL_LEVELS.KG ||
+    computedResults.some((s) => s?.isKgResult);
+
+  if (isKg) {
+    const kgCounts = { IND: 0, DEV: 0, EMG: 0, NYS: 0 };
+    computedResults.forEach((student) => {
+      teacherSubjects.forEach((sub) => {
+        const res = student.subjects?.[sub.name];
+        const code = res?.rating || res?.grade;
+        if (code && kgCounts[code] !== undefined) {
+          kgCounts[code] += 1;
+        }
+      });
+    });
+
+    return KG_PROFICIENCY_SCALE.map((tier) => ({
+      grade: `${tier.code} (${tier.shortLabel})`,
+      count: kgCounts[tier.code] || 0,
+      tone: tier.tone,
+    }));
+  }
 
   const gradeCounts = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 };
 
   computedResults.forEach(student => {
     teacherSubjects.forEach(sub => {
-      const res = student.subjects[sub.name];
+      const res = student.subjects?.[sub.name];
       if (res && res.grade) {
         if (gradeCounts[res.grade] !== undefined) {
           gradeCounts[res.grade]++;
@@ -62,12 +86,21 @@ const calculateGradeDistribution = (computedResults, teacherSubjects) => {
 };
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#64748b'];
+const KG_TONE_COLORS = {
+  emerald: '#10b981',
+  blue: '#3b82f6',
+  amber: '#f59e0b',
+  rose: '#f43f5e',
+};
 
-export function GradeDistributionChart({ computedResults, teacherSubjects }) {
-  const data = useMemo(() => calculateGradeDistribution(computedResults, teacherSubjects), [computedResults, teacherSubjects]);
+export function GradeDistributionChart({ computedResults, teacherSubjects, metadata = {} }) {
+  const data = useMemo(
+    () => calculateGradeDistribution(computedResults, teacherSubjects, metadata),
+    [computedResults, teacherSubjects, metadata]
+  );
 
   if (data.every(d => d.count === 0)) {
-    return <div className="flex items-center justify-center h-full text-zinc-400 text-xs font-semibold">No grades recorded yet.</div>;
+    return <div className="flex items-center justify-center h-full text-zinc-400 text-xs font-semibold">No assessments recorded yet.</div>;
   }
 
   return (
@@ -83,7 +116,10 @@ export function GradeDistributionChart({ computedResults, teacherSubjects }) {
         />
         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
           {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.tone ? (KG_TONE_COLORS[entry.tone] || COLORS[index % COLORS.length]) : COLORS[index % COLORS.length]}
+            />
           ))}
         </Bar>
       </BarChart>

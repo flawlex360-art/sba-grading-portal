@@ -15,7 +15,16 @@ import Gradebook from './Gradebook';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
 import ParentsSmsTab from './ParentsSmsTab';
 import { exportYearlyData } from '../utils/excelExport';
-import { computeClassResults, isJhsClass } from '../utils/calculations';
+import { computeClassResults } from '../utils/calculations';
+import {
+  SCHOOL_LEVELS,
+  ALL_CLASSES_LIST,
+  JHS_SUBJECTS_LIST,
+  resolveSchoolLevel,
+  getDefaultSubjectsListForLevel,
+  getInitialSelectedSubjectKeysForLevel,
+} from '../constants/curriculum';
+import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from '../constants/dropList';
 import {
   buildTeacherSubjectInfo,
   buildClassTermMetadata,
@@ -155,10 +164,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         {/* Top Navbar */}
         <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 shadow-sm no-print">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-            {institution?.schoolCrestUrl ? (
+            {institution?.schoolCrestUrl && (
               <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm shrink-0" alt="Crest" />
-            ) : (
-              <img src="/icon.png" className="w-12 h-12 object-contain shrink-0" alt="Madifor logo" />
             )}
             <div>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -198,7 +205,6 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
             { id: 'archives', name: 'Data Archives', icon: Archive },
-            { id: 'sms', name: 'SMS Package', icon: Package },
             { id: 'parents', name: 'Parents & SMS', icon: MessageSquare }
           ].map(tab => {
             const Icon = tab.icon;
@@ -261,27 +267,13 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             />
           )}
           {adminTab === 'archives' && <AdminArchivesTab institution={institution} />}
-          {adminTab === 'sms' && (
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
-              {institution?.id ? (
-                <SchoolSmsConfigPanel
-                  institution={institution}
-                  canManagePackage={false}
-                  onSaved={handlePackageSaved}
-                />
-              ) : (
-                <div className="text-sm text-zinc-500 py-8 text-center">
-                  Loading school SMS configuration...
-                </div>
-              )}
-            </div>
-          )}
           {adminTab === 'parents' && (
             <AdminParentsSmsTab
               teachers={teachers.filter(t => t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher')}
               institution={institution}
               adminUser={adminUser}
               onSmsPackageUpdated={handleSmsPackageUpdated}
+              onPackageSaved={handlePackageSaved}
             />
           )}
           
@@ -322,52 +314,14 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
 }
 
 
-const JHS_SUBJECTS_LIST = [
-  { name: "English Language", key: "ENG. LANG." },
-  { name: "Mathematics", key: "MATHS" },
-  { name: "Science", key: "SCIENCE" },
-  { name: "Career Technology", key: "C. TECH" },
-  { name: "Social Studies", key: "SOCIAL" },
-  { name: "Computing", key: "COMPUTING" },
-  { name: "Religious and Moral Education", key: "RME" },
-  { name: "Ghanaian Language", key: "GH. LANG." },
-  { name: "Creative Arts & Design", key: "C. ARTS" },
-  { name: "French", key: "FRENCH" },
-  { name: "Arabic", key: "ARABIC" }
-];
-
-const PRIMARY_SUBJECTS_LIST = [
-  { name: "English Language", key: "ENG. LANG." },
-  { name: "Mathematics", key: "MATHS" },
-  { name: "Science", key: "SCIENCE" },
-  { name: "History", key: "HISTORYY" },
-  { name: "Our World Our People", key: "OWOP" },
-  { name: "Computing", key: "COMPUTING" },
-  { name: "Religious and Moral Education", key: "RME" },
-  { name: "Ghanaian Language", key: "GH. LANG." },
-  { name: "Creative Arts", key: "C. ARTS" }
-];
-
-const ALL_CLASSES_LIST = [
-  "BS. 7", "BS. 7A", "BS. 7B",
-  "BS. 8", "BS. 8A", "BS. 8B",
-  "BS. 9", "BS. 9A", "BS. 9B",
-  "BS. 1", "BS. 1A", "BS. 1B",
-  "BS. 2", "BS. 2A", "BS. 2B",
-  "BS. 3", "BS. 3A", "BS. 3B",
-  "BS. 4", "BS. 4A", "BS. 4B",
-  "BS. 5", "BS. 5A", "BS. 5B",
-  "BS. 6", "BS. 6A", "BS. 6B"
-];
-
 function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, onOpenSubjectManagement }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [assignedClass, setAssignedClass] = useState('BS. 7');
-  const [level, setLevel] = useState('JHS');
+  const [level, setLevel] = useState(SCHOOL_LEVELS.JHS);
   const [selectedSubjects, setSelectedSubjects] = useState(
-    JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key)
+    getInitialSelectedSubjectKeysForLevel(SCHOOL_LEVELS.JHS)
   );
   
   // Custom metadata fields entered by the Admin for new accounts
@@ -402,12 +356,16 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
   const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr) => {
     const termMap = { "ONE": "Term 1", "TWO": "Term 2", "THREE": "Term 3" };
     const mappedActiveTerm = termMap[trm] || "Term 1";
-    
+    const resolvedLevel = resolveSchoolLevel(cName);
+    const isKg = resolvedLevel === SCHOOL_LEVELS.KG;
+    const isPrimary = resolvedLevel === SCHOOL_LEVELS.PRIMARY;
+
     return {
       metadata: {
         schoolName: sName,
         district: dist,
         classLevel: cName,
+        level: resolvedLevel,
         term: trm,
         academicYear: acadYr,
         teacherName: tName,
@@ -425,31 +383,35 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
         }
       },
       dropLists: {
-      conduct: [
-        "Respectful and cooperative",
-        "Disciplined and focused",
-        "Regular and punctual",
-        "Shows leadership potential",
-        "Needs to improve focus"
-      ],
-      interest: [
-        "Reading and research",
-        "Sports and athletics",
-        "Creative Arts and music",
-        "Gardening and agriculture",
-        "Information Technology"
-      ],
-      remarks: [
-        "Excellent performance. Keep it up!",
-        "A very good student. Well done.",
-        "Good progress made. Work harder.",
-        "Fair performance. Needs more effort.",
-        "Can do better with regular study."
-      ],
-      classes: ["BS. 7", "BS. 8", "BS. 9"]
-    }
+        conduct: isKg ? [...KG_CONDUCT] : [
+          "Respectful and cooperative",
+          "Disciplined and focused",
+          "Regular and punctual",
+          "Shows leadership potential",
+          "Needs to improve focus"
+        ],
+        interest: isKg ? [...KG_INTEREST] : [
+          "Reading and research",
+          "Sports and athletics",
+          "Creative Arts and music",
+          "Gardening and agriculture",
+          "Information Technology"
+        ],
+        remarks: isKg ? [...KG_REMARKS] : [
+          "Excellent performance. Keep it up!",
+          "A very good student. Well done.",
+          "Good progress made. Work harder.",
+          "Fair performance. Needs more effort.",
+          "Can do better with regular study."
+        ],
+        classes: isKg
+          ? [...KG_CLASSES_DROPLIST]
+          : isPrimary
+            ? ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6"]
+            : ["BS. 7", "BS. 8", "BS. 9"]
+      }
+    };
   };
-};
 
 
   const handleEditClick = async (teacher) => {
@@ -458,11 +420,18 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       onOpenSubjectManagement(teacher);
       return;
     }
+    const teacherClass = teacher.assignedClass || 'BS. 7';
+    const resolvedEditLevel = resolveSchoolLevel(teacherClass, teacher.level);
     setSelectedTeacher(teacher);
     setEditName(teacher.name === 'New Teacher' ? '' : (teacher.name || ''));
-    setEditClass(teacher.assignedClass || 'BS. 7');
-    setEditLevel(teacher.level || 'JHS');
-    const activeSubjects = teacher.subjects || JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC');
+    setEditClass(teacherClass);
+    setEditLevel(resolvedEditLevel);
+    const defaultSubs = getDefaultSubjectsListForLevel(resolvedEditLevel);
+    const activeSubjects = teacher.subjects || (
+      resolvedEditLevel === SCHOOL_LEVELS.JHS
+        ? defaultSubs.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')
+        : defaultSubs
+    );
     setEditSelectedSubjects(activeSubjects.map(s => s.key));
     setEditLoading(true);
     setEditError('');
@@ -508,14 +477,15 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       const finalEditName = editName.trim() || 'New Teacher';
 
       // 2. Update teachers/{uid} doc
-      const finalEditSubjects = (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST)
+      const resolvedEditLevel = resolveSchoolLevel(editClass, editLevel);
+      const finalEditSubjects = getDefaultSubjectsListForLevel(resolvedEditLevel)
         .filter(s => editSelectedSubjects.includes(s.key));
 
       const teacherDocRef = doc(db, "teachers", selectedTeacher.uid);
       await setDoc(teacherDocRef, {
         name: finalEditName,
         assignedClass: editClass,
-        level: editLevel,
+        level: resolvedEditLevel,
         subjects: finalEditSubjects
       }, { merge: true });
 
@@ -677,7 +647,8 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       const teacherUid = await createTeacherUser(email.trim(), password);
       
       // 2. Create the teacher profile document in Firestore 'teachers'
-      const finalSubjects = (level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST)
+      const resolvedLevel = resolveSchoolLevel(assignedClass, level);
+      const finalSubjects = getDefaultSubjectsListForLevel(resolvedLevel)
         .filter(s => selectedSubjects.includes(s.key));
 
       const teacherDocRef = doc(db, "teachers", teacherUid);
@@ -687,7 +658,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
         authPass: password,
         assignedClass: assignedClass,
         createdDate: new Date().toISOString(),
-        level: level,
+        level: resolvedLevel,
         subjects: finalSubjects,
         institutionId: institution.id
       };
@@ -709,8 +680,8 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       setEmail('');
       setPassword('');
       setAssignedClass('BS. 7');
-      setLevel('JHS');
-      setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
+      setLevel(SCHOOL_LEVELS.JHS);
+      setSelectedSubjects(getInitialSelectedSubjectKeysForLevel(SCHOOL_LEVELS.JHS));
       
       // Refresh teacher list
       fetchTeachersList();
@@ -787,13 +758,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                     onChange={(e) => {
                       const newClass = e.target.value;
                       setAssignedClass(newClass);
-                      const calculatedLevel = isJhsClass(newClass) ? 'JHS' : 'Primary';
+                      const calculatedLevel = resolveSchoolLevel(newClass);
                       setLevel(calculatedLevel);
-                      if (calculatedLevel === 'Primary') {
-                        setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
-                      } else {
-                        setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
-                      }
+                      setSelectedSubjects(getInitialSelectedSubjectKeysForLevel(calculatedLevel));
                     }}
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   >
@@ -865,16 +832,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                     disabled
                     onChange={(e) => {
                       setLevel(e.target.value);
-                      if (e.target.value === 'Primary') {
-                        setSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
-                      } else {
-                        setSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
-                      }
+                      setSelectedSubjects(getInitialSelectedSubjectKeysForLevel(e.target.value));
                     }}
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink appearance-none"
                   >
-                    <option value="JHS">Junior High School (JHS)</option>
-                    <option value="Primary">Primary School</option>
+                    <option value={SCHOOL_LEVELS.KG}>Kindergarten (KG 1 &amp; KG 2)</option>
+                    <option value={SCHOOL_LEVELS.JHS}>Junior High School (JHS)</option>
+                    <option value={SCHOOL_LEVELS.PRIMARY}>Primary School</option>
                   </select>
                 </div>
               </div>
@@ -882,11 +846,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
               {/* Subject Selection Checkboxes */}
               <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
                 <div className="flex justify-between items-center mb-2">
-                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects ({level})</label>
+                  <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    {level === SCHOOL_LEVELS.KG ? 'Assigned Learning Areas (KG)' : `Assigned Subjects (${level})`}
+                  </label>
                   <button
                     type="button"
                     onClick={() => {
-                      const activeList = level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST;
+                      const activeList = getDefaultSubjectsListForLevel(level);
                       if (selectedSubjects.length === activeList.length) {
                         setSelectedSubjects([]);
                       } else {
@@ -895,12 +861,12 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                     }}
                     className="text-[10px] text-emerald-ink dark:text-emerald-400 hover:underline"
                   >
-                    {selectedSubjects.length === (level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
+                    {selectedSubjects.length === getDefaultSubjectsListForLevel(level).length ? 'Deselect All' : 'Select All'}
                   </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2.5 max-h-40 overflow-y-auto">
-                  {(level === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).map(s => {
+                  {getDefaultSubjectsListForLevel(level).map(s => {
                     const checked = selectedSubjects.includes(s.key);
                     return (
                       <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
@@ -1092,13 +1058,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                       onChange={(e) => {
                         const newClass = e.target.value;
                         setEditClass(newClass);
-                        const calculatedLevel = isJhsClass(newClass) ? 'JHS' : 'Primary';
+                        const calculatedLevel = resolveSchoolLevel(newClass);
                         setEditLevel(calculatedLevel);
-                        if (calculatedLevel === 'Primary') {
-                          setEditSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
-                        } else {
-                          setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
-                        }
+                        setEditSelectedSubjects(getInitialSelectedSubjectKeysForLevel(calculatedLevel));
                       }}
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     >
@@ -1152,16 +1114,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                       onChange={(e) => {
                         const selectedVal = e.target.value;
                         setEditLevel(selectedVal);
-                        if (selectedVal === 'Primary') {
-                          setEditSelectedSubjects(PRIMARY_SUBJECTS_LIST.map(s => s.key));
-                        } else {
-                          setEditSelectedSubjects(JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC').map(s => s.key));
-                        }
+                        setEditSelectedSubjects(getInitialSelectedSubjectKeysForLevel(selectedVal));
                       }}
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink appearance-none"
                     >
-                      <option value="JHS">Junior High School (JHS)</option>
-                      <option value="Primary">Primary School</option>
+                      <option value={SCHOOL_LEVELS.KG}>Kindergarten (KG 1 &amp; KG 2)</option>
+                      <option value={SCHOOL_LEVELS.JHS}>Junior High School (JHS)</option>
+                      <option value={SCHOOL_LEVELS.PRIMARY}>Primary School</option>
                     </select>
                   </div>
                 </div>
@@ -1169,11 +1128,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                 {/* Edit Subject Selection Checkboxes */}
                 <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Assigned Subjects ({editLevel})</label>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      {editLevel === SCHOOL_LEVELS.KG ? 'Assigned Learning Areas (KG)' : `Assigned Subjects (${editLevel})`}
+                    </label>
                     <button
                       type="button"
                       onClick={() => {
-                        const activeList = editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST;
+                        const activeList = getDefaultSubjectsListForLevel(editLevel);
                         if (editSelectedSubjects.length === activeList.length) {
                           setEditSelectedSubjects([]);
                         } else {
@@ -1182,12 +1143,12 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                       }}
                       className="text-[10px] text-emerald-ink dark:text-emerald-400 hover:underline"
                     >
-                      {editSelectedSubjects.length === (editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).length ? 'Deselect All' : 'Select All'}
+                      {editSelectedSubjects.length === getDefaultSubjectsListForLevel(editLevel).length ? 'Deselect All' : 'Select All'}
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5 bg-zinc-50 dark:bg-[#121214]/50 border border-zinc-200 dark:border-zinc-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
-                    {(editLevel === 'Primary' ? PRIMARY_SUBJECTS_LIST : JHS_SUBJECTS_LIST).map(s => {
+                    {getDefaultSubjectsListForLevel(editLevel).map(s => {
                       const checked = editSelectedSubjects.includes(s.key);
                       return (
                         <label key={s.key} className="flex items-center gap-2 cursor-pointer text-[10px] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium select-none">
@@ -2035,7 +1996,11 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
                     const subGradesMap = activeCoverageTermData.grades?.[sub.key] || {};
                     const gradedLearners = (activeCoverageTermData.students || []).filter(st => {
                       const g = subGradesMap[st.sn];
-                      return g && (g.gw1 || g.test || g.gw2 || g.proj || g.exams);
+                      if (!g) return false;
+                      if (g.mode === 'kg' || resolveSchoolLevel(selectedCoverageClass.assignedClass, selectedCoverageClass.level) === SCHOOL_LEVELS.KG) {
+                        return Boolean(g.rating || (g.indicators && Object.values(g.indicators).some(Boolean)));
+                      }
+                      return Boolean(g.gw1 || g.test || g.gw2 || g.proj || g.exams);
                     }).length;
                     const meta = activeCoverageTermData.gradeMeta?.[sub.key];
 
@@ -2137,10 +2102,18 @@ function AdminOverviewTab({ teachers }) {
     const termData = selectedClass.schoolData?.terms?.[selectedTerm] || { students: [], grades: {} };
     const termStudents = termData.students || [];
     const termGrades = termData.grades || {};
-    const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedClass);
+    const { level: overviewLevel, subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedClass);
+    const overviewMeta = {
+      ...(selectedClass.schoolData?.metadata || {}),
+      classLevel: selectedClass.schoolData?.metadata?.classLevel || selectedClass.assignedClass,
+      level: overviewLevel,
+    };
 
     const computedResults = termStudents.length > 0
-      ? computeClassResults(termStudents, termGrades, subjectsList, subjectMap)
+      ? computeClassResults(termStudents, termGrades, subjectsList, subjectMap, {
+          level: overviewLevel,
+          classLevel: overviewMeta.classLevel,
+        })
       : [];
 
     // Get available terms
@@ -2165,7 +2138,7 @@ function AdminOverviewTab({ teachers }) {
             onClick={() => setViewMode('positions')}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${viewMode === 'positions' ? 'bg-emerald-ink text-white shadow-sm' : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'}`}
           >
-            Class Positions
+            {overviewLevel === SCHOOL_LEVELS.KG ? 'Class Overview' : 'Class Positions'}
           </button>
           <button
             onClick={() => setViewMode('trends')}
@@ -2194,7 +2167,7 @@ function AdminOverviewTab({ teachers }) {
           <TrendAnalysis 
             termData={selectedClass.schoolData?.terms || {}}
             students={selectedClass.students}
-            metadata={selectedClass.schoolData?.metadata || {}}
+            metadata={overviewMeta}
             teacherSubjects={tSubjects}
           />
         ) : (
@@ -2202,7 +2175,7 @@ function AdminOverviewTab({ teachers }) {
             <ConsolidatedView
               computedResults={computedResults}
               teacherSubjects={tSubjects}
-              metadata={selectedClass.schoolData?.metadata || {}}
+              metadata={overviewMeta}
             />
           ) : (
             <div className="text-center p-12 text-zinc-500 text-sm">
@@ -2371,7 +2344,7 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
   } = useAdminClassRecords();
 
   const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
-  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
+  const { level: reportLevel, subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
 
   const currentTermData = classData?.terms?.[selectedTerm] || { students: [], grades: {} };
   const currentStudents = currentTermData.students || [];
@@ -2384,7 +2357,10 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
   });
 
   const computedResults = currentStudents.length > 0 && classData
-    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap)
+    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap, {
+        level: reportLevel,
+        classLevel: mergedMetadata.classLevel,
+      })
     : [];
 
   const handleSaveStudentReport = async (updatedStudent) => {
@@ -2477,7 +2453,7 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
   );
 }
 
-function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpdated }) {
+function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpdated, onPackageSaved }) {
   const {
     selectedTeacherId,
     setSelectedTeacherId,
@@ -2490,7 +2466,7 @@ function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpda
   } = useAdminClassRecords();
 
   const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
-  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
+  const { level: reportLevel, subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
 
   const currentTermData = classData?.terms?.[selectedTerm] || { students: [], grades: {} };
   const currentStudents = currentTermData.students || [];
@@ -2503,7 +2479,10 @@ function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpda
   });
 
   const computedResults = currentStudents.length > 0 && classData
-    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap)
+    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap, {
+        level: reportLevel,
+        classLevel: mergedMetadata.classLevel,
+      })
     : [];
 
   const handleSaveParentContacts = async (contactUpdatesBySn) => {
@@ -2600,7 +2579,15 @@ function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpda
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
+      {institution?.id && (
+        <SchoolSmsConfigPanel
+          institution={institution}
+          canManagePackage={false}
+          onSaved={onPackageSaved}
+        />
+      )}
+
       <AdminClassTermSelector
         label="Select Class for Parents & SMS"
         teachers={teachers}

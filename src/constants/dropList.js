@@ -64,3 +64,35 @@ export const DEFAULT_REMARKS = [
   "Improve on your spelling",
   "Read through your work before submitting"
 ];
+
+export const KG_CLASSES_DROPLIST = ["KG 1", "KG 2", "BS. 1"];
+
+export const KG_CONDUCT = [
+  "Cheerful, curious, and eager to learn",
+  "Shares toys and materials willingly with peers",
+  "Follows classroom routines and listens attentively",
+  "Plays cooperatively and shows kindness to others",
+  "Respectful and responds warmly to guidance",
+  "Growing in independence during daily activities",
+  "Needs gentle reminders to take turns and listen"
+];
+
+export const KG_INTEREST = [
+  "Storytelling and picture books",
+  "Action rhymes, singing, and dancing",
+  "Drawing, colouring, and craft work",
+  "Building blocks and sorting games",
+  "Role-play and dramatic activities",
+  "Outdoor play and nature exploration",
+  "Tracing letters and counting objects"
+];
+
+export const KG_REMARKS = [
+  "A joyful and inquisitive learner making steady progress.",
+  "Communicates confidently and enjoys group play.",
+  "Shows growing mastery in early literacy and counting activities.",
+  "Participates enthusiastically in rhymes, storytelling, and crafts.",
+  "Progressing steadily; continue reading picture books together at home.",
+  "Developing fine motor skills well; encourage regular tracing and colouring.",
+  "Requires gentle guided practice in letter sounds and number recognition."
+];

@@ -1,5 +1,12 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import {
+  SCHOOL_LEVELS,
+  deriveKgAreaRatingFromIndicators,
+  getKgProficiencyMeta,
+  normalizeKgRatingCode,
+  resolveSchoolLevel,
+} from '../constants/curriculum.js';
 
 export const exportYearlyData = async (termData, metadata, teacherSubjects) => {
   const wb = new ExcelJS.Workbook();
@@ -12,34 +19,64 @@ export const exportYearlyData = async (termData, metadata, teacherSubjects) => {
     const students = term.students;
     const grades = term.grades || {};
 
+    const isKgSheet =
+      resolveSchoolLevel(metadata?.classLevel, metadata?.level) === SCHOOL_LEVELS.KG ||
+      teacherSubjects.some((sub) => {
+        const areaGrades = grades[sub.key] || grades[sub.name] || {};
+        return Object.values(areaGrades).some((g) => g && g.mode === 'kg');
+      });
+
     const ws = wb.addWorksheet(termName);
 
     // Header Rows
     const header1 = ["", ""];
     const header2 = ["S/N", "Name"];
 
-    teacherSubjects.forEach(sub => {
-      header1.push(sub.name, "", "", "", "", ""); // Merge space
-      header2.push("Test 1", "Group Work", "Test 2", "Project", "Exams", "Total");
-    });
-    
+    if (isKgSheet) {
+      teacherSubjects.forEach((sub) => {
+        header1.push(sub.name, "", "");
+        header2.push("Proficiency", "Milestones (IND)", "Facilitator Note");
+      });
+    } else {
+      teacherSubjects.forEach(sub => {
+        header1.push(sub.name, "", "", "", "", ""); // Merge space
+        header2.push("Test 1", "Group Work", "Test 2", "Project", "Exams", "Total");
+      });
+    }
+
     ws.addRow(header1);
     ws.addRow(header2);
 
     students.forEach(student => {
       const row = [student.sn, student.name];
       teacherSubjects.forEach(sub => {
-        const sg = grades[sub.name] && grades[sub.name][student.sn] ? grades[sub.name][student.sn] : {};
-        const t1 = Number(sg.test1) || 0;
-        const gw = Number(sg.groupWork) || 0;
-        const t2 = Number(sg.test2) || 0;
-        const pr = Number(sg.projectWork) || 0;
-        const ex = Number(sg.exams) || 0;
-        const sba = t1 + gw + t2 + pr;
-        const finalEx = ex / 2;
-        const total = sba + finalEx;
+        const sg = grades[sub.key]?.[student.sn] || grades[sub.name]?.[student.sn] || {};
+        if (isKgSheet) {
+          const indicators =
+            sg.indicators && typeof sg.indicators === 'object' ? sg.indicators : {};
+          const ratingCode =
+            normalizeKgRatingCode(sg.rating) || deriveKgAreaRatingFromIndicators(indicators);
+          const meta = getKgProficiencyMeta(ratingCode);
+          const profLabel = ratingCode ? `${ratingCode} (${meta.shortLabel})` : 'Unassessed';
+          const totalInd = Object.keys(indicators).length;
+          const indMastered = Object.values(indicators).filter(
+            (v) => normalizeKgRatingCode(v) === 'IND'
+          ).length;
+          const milestonesText = totalInd > 0 ? `${indMastered}/${totalInd}` : '-';
+          const noteText = String(sg.note || '').trim();
+          row.push(profLabel, milestonesText, noteText);
+        } else {
+          const t1 = Number(sg.gw1 ?? sg.test1) || 0;
+          const gw = Number(sg.test ?? sg.groupWork) || 0;
+          const t2 = Number(sg.gw2 ?? sg.test2) || 0;
+          const pr = Number(sg.proj ?? sg.projectWork) || 0;
+          const ex = Number(sg.exams) || 0;
+          const sba = t1 + gw + t2 + pr;
+          const finalEx = ex / 2;
+          const total = sba + finalEx;
 
-        row.push(t1, gw, t2, pr, ex, total);
+          row.push(t1, gw, t2, pr, ex, total);
+        }
       });
       ws.addRow(row);
     });
@@ -47,8 +84,16 @@ export const exportYearlyData = async (termData, metadata, teacherSubjects) => {
     // Add some column widths for readability
     ws.getColumn(1).width = 5;
     ws.getColumn(2).width = 30;
-    for (let i = 0; i < teacherSubjects.length * 6; i++) {
+    if (isKgSheet) {
+      for (let i = 0; i < teacherSubjects.length; i++) {
+        ws.getColumn(3 + i * 3).width = 18;
+        ws.getColumn(4 + i * 3).width = 16;
+        ws.getColumn(5 + i * 3).width = 28;
+      }
+    } else {
+      for (let i = 0; i < teacherSubjects.length * 6; i++) {
         ws.getColumn(3 + i).width = 10;
+      }
     }
   });
 

@@ -1,5 +1,13 @@
 import { PROMOTION_THRESHOLD, CLASS_PROGRESSION, isJhsClass, resolveNextClass } from '../constants/promotionMap.js';
-export { isJhsClass, resolveNextClass };
+import {
+  SCHOOL_LEVELS,
+  isKgClass,
+  resolveSchoolLevel,
+  normalizeKgRatingCode,
+  getKgProficiencyMeta,
+  deriveKgAreaRatingFromIndicators,
+} from '../constants/curriculum.js';
+export { isJhsClass, isKgClass, resolveNextClass, resolveSchoolLevel };
 
 /**
  * Generates ordinal suffixes for ranks (e.g. 1 -> 1st, 2 -> 2nd, etc.).
@@ -60,11 +68,111 @@ export function calculateStudentSubjectScores(gw1, test, gw2, proj, exams) {
 }
 
 /**
+ * Computes Kindergarten (KG 1 & KG 2) developmental proficiency results across learning areas.
+ * Omits exam totals, BECE 1-9 grades, and competitive class rankings.
+ */
+export function computeKgClassResults(students, gradesStore = {}, learningAreas = [], areaMap = {}) {
+  if (!students || students.length === 0) return [];
+
+  return [...students]
+    .sort((a, b) => a.sn - b.sn)
+    .map((s) => {
+      const subjects = {};
+      const masteryCounts = { IND: 0, DEV: 0, EMG: 0, NYS: 0 };
+      let assessedCount = 0;
+      let rankOrderSum = 0;
+
+      learningAreas.forEach((areaName) => {
+        const areaKey = areaMap[areaName] || areaName;
+        const rawEntry = gradesStore?.[areaKey]?.[s.sn] || {};
+        const indicators =
+          rawEntry.indicators && typeof rawEntry.indicators === 'object' ? rawEntry.indicators : {};
+        const explicitCode = normalizeKgRatingCode(rawEntry.rating);
+        const derivedCode = explicitCode || deriveKgAreaRatingFromIndicators(indicators);
+        const meta = getKgProficiencyMeta(derivedCode);
+        const note = String(rawEntry.note || '').trim();
+
+        if (meta.code) {
+          masteryCounts[meta.code] += 1;
+          assessedCount += 1;
+          rankOrderSum += meta.rankOrder;
+        }
+
+        const totalIndicatorCount = Object.keys(indicators).length;
+        const indMasteredCount = Object.values(indicators).filter(
+          (v) => normalizeKgRatingCode(v) === 'IND'
+        ).length;
+
+        subjects[areaName] = {
+          mode: 'kg',
+          rating: meta.code,
+          grade: meta.code || '-',
+          label: meta.label,
+          shortLabel: meta.shortLabel,
+          remark: note || meta.label,
+          note,
+          indicators,
+          indicatorCount: totalIndicatorCount,
+          indMasteredCount,
+          rankOrder: meta.rankOrder,
+          rank: '—',
+          scaledSba: null,
+          scaledExam: null,
+          total: meta.rankOrder > 0 ? Math.round((meta.rankOrder / 4) * 100) : null,
+        };
+      });
+
+      const avgRank = assessedCount > 0 ? rankOrderSum / assessedCount : 0;
+      const readinessScore =
+        assessedCount > 0 ? Math.round((avgRank / 4) * 1000) / 10 : null;
+
+      let readinessStatus = 'Pending Observation';
+      if (assessedCount > 0) {
+        if (masteryCounts.NYS >= Math.ceil(assessedCount / 2) && masteryCounts.IND === 0) {
+          readinessStatus = 'Needs Guided Support';
+        } else if (avgRank >= 3.25) {
+          readinessStatus = 'Consistently Ready';
+        } else if (avgRank >= 2.25) {
+          readinessStatus = 'Progressing Steadily';
+        } else {
+          readinessStatus = 'Emerging / Guided Practice';
+        }
+      }
+
+      return {
+        sn: s.sn,
+        name: s.name,
+        gender: s.gender || 'U',
+        attendance: s.attendance || 0,
+        conduct: s.conduct || '',
+        interest: s.interest || '',
+        remarks: s.remarks || '',
+        promotedTo: s.promotedTo || '',
+        socialHabits: s.socialHabits || {},
+        isKgResult: true,
+        assessmentMode: 'kg',
+        subjects,
+        masteryCounts,
+        assessedCount,
+        readinessScore,
+        readinessStatus,
+        overallTotal: readinessScore ?? 0,
+        overallRank: '—',
+      };
+    });
+}
+
+/**
  * Computes individual subject totals, grades, ranks, overall totals,
  * and overall ranks for the entire class, matching the Excel formulas.
+ * Delegates to NaCCA Kindergarten developmental assessment when level === 'KG'.
  */
-export function computeClassResults(students, gradesStore, subjects, subjectMap) {
+export function computeClassResults(students, gradesStore, subjects, subjectMap, options = {}) {
   if (!students || students.length === 0) return [];
+
+  if (options?.level === SCHOOL_LEVELS.KG || isKgClass(options?.classLevel)) {
+    return computeKgClassResults(students, gradesStore, subjects, subjectMap);
+  }
 
   // Initialize scores per student
   const studentScores = students.reduce((acc, s) => {
@@ -180,11 +288,57 @@ export function computeClassResults(students, gradesStore, subjects, subjectMap)
  * with dynamic re-weighting for mid-year admissions.
  * Standard weights: Term 1 = 25% (0.25), Term 2 = 25% (0.25), Term 3 = 50% (0.50).
  * Mid-year dynamic re-weighting: Terms 2 & 3 = 33.3% (0.333) and 66.7% (0.667).
+ * For Kindergarten (KG 1 & KG 2), computes developmental readiness transition.
  */
-export function computeCumulativePromotion(termData, currentStudents, subjects, subjectMap, classLevel) {
+export function computeCumulativePromotion(termData, currentStudents, subjects, subjectMap, classLevel, options = {}) {
   if (!currentStudents || currentStudents.length === 0) return [];
 
+  const resolvedLevel = resolveSchoolLevel(classLevel, options?.level);
   const terms = ['Term 1', 'Term 2', 'Term 3'];
+  const nextClass = resolveNextClass(classLevel);
+
+  if (resolvedLevel === SCHOOL_LEVELS.KG) {
+    const kgTermResults = {};
+    terms.forEach((t) => {
+      if (termData && termData[t] && termData[t].students && termData[t].grades) {
+        kgTermResults[t] = computeKgClassResults(
+          termData[t].students,
+          termData[t].grades,
+          subjects,
+          subjectMap
+        );
+      } else {
+        kgTermResults[t] = [];
+      }
+    });
+
+    return currentStudents.map((student) => {
+      const assessedScores = [];
+      terms.forEach((t) => {
+        const found = kgTermResults[t].find((s) => s.sn === student.sn);
+        if (found && found.readinessScore !== null && found.assessedCount > 0) {
+          assessedScores.push(found.readinessScore);
+        }
+      });
+
+      const readinessPct =
+        assessedScores.length > 0
+          ? Math.round((assessedScores.reduce((a, b) => a + b, 0) / assessedScores.length) * 10) / 10
+          : null;
+      const ready = readinessPct === null || readinessPct >= 35;
+
+      return {
+        sn: student.sn,
+        isKg: true,
+        annualScore: readinessPct,
+        autoPromotedTo: ready
+          ? `Promoted to ${nextClass}`
+          : `Extended Readiness in ${classLevel || 'KG'}`,
+        passed: ready,
+      };
+    });
+  }
+
   const termResults = {};
 
   terms.forEach(t => {
@@ -245,7 +399,6 @@ export function computeCumulativePromotion(termData, currentStudents, subjects, 
 
     annualScore = Math.round(annualScore * 10) / 10;
     const passed = annualScore >= PROMOTION_THRESHOLD;
-    const nextClass = resolveNextClass(classLevel);
     const autoPromotedTo = passed
       ? `Promoted to ${nextClass}`
       : `To Repeat ${classLevel || 'current class'}`;
@@ -285,3 +438,28 @@ export function generateParentAdvisory(studentName, mathScore, scienceScore) {
   }
 }
 
+/**
+ * Generates an early-childhood NaCCA parent home-support advisory for KG 1 & KG 2 learners.
+ */
+export function generateKgParentAdvisory(studentName, literacyRating = '', numeracyRating = '') {
+  const firstName = (studentName || 'Learner').trim().split(/\s+/)[0];
+  const lit = normalizeKgRatingCode(literacyRating);
+  const num = normalizeKgRatingCode(numeracyRating);
+
+  const litLow = lit === 'EMG' || lit === 'NYS';
+  const numLow = num === 'EMG' || num === 'NYS';
+
+  if (litLow && numLow) {
+    return `Early Learning Home Support Note: ${firstName} is making gradual progress and benefits from playful daily practice at home in both Language & Literacy and Numeracy.\n\nRecommended Play-Based Steps:\n1. Spend 10-15 minutes daily reading or telling picture stories together, asking ${firstName} to point to pictures and repeat key words.\n2. Count everyday objects at home (cups, fruits, buttons) aloud together and sort items by colour or size.\n3. Encourage playful scribbling, tracing, and singing action rhymes to build confidence.`;
+  }
+  if (litLow) {
+    return `Language & Literacy Support Note: ${firstName} is developing early communication skills and needs gentle guidance with letter sounds, naming pictures, and pre-writing control.\n\nRecommended Home Steps:\nShare picture books, sing rhymes and alphabet songs together, and give ${firstName} thick crayons or pencils to trace simple lines and letters daily.`;
+  }
+  if (numLow) {
+    return `Numeracy Support Note: ${firstName} enjoys classroom activities and needs extra hands-on practice matching, sorting, and counting objects.\n\nRecommended Home Steps:\nPractice counting real objects (1 to 10 / 20), comparing big and small items, and spotting shapes (circles, squares, triangles) during daily routines.`;
+  }
+  if ((lit === 'IND' || lit === 'DEV') && (num === 'IND' || num === 'DEV')) {
+    return `Early Years Commendation: ${firstName} demonstrates joyful curiosity and steady growth in early literacy and numeracy milestones this term! Keep nurturing this enthusiasm with bedtime picture stories, creative drawing, puzzles, and everyday counting games.`;
+  }
+  return `${firstName} continues to participate warmly in Kindergarten learning experiences across play, storytelling, counting, and creative activities. Continue encouraging curiosity, independent self-care routines, and daily conversation at home.`;
+}

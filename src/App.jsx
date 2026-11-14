@@ -5,6 +5,7 @@ import Roster from './components/Roster';
 import ParentsSmsTab from './components/ParentsSmsTab';
 import PublicParentReportView from './components/PublicParentReportView';
 import Gradebook from './components/Gradebook';
+import KgAssessmentBook from './components/KgAssessmentBook';
 import ConsolidatedView from './components/ConsolidatedView';
 import ConsolidatedRecords from './components/ConsolidatedRecords';
 import DropLists from './components/DropLists';
@@ -16,7 +17,9 @@ import AdminPanel from './components/AdminPanel';
 import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
-import { computeClassResults, isJhsClass } from './utils/calculations';
+import { computeClassResults } from './utils/calculations';
+import { SCHOOL_LEVELS, DEFAULT_KG_SUBJECT_MAP, resolveSchoolLevel } from './constants/curriculum';
+import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from './constants/dropList';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
 import {
   parseReportTokenFromPathname,
@@ -124,14 +127,19 @@ export default function App() {
   // Get full class subjects (for Report Cards / Broadsheet) and Gradebook subjects (scoped for Subject Teachers)
   const getTeacherSubjects = () => {
     const ownerProf = classOwnerProfile || userProfile;
+    const effectiveClassName = activeClassEntry?.className || metadata?.classLevel || userProfile?.assignedClass || 'BS. 7';
+    const resolvedLevel = resolveSchoolLevel(effectiveClassName, ownerProf?.level || metadata?.level);
     let fullClassSubjects = [];
 
     if (ownerProf && Array.isArray(ownerProf.subjects) && ownerProf.subjects.length > 0) {
       fullClassSubjects = ownerProf.subjects;
     } else {
-      const effectiveClassName = activeClassEntry?.className || metadata?.classLevel || userProfile?.assignedClass || 'BS. 7';
-      const isPrimary = ownerProf?.level === 'Primary' || (!isJhsClass(effectiveClassName) && ownerProf?.level !== 'JHS');
-      const fallbackMap = isPrimary ? DEFAULT_PRIMARY_SUBJECT_MAP : DEFAULT_JHS_SUBJECT_MAP;
+      const fallbackMap =
+        resolvedLevel === SCHOOL_LEVELS.KG
+          ? DEFAULT_KG_SUBJECT_MAP
+          : resolvedLevel === SCHOOL_LEVELS.PRIMARY
+            ? DEFAULT_PRIMARY_SUBJECT_MAP
+            : DEFAULT_JHS_SUBJECT_MAP;
       fullClassSubjects = Object.entries(fallbackMap).map(([name, key]) => ({ name, key }));
     }
 
@@ -155,6 +163,7 @@ export default function App() {
       : fullClassSubjects;
 
     return {
+      level: resolvedLevel,
       subjectMap: fullMap,
       subjectsList: fullClassSubjects.map(s => s.name),
       teacherSubjects: fullClassSubjects,
@@ -162,7 +171,8 @@ export default function App() {
     };
   };
 
-  const { subjectMap, subjectsList, teacherSubjects, gradebookSubjects } = getTeacherSubjects();
+  const { level: currentSchoolLevel, subjectMap, subjectsList, teacherSubjects, gradebookSubjects } = getTeacherSubjects();
+  const isKgMode = currentSchoolLevel === SCHOOL_LEVELS.KG;
   const [isLoading, setIsLoading] = useState(true);
 
   // API Key & Chat states
@@ -189,20 +199,35 @@ export default function App() {
   };
 
   const handlePrintAnalytics = (aiSummaryText) => {
-    const subjectCount = teacherSubjects?.length || 9;
+    const subjectCount = teacherSubjects?.length || (isKgMode ? 4 : 9);
     const totalStudents = computedResults.length;
-    const classAvg = totalStudents > 0 
-      ? (computedResults.reduce((sum, s) => sum + (s.overallTotal || 0), 0) / (totalStudents * subjectCount)).toFixed(1)
-      : '0';
-    const passCount = computedResults.filter(s => (s.overallTotal / subjectCount) >= 40).length;
+    const classAvg = isKgMode
+      ? (totalStudents > 0
+          ? (computedResults.reduce((sum, s) => sum + (s.readinessScore ?? 0), 0) / totalStudents).toFixed(1)
+          : '0')
+      : (totalStudents > 0 
+          ? (computedResults.reduce((sum, s) => sum + (s.overallTotal || 0), 0) / (totalStudents * subjectCount)).toFixed(1)
+          : '0');
+    const passCount = isKgMode
+      ? computedResults.filter(s => (s.masteryCounts?.IND || 0) + (s.masteryCounts?.DEV || 0) > 0 && (s.masteryCounts?.NYS || 0) === 0).length
+      : computedResults.filter(s => (s.overallTotal / subjectCount) >= 40).length;
     const passRate = totalStudents > 0 ? ((passCount / totalStudents) * 100).toFixed(1) : '0';
 
-    const sorted = [...computedResults].sort((a, b) => b.overallTotal - a.overallTotal);
+    const sorted = isKgMode ? [] : [...computedResults].sort((a, b) => b.overallTotal - a.overallTotal);
     const top5 = sorted.slice(0, 5);
     const bottom5 = sorted.slice(-5);
 
     const topRows = top5.map((s, i) => `<tr><td style="padding:8px;border:1px solid #ccc;font-weight:bold">${i+1}</td><td style="padding:8px;border:1px solid #ccc">${s.name}</td><td style="padding:8px;border:1px solid #ccc;text-align:right">${(s.overallTotal / subjectCount).toFixed(1)}%</td></tr>`).join('');
     const bottomRows = bottom5.map((s, i) => `<tr><td style="padding:8px;border:1px solid #ccc;font-weight:bold">${totalStudents - 4 + i}</td><td style="padding:8px;border:1px solid #ccc">${s.name}</td><td style="padding:8px;border:1px solid #ccc;text-align:right">${(s.overallTotal / subjectCount).toFixed(1)}%</td></tr>`).join('');
+
+    const kgMasteryRows = isKgMode
+      ? computedResults.map((s) => {
+          const areaBadges = Object.entries(s.subjects || {})
+            .map(([areaName, info]) => `${areaName}: <strong>${info.rating || '—'}</strong>`)
+            .join(' • ');
+          return `<tr><td style="padding:8px;border:1px solid #ccc">${s.name}</td><td style="padding:8px;border:1px solid #ccc;font-size:11px">${areaBadges}</td><td style="padding:8px;border:1px solid #ccc;text-align:right;font-weight:bold">${s.readinessStatus || 'In Progress'}</td></tr>`;
+        }).join('')
+      : '';
 
     // Convert AI summary markdown to simple HTML
     let summaryHtml = '<p style="color:#888;font-style:italic">AI Summary not generated. Please generate the AI summary on the dashboard before exporting.</p>';
@@ -258,8 +283,8 @@ export default function App() {
           <div style="text-align:center;background:#f4f4f5;padding:20px;border-radius:8px;border:1px solid #d4d4d8;margin-bottom:28px">
             <h2 style="font-size:22px;font-weight:700;border:none;margin-bottom:12px">Class Performance Analytics Report</h2>
             <div class="kpi-grid">
-              <div class="kpi-card"><div class="kpi-label">Class Average</div><div class="kpi-value" style="color:#059669">${classAvg}%</div></div>
-              <div class="kpi-card"><div class="kpi-label">Pass Rate</div><div class="kpi-value" style="color:#2563eb">${passRate}%</div></div>
+              <div class="kpi-card"><div class="kpi-label">${isKgMode ? 'Mastery Index' : 'Class Average'}</div><div class="kpi-value" style="color:#059669">${classAvg}%</div></div>
+              <div class="kpi-card"><div class="kpi-label">${isKgMode ? 'On-Track Mastery' : 'Pass Rate'}</div><div class="kpi-value" style="color:#2563eb">${passRate}%</div></div>
               <div class="kpi-card"><div class="kpi-label">Enrolment</div><div class="kpi-value">${totalStudents}</div></div>
             </div>
           </div>
@@ -268,11 +293,15 @@ export default function App() {
         </div>
 
         <div class="page">
-          <h2>Top 5 Students</h2>
-          <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${topRows}</tbody></table>
+          ${isKgMode
+            ? `<h2>Kindergarten Learning Area Developmental Overview</h2>
+               <table style="margin-bottom:32px"><thead><tr><th>Learner</th><th>Learning Areas</th><th style="text-align:right">Readiness</th></tr></thead><tbody>${kgMasteryRows}</tbody></table>`
+            : `<h2>Top 5 Students</h2>
+               <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${topRows}</tbody></table>
 
-          <h2>Bottom 5 Students</h2>
-          <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${bottomRows}</tbody></table>
+               <h2>Bottom 5 Students</h2>
+               <table style="margin-bottom:32px"><thead><tr><th>Pos</th><th>Name</th><th style="text-align:right">Average</th></tr></thead><tbody>${bottomRows}</tbody></table>`
+          }
 
           <div class="sig-row">
             <div class="sig-block">
@@ -667,20 +696,29 @@ export default function App() {
           ...(data.metadata || {}),
           classLevel: chosenClass?.className || data.metadata?.classLevel || currentProf?.assignedClass || "BS. 7",
           schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name",
-          academicYear: effectiveInst?.academicYear || data.metadata?.academicYear || "2026/2027"
+          academicYear: effectiveInst?.academicYear || data.metadata?.academicYear || "2026/2027",
+          level: resolveSchoolLevel(data.metadata?.classLevel || activeClassEntry?.className || currentProf?.assignedClass || '', currentProf?.level || data.metadata?.level)
         };
         setMetadata(mergedMetadata);
         setStudents(activeTermData.students || []);
         studentsRef.current = activeTermData.students || [];
         setGrades(activeTermData.grades || {});
         let loadedDropLists = data.dropLists;
+        const isKgLoadedClass = mergedMetadata.level === SCHOOL_LEVELS.KG;
         if (!loadedDropLists) {
-          loadedDropLists = {
-            conduct: ["Respectful", "Attentive", "Polite", "Helpful", "Confident", "Friendly"],
-            interest: ["Reading novels", "Sports", "Creative Arts", "Music", "Gardening"],
-            attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable"],
-            remark: ["Keep it up", "Good performance", "Can do better", "Needs to pay more attention in class", "Highly motivated"]
-          };
+          loadedDropLists = isKgLoadedClass
+            ? {
+                conduct: [...KG_CONDUCT],
+                interest: [...KG_INTEREST],
+                remarks: [...KG_REMARKS],
+                classes: [...KG_CLASSES_DROPLIST],
+              }
+            : {
+                conduct: ["Respectful", "Attentive", "Polite", "Helpful", "Confident", "Friendly"],
+                interest: ["Reading novels", "Sports", "Creative Arts", "Music", "Gardening"],
+                attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable"],
+                remark: ["Keep it up", "Good performance", "Can do better", "Needs to pay more attention in class", "Highly motivated"]
+              };
           if (!isSubTeacherForThisClass) {
             setDoc(docRef, { dropLists: loadedDropLists }, { merge: true }).catch(console.error);
           }
@@ -724,11 +762,15 @@ export default function App() {
           return;
         }
         // Fallback default templates initialized for a Form Master / Class Teacher
+        const initClassName = currentProf?.assignedClass || "BS. 7";
+        const initLevel = resolveSchoolLevel(initClassName, currentProf?.level);
+        const isKgInit = initLevel === SCHOOL_LEVELS.KG;
         const template = {
           metadata: {
             schoolName: fetchedInstData?.schoolName || "My School Name",
             district: "My District",
-            classLevel: currentProf?.assignedClass || "BS. 7",
+            classLevel: initClassName,
+            level: initLevel,
             term: "1st Term",
             academicYear: fetchedInstData?.academicYear || "2026/2027",
             date: new Date().toISOString().split('T')[0],
@@ -756,7 +798,7 @@ export default function App() {
           },
           activeTerm: activeInstTerm || "Term 1",
           dropLists: {
-            conduct: [
+            conduct: isKgInit ? [...KG_CONDUCT] : [
               "Respectful and cooperative",
               "Disciplined and focused",
               "Regular and punctual",
@@ -773,7 +815,7 @@ export default function App() {
               "Always eager to help others",
               "Needs constant supervision"
             ],
-            interest: [
+            interest: isKgInit ? [...KG_INTEREST] : [
               "Reading novels",
               "Researching topics",
               "Sports",
@@ -796,7 +838,7 @@ export default function App() {
               "Writing",
               "Storytelling"
             ],
-            remarks: [
+            remarks: isKgInit ? [...KG_REMARKS] : [
               "Excellent performance. Keep it up!",
               "A very good student. Well done.",
               "Good progress made. Work harder.",
@@ -810,17 +852,19 @@ export default function App() {
               "Highly motivated and dedicated learner.",
               "A promising student with a bright future."
             ],
-            classes: [
-              "BS. 1", "BS. 1A", "BS. 1B",
-              "BS. 2", "BS. 2A", "BS. 2B",
-              "BS. 3", "BS. 3A", "BS. 3B",
-              "BS. 4", "BS. 4A", "BS. 4B",
-              "BS. 5", "BS. 5A", "BS. 5B",
-              "BS. 6", "BS. 6A", "BS. 6B",
-              "BS. 7", "BS. 7A", "BS. 7B",
-              "BS. 8", "BS. 8A", "BS. 8B",
-              "BS. 9", "BS. 9A", "BS. 9B"
-            ]
+            classes: isKgInit
+              ? [...KG_CLASSES_DROPLIST]
+              : [
+                  "BS. 1", "BS. 1A", "BS. 1B",
+                  "BS. 2", "BS. 2A", "BS. 2B",
+                  "BS. 3", "BS. 3A", "BS. 3B",
+                  "BS. 4", "BS. 4A", "BS. 4B",
+                  "BS. 5", "BS. 5A", "BS. 5B",
+                  "BS. 6", "BS. 6A", "BS. 6B",
+                  "BS. 7", "BS. 7A", "BS. 7B",
+                  "BS. 8", "BS. 8A", "BS. 8B",
+                  "BS. 9", "BS. 9A", "BS. 9B"
+                ]
           }
         };
         await setDoc(docRef, template);
@@ -1348,7 +1392,9 @@ if (userProfile?.isSeniorSuperUser) {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] flex flex-col items-center justify-center p-6 text-center">
         <div className="glass-card max-w-md w-full p-8 border border-zinc-200 dark:border-zinc-800 space-y-4">
-          <img src="/icon.png" className="w-16 h-16 object-contain mx-auto" alt="Madifor logo" />
+          {institution?.schoolCrestUrl && (
+            <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-16 h-16 object-contain mx-auto bg-white rounded p-1" alt="School Crest" />
+          )}
           <h2 className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wide">
             Subject Teacher Account Active
           </h2>
@@ -1383,13 +1429,20 @@ if (userProfile?.isSeniorSuperUser) {
   }
 
   // Calculate ranks and totals class-wide in real-time
-  const computedResults = computeClassResults(students, grades, subjectsList, subjectMap, { formula: institution?.gradingFormula || 'default' });
+  const computedResults = computeClassResults(students, grades, subjectsList, subjectMap, {
+    formula: institution?.gradingFormula || 'default',
+    level: currentSchoolLevel,
+    classLevel: activeClassEntry?.className || metadata?.classLevel || userProfile?.assignedClass || '',
+  });
 
   const isPrinting = printAll || !!printSingleStudent;
   const isReadOnly = viewingTerm !== activeTerm;
-  const visibleTabs = isSubjectTeacherMode
-    ? MAIN_TABS.filter(t => t.id === 'gradebook' || t.id === 'reports' || t.id === 'trends')
+  const resolvedTabs = isKgMode
+    ? MAIN_TABS.map(t => (t.id === 'gradebook' ? { ...t, name: 'Progress Book' } : t))
     : MAIN_TABS;
+  const visibleTabs = isSubjectTeacherMode
+    ? resolvedTabs.filter(t => t.id === 'gradebook' || t.id === 'reports' || t.id === 'trends')
+    : resolvedTabs;
 
   return (
     <>
@@ -1398,11 +1451,9 @@ if (userProfile?.isSeniorSuperUser) {
       {/* 1. Header Bar */}
       <header className="glass-panel sticky top-0 z-40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between no-print shadow-sm gap-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {institution?.schoolCrestUrl ? (
-                <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
-              ) : (
-                <img src="/icon.png" className="w-14 h-14 object-contain select-none shrink-0" alt="Madifor logo" />
-              )}
+          {institution?.schoolCrestUrl && (
+            <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-md font-black tracking-wider text-zinc-900 dark:text-white truncate">
@@ -1596,14 +1647,25 @@ if (userProfile?.isSeniorSuperUser) {
           />
         )}
         {activeTab === 'gradebook' && (
-          <Gradebook
-            students={students}
-            gradesStore={grades}
-            onSave={handleSaveGrades}
-            teacherSubjects={gradebookSubjects}
-            apiKey={apiKey}
-            isReadOnly={isReadOnly}
-          />
+          isKgMode ? (
+            <KgAssessmentBook
+              students={students}
+              gradesStore={grades}
+              onSave={handleSaveGrades}
+              teacherSubjects={gradebookSubjects}
+              metadata={metadata}
+              isReadOnly={isReadOnly}
+            />
+          ) : (
+            <Gradebook
+              students={students}
+              gradesStore={grades}
+              onSave={handleSaveGrades}
+              teacherSubjects={gradebookSubjects}
+              apiKey={apiKey}
+              isReadOnly={isReadOnly}
+            />
+          )
         )}
         {!isSubjectTeacherMode && activeTab === 'positions' && (
           <ConsolidatedView
@@ -1629,6 +1691,7 @@ if (userProfile?.isSeniorSuperUser) {
             gradesStore={grades}
             teacherSubjects={teacherSubjects}
             viewingTerm={viewingTerm}
+            metadata={metadata}
           />
         )}
         {activeTab === 'reports' && (

@@ -3,26 +3,30 @@ import { Award, Download, Printer, TrendingUp, Users, CheckCircle, AlertTriangle
 import ReactMarkdown from 'react-markdown';
 import { GradeDistributionChart, SubjectPerformanceChart } from './AnalyticsCharts';
 import { generateClassSummary } from '../utils/aiSummary';
+import {
+  SCHOOL_LEVELS,
+  JHS_SUBJECTS_LIST,
+  getDefaultSubjectsListForLevel,
+  resolveSchoolLevel,
+} from '../constants/curriculum';
 
-const DEFAULT_JHS_HEADERS = [
-  { name: "ENG. LANG.", key: "English Language" },
-  { name: "MATHS", key: "Mathematics" },
-  { name: "SCIENCE", key: "Science" },
-  { name: "C. TECH", key: "Career Technology" },
-  { name: "SOCIAL", key: "Social Studies" },
-  { name: "COMPUTING", key: "Computing" },
-  { name: "RME", key: "Religious and Moral Education" },
-  { name: "GH. LANG.", key: "Ghanaian Language" },
-  { name: "C. ARTS", key: "Creative Arts & Design" }
-];
+const DEFAULT_JHS_HEADERS = JHS_SUBJECTS_LIST
+  .filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')
+  .map(s => ({ name: s.key, key: s.name }));
 
 export default function ConsolidatedView({ computedResults, teacherSubjects, onPrintAnalytics, metadata }) {
+  const schoolLevel = resolveSchoolLevel(metadata?.classLevel, metadata?.level);
+  const isKgMode = schoolLevel === SCHOOL_LEVELS.KG || computedResults.some(s => s?.isKgResult);
+
   const SUBJECT_HEADERS = teacherSubjects && teacherSubjects.length > 0 
     ? teacherSubjects.map(sub => ({ name: sub.key, key: sub.name }))
-    : DEFAULT_JHS_HEADERS;
-  const maxScore = (teacherSubjects?.length || 10) * 100;
+    : schoolLevel === SCHOOL_LEVELS.JHS
+      ? DEFAULT_JHS_HEADERS
+      : getDefaultSubjectsListForLevel(schoolLevel).map(sub => ({ name: sub.key, key: sub.name }));
+  const subjectDenominator = SUBJECT_HEADERS.length || (isKgMode ? 4 : 9);
+  const maxScore = subjectDenominator * 100;
   const [hoverRow, setHoverRow] = useState(null);
-  const [filter, setFilter] = useState('all'); // all, top5, bottom5, atRisk, boys, girls
+  const [filter, setFilter] = useState('all'); // Primary/JHS: all|top5|bottom5|atRisk|boys|girls; KG: all|ind|dev|support|boys|girls
   const [aiSummary, setAiSummary] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
@@ -82,94 +86,150 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
 
   const handleExportCSV = () => {
     if (computedResults.length === 0) return;
-    
-    // Build CSV content
-    const headers = ["S/N", "Student Name", "Overall Total", "Class Position", ...SUBJECT_HEADERS.map(s => s.name)];
+
+    const headers = isKgMode
+      ? ["S/N", "Learner Name", "Readiness Status", "Mastery Index (%)", ...SUBJECT_HEADERS.map(s => s.key)]
+      : ["S/N", "Student Name", "Overall Total", "Class Position", ...SUBJECT_HEADERS.map(s => s.key)];
     const csvRows = [headers.join(",")];
-    
-    computedResults.forEach((s, idx) => {
-      const row = [
-        s.sn,
-        `"${s.name}"`,
-        s.overallTotal,
-        s.overallRank,
-        ...SUBJECT_HEADERS.map(sh => s.subjects[sh.key]?.total || 0)
-      ];
+
+    rankedResults.forEach((s) => {
+      const row = isKgMode
+        ? [
+            s.sn,
+            `"${s.name}"`,
+            `"${s.readinessStatus || 'In Progress'}"`,
+            s.readinessScore ?? '',
+            ...SUBJECT_HEADERS.map(sh => s.subjects?.[sh.key]?.rating || '')
+          ]
+        : [
+            s.sn,
+            `"${s.name}"`,
+            s.overallTotal,
+            s.overallRank,
+            ...SUBJECT_HEADERS.map(sh => s.subjects?.[sh.key]?.total || 0)
+          ];
       csvRows.push(row.join(","));
     });
-    
+
     const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "class_positions_summary.csv");
+    link.setAttribute("download", isKgMode ? "kg_developmental_overview.csv" : "class_positions_summary.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Sort and filter computedResults
+  // Sort and filter computedResults (KG keeps alphabetical/natural order — no ranking)
+  const isMaleGender = (g) => {
+    const u = String(g || '').trim().toUpperCase();
+    return u === 'M' || u === 'MALE' || u === 'BOY';
+  };
+  const isFemaleGender = (g) => {
+    const u = String(g || '').trim().toUpperCase();
+    return u === 'F' || u === 'FEMALE' || u === 'GIRL';
+  };
+
   const rankedResults = useMemo(() => {
-    let sorted = [...computedResults].sort((a, b) => {
+    let base = [...computedResults];
+    if (isKgMode) {
+      base.sort((a, b) => (a.sn || 0) - (b.sn || 0));
+      if (filter === 'ind') return base.filter(s => (s.masteryCounts?.IND || 0) > 0 && (s.masteryCounts?.NYS || 0) === 0);
+      if (filter === 'dev') return base.filter(s => (s.masteryCounts?.DEV || 0) > 0);
+      if (filter === 'support') return base.filter(s => (s.masteryCounts?.NYS || 0) > 0 || (s.masteryCounts?.EMG || 0) > 0);
+      if (filter === 'boys') return base.filter(s => isMaleGender(s.gender));
+      if (filter === 'girls') return base.filter(s => isFemaleGender(s.gender));
+      return base;
+    }
+
+    base.sort((a, b) => {
       const aRank = parseInt(a.overallRank, 10) || 999;
       const bRank = parseInt(b.overallRank, 10) || 999;
       return aRank - bRank;
     });
 
-    const subjectCount = teacherSubjects?.length || 10;
+    const subjectCount = SUBJECT_HEADERS.length || 9;
 
-    if (filter === 'top5') return sorted.slice(0, 5);
-    if (filter === 'bottom5') return sorted.slice(-5);
-    if (filter === 'atRisk') return sorted.filter(s => (s.overallTotal / subjectCount) < 40); // Less than 40%
-    if (filter === 'boys') return sorted.filter(s => s.gender === 'M');
-    if (filter === 'girls') return sorted.filter(s => s.gender === 'F');
-    return sorted;
-  }, [computedResults, filter, teacherSubjects]);
+    if (filter === 'top5') return base.slice(0, 5);
+    if (filter === 'bottom5') return base.slice(-5);
+    if (filter === 'atRisk') return base.filter(s => (s.overallTotal / subjectCount) < 40); // Less than 40%
+    if (filter === 'boys') return base.filter(s => isMaleGender(s.gender));
+    if (filter === 'girls') return base.filter(s => isFemaleGender(s.gender));
+    return base;
+  }, [computedResults, filter, isKgMode, SUBJECT_HEADERS.length]);
 
   // Analytics calculations
   const analytics = useMemo(() => {
-    if (!computedResults || computedResults.length === 0 || !teacherSubjects) return null;
-    
+    if (!computedResults || computedResults.length === 0) return null;
+
     const totalStudents = computedResults.length;
-    const subjectCount = teacherSubjects.length || 10;
-    
+    const activeSubHeaders = SUBJECT_HEADERS;
+    const subjectCount = activeSubHeaders.length || (isKgMode ? 4 : 9);
+
     let sumAverages = 0;
+    let avgDenominator = 0;
     let passCount = 0;
     let boyTotal = 0, boyCount = 0;
     let girlTotal = 0, girlCount = 0;
 
     const subjectTotals = {};
-    teacherSubjects.forEach(sub => {
-      subjectTotals[sub.name] = 0;
+    const subjectCounts = {};
+    activeSubHeaders.forEach(sub => {
+      subjectTotals[sub.key] = 0;
+      subjectCounts[sub.key] = 0;
     });
 
     computedResults.forEach(student => {
-      const avg = student.overallTotal / subjectCount;
-      sumAverages += avg;
-      if (avg >= 50) passCount++;
+      let studentAvg = null;
+      if (isKgMode) {
+        if (typeof student.readinessScore === 'number') {
+          studentAvg = student.readinessScore;
+          sumAverages += studentAvg;
+          avgDenominator += 1;
+        }
+        if ((student.masteryCounts?.IND || 0) + (student.masteryCounts?.DEV || 0) > 0 && (student.masteryCounts?.NYS || 0) === 0) {
+          passCount++;
+        }
+      } else {
+        studentAvg = (student.overallTotal || 0) / subjectCount;
+        sumAverages += studentAvg;
+        avgDenominator += 1;
+        if (studentAvg >= 50) passCount++;
+      }
 
-      if (student.gender === 'M') { boyTotal += avg; boyCount++; }
-      if (student.gender === 'F') { girlTotal += avg; girlCount++; }
+      if (studentAvg !== null) {
+        if (isMaleGender(student.gender)) { boyTotal += studentAvg; boyCount++; }
+        if (isFemaleGender(student.gender)) { girlTotal += studentAvg; girlCount++; }
+      }
 
-      teacherSubjects.forEach(sub => {
-        const res = student.subjects[sub.name];
-        if (res && res.total) {
-          subjectTotals[sub.name] += res.total;
+      activeSubHeaders.forEach(sub => {
+        const res = student.subjects?.[sub.key];
+        if (res && typeof res.total === 'number' && (!isKgMode || res.rating)) {
+          subjectTotals[sub.key] += res.total;
+          subjectCounts[sub.key] += 1;
         }
       });
     });
 
     let bestSubject = { name: '-', avg: 0 };
     let worstSubject = { name: '-', avg: 100 };
+    let foundAny = false;
 
-    teacherSubjects.forEach(sub => {
-      const avg = subjectTotals[sub.name] / totalStudents;
-      if (avg > bestSubject.avg) bestSubject = { name: sub.key || sub.name.substring(0,8), avg };
-      if (avg < worstSubject.avg) worstSubject = { name: sub.key || sub.name.substring(0,8), avg };
+    activeSubHeaders.forEach(sub => {
+      const cnt = subjectCounts[sub.key];
+      const avg = cnt > 0 ? subjectTotals[sub.key] / cnt : 0;
+      if (cnt > 0) foundAny = true;
+      if (avg >= bestSubject.avg && cnt > 0) bestSubject = { name: sub.name || sub.key.substring(0, 8), avg };
+      if (avg <= worstSubject.avg && cnt > 0) worstSubject = { name: sub.name || sub.key.substring(0, 8), avg };
     });
 
+    if (!foundAny) {
+      worstSubject = { name: '-', avg: 0 };
+    }
+
     return {
-      classAverage: (sumAverages / totalStudents).toFixed(1),
+      classAverage: avgDenominator > 0 ? (sumAverages / avgDenominator).toFixed(1) : '0.0',
       passRate: ((passCount / totalStudents) * 100).toFixed(1),
       boyAvg: boyCount > 0 ? (boyTotal / boyCount).toFixed(1) : '-',
       girlAvg: girlCount > 0 ? (girlTotal / girlCount).toFixed(1) : '-',
@@ -177,7 +237,7 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
       worstSubject,
       totalStudents
     };
-  }, [computedResults, teacherSubjects]);
+  }, [computedResults, SUBJECT_HEADERS, isKgMode]);
 
   return (
     <div className="space-y-6">
@@ -188,32 +248,32 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
           <div className="glass-card p-4 flex flex-col justify-center">
             <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
               <TrendingUp className="w-4 h-4 text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Class Average</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">{isKgMode ? 'Mastery Index' : 'Class Average'}</span>
             </div>
             <div className="text-2xl font-black text-zinc-800 dark:text-zinc-100">{analytics.classAverage}%</div>
           </div>
           <div className="glass-card p-4 flex flex-col justify-center">
             <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
               <CheckCircle className="w-4 h-4 text-blue-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Pass Rate</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">{isKgMode ? 'On-Track Mastery' : 'Pass Rate'}</span>
             </div>
             <div className="text-2xl font-black text-zinc-800 dark:text-zinc-100">{analytics.passRate}%</div>
           </div>
           <div className="glass-card p-4 flex flex-col justify-center border-l-4 border-emerald-500">
             <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
               <Award className="w-4 h-4 text-emerald-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Top Subject</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">{isKgMode ? 'Strongest Area' : 'Top Subject'}</span>
             </div>
             <div className="text-xl font-bold text-zinc-800 dark:text-zinc-100 truncate" title={analytics.bestSubject.name}>{analytics.bestSubject.name}</div>
-            <div className="text-xs text-zinc-400 font-semibold">{analytics.bestSubject.avg.toFixed(1)}% avg</div>
+            <div className="text-xs text-zinc-400 font-semibold">{analytics.bestSubject.avg.toFixed(1)}% {isKgMode ? 'mastery' : 'avg'}</div>
           </div>
           <div className="glass-card p-4 flex flex-col justify-center border-l-4 border-rose-500">
             <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mb-2">
               <AlertTriangle className="w-4 h-4 text-rose-500" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Lowest Subject</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">{isKgMode ? 'Focus Area' : 'Lowest Subject'}</span>
             </div>
             <div className="text-xl font-bold text-zinc-800 dark:text-zinc-100 truncate" title={analytics.worstSubject.name}>{analytics.worstSubject.name}</div>
-            <div className="text-xs text-zinc-400 font-semibold">{analytics.worstSubject.avg.toFixed(1)}% avg</div>
+            <div className="text-xs text-zinc-400 font-semibold">{analytics.worstSubject.avg.toFixed(1)}% {isKgMode ? 'mastery' : 'avg'}</div>
           </div>
         </div>
       )}
@@ -222,11 +282,11 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
       {analytics && (analytics.boyAvg !== '-' || analytics.girlAvg !== '-') && (
         <div className="grid grid-cols-2 gap-4 no-print">
           <div className="glass-card p-3 flex items-center justify-between border-l-4 border-blue-500">
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Boys Average</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{isKgMode ? 'Boys Mastery' : 'Boys Average'}</span>
             <span className="text-lg font-black text-blue-600 dark:text-blue-400">{analytics.boyAvg}%</span>
           </div>
           <div className="glass-card p-3 flex items-center justify-between border-l-4 border-pink-500">
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Girls Average</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{isKgMode ? 'Girls Mastery' : 'Girls Average'}</span>
             <span className="text-lg font-black text-pink-600 dark:text-pink-400">{analytics.girlAvg}%</span>
           </div>
         </div>
@@ -276,14 +336,16 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
 
       {/* 2. Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 no-print">
-        {/* Grade Distribution */}
+        {/* Grade / Proficiency Distribution */}
         <div className="glass-card p-4 flex flex-col h-[300px]">
           <div className="flex items-center gap-2 mb-4 text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2">
             <BarChart2 className="w-4 h-4 text-blue-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider">Grade Distribution</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider">
+              {isKgMode ? 'Proficiency Rating Distribution' : 'Grade Distribution'}
+            </h3>
           </div>
           <div className="flex-1 w-full">
-            <GradeDistributionChart computedResults={computedResults} teacherSubjects={teacherSubjects} />
+            <GradeDistributionChart computedResults={computedResults} teacherSubjects={teacherSubjects} metadata={metadata} />
           </div>
         </div>
         
@@ -291,7 +353,9 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
         <div className="glass-card p-4 flex flex-col h-[300px]">
           <div className="flex items-center gap-2 mb-4 text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2">
             <Award className="w-4 h-4 text-emerald-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider">Subject Performance Overview</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider">
+              {isKgMode ? 'Learning Area Mastery Overview' : 'Subject Performance Overview'}
+            </h3>
           </div>
           <div className="flex-1 w-full">
             <SubjectPerformanceChart computedResults={computedResults} teacherSubjects={teacherSubjects} />
@@ -301,24 +365,36 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
 
       {/* Consolidated Overview Table */}
       <div className="glass-card overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800 no-print">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 border-b border-zinc-200 dark:border-zinc-800 no-print">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
               <Award className="w-4 h-4 text-amber-500" />
-              POSITIONS — Class Overview
+              {isKgMode ? 'EARLY CHILDHOOD OVERVIEW — Developmental Mastery' : 'POSITIONS — Class Overview'}
             </h3>
             <p className="text-[10px] text-zinc-400 mt-1">
-              Sorted by overall ranking. Displays totals out of {maxScore} and subject breakdowns.
+              {isKgMode
+                ? 'NaCCA Kindergarten proficiency across the 4 Core Learning Areas (IND = Independently, DEV = Developing, EMG = Emerging, NYS = Not Yet).'
+                : `Sorted by overall ranking. Displays totals out of ${maxScore} and subject breakdowns.`}
             </p>
           </div>
           
           <div className="flex flex-col items-end gap-3">
             {/* Filters */}
-            <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <div className="flex flex-wrap gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
               <button onClick={() => setFilter('all')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'all' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>All</button>
-              <button onClick={() => setFilter('top5')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'top5' ? 'bg-emerald-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Top 5</button>
-              <button onClick={() => setFilter('bottom5')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'bottom5' ? 'bg-rose-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Bottom 5</button>
-              <button onClick={() => setFilter('atRisk')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'atRisk' ? 'bg-amber-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>At-Risk</button>
+              {isKgMode ? (
+                <>
+                  <button onClick={() => setFilter('ind')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'ind' ? 'bg-emerald-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Consistent (IND)</button>
+                  <button onClick={() => setFilter('dev')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'dev' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Developing (DEV)</button>
+                  <button onClick={() => setFilter('support')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'support' ? 'bg-rose-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Needs Support</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setFilter('top5')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'top5' ? 'bg-emerald-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Top 5</button>
+                  <button onClick={() => setFilter('bottom5')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'bottom5' ? 'bg-rose-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Bottom 5</button>
+                  <button onClick={() => setFilter('atRisk')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'atRisk' ? 'bg-amber-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>At-Risk</button>
+                </>
+              )}
               <button onClick={() => setFilter('boys')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'boys' ? 'bg-blue-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Boys</button>
               <button onClick={() => setFilter('girls')} className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${filter === 'girls' ? 'bg-pink-500 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Girls</button>
             </div>
@@ -363,27 +439,34 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
           <table className="w-full text-left text-xs border-collapse gradebook-table">
             <thead className="sticky top-0 bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 font-semibold select-none z-10 text-center">
               <tr>
-                <th className="px-3 py-3 w-12 text-center">Pos</th>
-                <th className="px-3 py-3 text-left min-w-[180px]">Student Name</th>
+                <th className="px-3 py-3 w-12 text-center">{isKgMode ? 'S/N' : 'Pos'}</th>
+                <th className="px-3 py-3 text-left min-w-[180px]">{isKgMode ? 'Learner Name' : 'Student Name'}</th>
                 <th className="px-2 py-3 w-16 text-center">Gender</th>
-                <th className="px-3 py-3 w-24">Overall Total<br/>({maxScore})</th>
+                <th className="px-3 py-3 w-28">
+                  {isKgMode ? 'Readiness' : (<>Overall Total<br/>({maxScore})</>)}
+                </th>
                 {SUBJECT_HEADERS.map(sub => (
-                  <th key={sub.key} className="px-2 py-3 w-20 font-mono text-[10px]">{sub.name}</th>
+                  <th key={sub.key} className="px-2 py-3 w-24 font-mono text-[10px]">{sub.name}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
               {rankedResults.map((row, idx) => {
                 const isSelected = hoverRow === row.sn;
-                const subjectCount = teacherSubjects?.length || 10;
-                const overallAvg = row.overallTotal / subjectCount;
-                
-                // Styling ranks
+                const overallAvg = (row.overallTotal || 0) / subjectDenominator;
+
                 const rankNum = idx + 1;
-                const isPodium = rankNum <= 3;
-                const podiumClass = rankNum === 1 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold' :
-                                    rankNum === 2 ? 'bg-zinc-400/10 text-zinc-600 dark:text-zinc-300 font-bold' :
-                                    rankNum === 3 ? 'bg-amber-700/10 text-amber-800 dark:text-amber-600 font-bold' : '';
+                const podiumClass = isKgMode
+                  ? 'text-zinc-400'
+                  : rankNum === 1 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold'
+                  : rankNum === 2 ? 'bg-zinc-400/10 text-zinc-600 dark:text-zinc-300 font-bold'
+                  : rankNum === 3 ? 'bg-amber-700/10 text-amber-800 dark:text-amber-600 font-bold'
+                  : '';
+
+                const gUpper = String(row.gender || '').trim().toUpperCase();
+                const genderShort = gUpper === 'M' || gUpper === 'MALE' || gUpper === 'BOY' ? 'M'
+                  : gUpper === 'F' || gUpper === 'FEMALE' || gUpper === 'GIRL' ? 'F'
+                  : '-';
 
                 return (
                   <tr
@@ -397,30 +480,63 @@ export default function ConsolidatedView({ computedResults, teacherSubjects, onP
                     }`}
                   >
                     <td className={`px-3 py-2 text-center font-mono font-medium ${podiumClass}`}>
-                      {row.overallRank}
+                      {isKgMode ? row.sn : row.overallRank}
                     </td>
                     <td className="px-3 py-2 text-left font-semibold truncate max-w-[180px]" title={row.name}>
                       {row.name}
                     </td>
                     <td className="px-2 py-2 text-center">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        row.gender === 'M' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        row.gender === 'F' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
+                        genderShort === 'M' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        genderShort === 'F' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
                         'text-zinc-400'
                       }`}>
-                        {row.gender === 'M' ? 'M' : row.gender === 'F' ? 'F' : '-'}
+                        {genderShort}
                       </span>
                     </td>
                     <td className="px-3 py-2 font-mono font-bold text-zinc-950 dark:text-zinc-50">
-                      {row.overallTotal}
-                      <span className="text-[10px] text-zinc-400 font-normal block">
-                        ({overallAvg.toFixed(1)}%)
-                      </span>
+                      {isKgMode ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                            {row.readinessScore !== null && row.readinessScore !== undefined ? `${row.readinessScore}%` : '—'}
+                          </span>
+                          <span className="text-[9px] font-sans font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                            {row.readinessStatus || 'Pending'}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          {row.overallTotal}
+                          <span className="text-[10px] text-zinc-400 font-normal block">
+                            ({overallAvg.toFixed(1)}%)
+                          </span>
+                        </>
+                      )}
                     </td>
                     
-                    {/* Subject breakdowns */}
+                    {/* Subject / Learning Area breakdowns */}
                     {SUBJECT_HEADERS.map(sh => {
-                      const subRes = row.subjects[sh.key] || { total: 0, grade: 'E' };
+                      const subRes = row.subjects?.[sh.key] || { total: 0, grade: 'E', rating: '' };
+                      if (isKgMode) {
+                        const code = subRes.rating || '';
+                        const badgeCls =
+                          code === 'IND' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-700/60' :
+                          code === 'DEV' ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-300/60 dark:border-blue-700/60' :
+                          code === 'EMG' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-300/60 dark:border-amber-700/60' :
+                          code === 'NYS' ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300/60 dark:border-rose-700/60' :
+                          'bg-zinc-100 dark:bg-zinc-900 text-zinc-400 border-zinc-200 dark:border-zinc-800';
+                        return (
+                          <td key={sh.key} className="px-2 py-2">
+                            <span
+                              title={subRes.label || 'Not Assessed'}
+                              className={`inline-block px-2 py-0.5 rounded border text-[10px] font-extrabold ${badgeCls}`}
+                            >
+                              {code || '—'}
+                            </span>
+                          </td>
+                        );
+                      }
+
                       return (
                         <td key={sh.key} className="px-2 py-2 font-mono text-zinc-600 dark:text-zinc-400">
                           {subRes.total}

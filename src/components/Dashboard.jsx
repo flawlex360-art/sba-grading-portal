@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
+import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
 
 export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYearlyData, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
   const [formData, setFormData] = useState({ ...metadata });
@@ -40,19 +41,32 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
   };
 
   // Calculate statistics
+  const schoolLevel = resolveSchoolLevel(metadata?.classLevel, metadata?.level);
+  const isKgMode = schoolLevel === SCHOOL_LEVELS.KG || computedResults.some((s) => s?.isKgResult);
   const totalStudents = students.length;
-  const maxScore = (teacherSubjects?.length || 10) * 100;
-  
-  const classAverage = totalStudents > 0 
-    ? (computedResults.reduce((acc, s) => acc + s.overallTotal, 0) / totalStudents).toFixed(2)
-    : 0;
+  const subjectCount = teacherSubjects?.length || (isKgMode ? 4 : 10);
+  const maxScore = subjectCount * 100;
 
-  const subjectCount = teacherSubjects?.length || 10;
+  const assessedKgStudents = isKgMode
+    ? computedResults.filter((s) => (s.assessedCount || 0) > 0 && typeof s.readinessScore === 'number')
+    : [];
 
-  const passingStudents = computedResults.filter(s => {
-    const avg = s.overallTotal / subjectCount;
-    return avg >= 40; 
-  }).length;
+  const classAverage = isKgMode
+    ? (assessedKgStudents.length > 0
+        ? (assessedKgStudents.reduce((acc, s) => acc + s.readinessScore, 0) / assessedKgStudents.length).toFixed(1)
+        : 0)
+    : (totalStudents > 0
+        ? (computedResults.reduce((acc, s) => acc + (s.overallTotal || 0), 0) / totalStudents).toFixed(2)
+        : 0);
+
+  const passingStudents = isKgMode
+    ? computedResults.filter(
+        (s) => (s.masteryCounts?.IND || 0) + (s.masteryCounts?.DEV || 0) > 0 && (s.masteryCounts?.NYS || 0) === 0
+      ).length
+    : computedResults.filter((s) => {
+        const avg = (s.overallTotal || 0) / subjectCount;
+        return avg >= 40;
+      }).length;
 
   const passRate = totalStudents > 0
     ? ((passingStudents / totalStudents) * 100).toFixed(1)
@@ -96,11 +110,23 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
             <Award className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Class Average Total</div>
-            <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {classAverage} <span className="text-xs font-normal text-zinc-400">/ {maxScore}</span>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+              {isKgMode ? 'Mean Mastery Index' : 'Class Average Total'}
             </div>
-            <div className="text-xs text-zinc-400">Avg. per subject: {totalStudents > 0 ? (classAverage / subjectCount).toFixed(1) : 0}%</div>
+            <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+              {isKgMode ? (
+                <>{classAverage}%</>
+              ) : (
+                <>
+                  {classAverage} <span className="text-xs font-normal text-zinc-400">/ {maxScore}</span>
+                </>
+              )}
+            </div>
+            <div className="text-xs text-zinc-400">
+              {isKgMode
+                ? `${subjectCount} Core Learning Areas`
+                : `Avg. per subject: ${totalStudents > 0 ? (classAverage / subjectCount).toFixed(1) : 0}%`}
+            </div>
           </div>
         </div>
 
@@ -109,11 +135,15 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
             <Percent className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Pass Rate</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+              {isKgMode ? 'On-Track Learners' : 'Pass Rate'}
+            </div>
             <div className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
               {passRate}%
             </div>
-            <div className="text-xs text-zinc-400">Scoring D (40%) or above</div>
+            <div className="text-xs text-zinc-400">
+              {isKgMode ? 'Developing / Independent overall' : 'Scoring D (40%) or above'}
+            </div>
           </div>
         </div>
       </div>

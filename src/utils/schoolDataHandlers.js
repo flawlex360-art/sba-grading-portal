@@ -7,7 +7,14 @@ import {
   FieldPath,
   Timestamp,
 } from 'firebase/firestore';
-import { isJhsClass } from './calculations.js';
+import {
+  SCHOOL_LEVELS,
+  KG_LEARNING_AREAS,
+  DEFAULT_KG_SUBJECT_MAP,
+  DEFAULT_PRIMARY_SUBJECT_MAP,
+  DEFAULT_JHS_SUBJECT_MAP,
+  resolveSchoolLevel,
+} from '../constants/curriculum.js';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './mnotifyHelpers.js';
 import { normalizeStudentName } from './rosterHelpers.js';
 import {
@@ -18,28 +25,12 @@ import {
   partitionExpiredReportLinks,
 } from './parentReportHelpers.js';
 
-export const DEFAULT_JHS_SUBJECT_MAP = {
-  'English Language': 'ENG. LANG.',
-  Mathematics: 'MATHS',
-  Science: 'SCIENCE',
-  'Career Technology': 'C. TECH',
-  'Social Studies': 'SOCIAL',
-  Computing: 'COMPUTING',
-  'Religious and Moral Education': 'RME',
-  'Ghanaian Language': 'GH. LANG.',
-  'Creative Arts & Design': 'C. ARTS',
-};
-
-export const DEFAULT_PRIMARY_SUBJECT_MAP = {
-  'English Language': 'ENG. LANG.',
-  Mathematics: 'MATHS',
-  Science: 'SCIENCE',
-  History: 'HISTORYY',
-  'Our World Our People': 'OWOP',
-  Computing: 'COMPUTING',
-  'Religious and Moral Education': 'RME',
-  'Ghanaian Language': 'GH. LANG.',
-  'Creative Arts': 'C. ARTS',
+export {
+  SCHOOL_LEVELS,
+  DEFAULT_KG_SUBJECT_MAP,
+  DEFAULT_PRIMARY_SUBJECT_MAP,
+  DEFAULT_JHS_SUBJECT_MAP,
+  resolveSchoolLevel,
 };
 
 /**
@@ -70,6 +61,7 @@ export function normalizeGatewayConfig(rawConfig) {
  * @returns {{ subjectMap: object, subjectsList: string[], teacherSubjects: Array<{name: string, key: string}> }}
  */
 export function buildTeacherSubjectInfo(teacherProfile) {
+  const resolvedLevel = resolveSchoolLevel(teacherProfile?.assignedClass, teacherProfile?.level);
   const subjects = teacherProfile?.subjects;
   if (Array.isArray(subjects) && subjects.length > 0) {
     const subjectMap = {};
@@ -77,17 +69,24 @@ export function buildTeacherSubjectInfo(teacherProfile) {
       subjectMap[sub.name] = sub.key;
     });
     return {
+      level: resolvedLevel,
       subjectMap,
       subjectsList: subjects.map((s) => s.name),
       teacherSubjects: subjects,
     };
   }
 
-  const fallback = isJhsClass(teacherProfile?.assignedClass)
-    ? { ...DEFAULT_JHS_SUBJECT_MAP }
-    : { ...DEFAULT_PRIMARY_SUBJECT_MAP };
+  let fallback;
+  if (resolvedLevel === SCHOOL_LEVELS.KG) {
+    fallback = { ...DEFAULT_KG_SUBJECT_MAP };
+  } else if (resolvedLevel === SCHOOL_LEVELS.JHS) {
+    fallback = { ...DEFAULT_JHS_SUBJECT_MAP };
+  } else {
+    fallback = { ...DEFAULT_PRIMARY_SUBJECT_MAP };
+  }
 
   return {
+    level: resolvedLevel,
     subjectMap: fallback,
     subjectsList: Object.keys(fallback),
     teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })),
@@ -103,12 +102,14 @@ export function buildClassTermMetadata({ classData, selectedTeacher, institution
   const baseMeta =
     classData?.metadata && typeof classData.metadata === 'object' ? classData.metadata : {};
   const academicYear = baseMeta.academicYear || baseMeta.year || institution?.academicYear || '';
+  const classLevel = baseMeta.classLevel || selectedTeacher?.assignedClass || '';
   return {
     ...baseMeta,
     schoolName: institution?.schoolName || baseMeta.schoolName || '',
     academicYear,
     year: baseMeta.year || academicYear,
-    classLevel: baseMeta.classLevel || selectedTeacher?.assignedClass || '',
+    classLevel,
+    level: resolveSchoolLevel(classLevel, selectedTeacher?.level || baseMeta.level),
     term: selectedTerm || baseMeta.term || 'Term 1',
   };
 }

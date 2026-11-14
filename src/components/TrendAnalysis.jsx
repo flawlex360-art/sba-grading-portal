@@ -2,6 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, BookOpen, Users, User } from 'lucide-react';
 import { computeClassResults } from '../utils/calculations';
+import {
+  SCHOOL_LEVELS,
+  DEFAULT_KG_SUBJECT_MAP,
+  DEFAULT_PRIMARY_SUBJECT_MAP,
+  DEFAULT_JHS_SUBJECT_MAP,
+  resolveSchoolLevel,
+} from '../constants/curriculum';
 
 export default function TrendAnalysis({
   termData,
@@ -47,6 +54,9 @@ export default function TrendAnalysis({
     return Object.keys(termData || {}).sort();
   }, [termData]);
 
+  const schoolLevel = resolveSchoolLevel(metadata?.classLevel, metadata?.level);
+  const isKgMode = schoolLevel === SCHOOL_LEVELS.KG;
+
   // Compute results for ALL terms
   const historicalResults = useMemo(() => {
     const results = {};
@@ -67,17 +77,23 @@ export default function TrendAnalysis({
           subjectsList.push(sub.name);
         });
       } else {
-        subjectMap = metadata?.classLevel?.startsWith('BS. 7') || metadata?.classLevel?.startsWith('BS. 8') || metadata?.classLevel?.startsWith('BS. 9')
-          ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
-          : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
+        subjectMap =
+          schoolLevel === SCHOOL_LEVELS.KG
+            ? DEFAULT_KG_SUBJECT_MAP
+            : schoolLevel === SCHOOL_LEVELS.JHS
+              ? DEFAULT_JHS_SUBJECT_MAP
+              : DEFAULT_PRIMARY_SUBJECT_MAP;
         subjectsList = Object.keys(subjectMap);
       }
 
-      const computed = computeClassResults(termStudents, termGrades, subjectsList, subjectMap);
+      const computed = computeClassResults(termStudents, termGrades, subjectsList, subjectMap, {
+        level: schoolLevel,
+        classLevel: metadata?.classLevel || '',
+      });
       results[term] = computed;
     });
     return results;
-  }, [termData, terms, metadata, teacherSubjects]);
+  }, [termData, terms, metadata, teacherSubjects, schoolLevel]);
 
   // All available subject names across terms / teacherSubjects
   const allSubjectNames = useMemo(() => {
@@ -128,20 +144,25 @@ export default function TrendAnalysis({
 
       let averageScore = 0;
       if (selectedStudent === 'class') {
+        let validStudents = 0;
         const sumAcrossStudents = resultsForTerm.reduce((acc, studentRes) => {
-          const studentSubSum = targetSubjects.reduce((sAcc, subName) => {
-            return sAcc + (studentRes.subjects?.[subName]?.total || 0);
-          }, 0);
-          return acc + studentSubSum / subCount;
+          const vals = targetSubjects
+            .map(subName => studentRes.subjects?.[subName]?.total)
+            .filter(v => typeof v === 'number');
+          if (vals.length === 0) return acc;
+          validStudents += 1;
+          const denom = isKgMode ? vals.length : subCount;
+          return acc + vals.reduce((a, b) => a + b, 0) / denom;
         }, 0);
-        averageScore = sumAcrossStudents / resultsForTerm.length;
+        averageScore = validStudents > 0 ? sumAcrossStudents / validStudents : 0;
       } else {
         const studentResult = resultsForTerm.find(s => (s.sn || s.id || '').toString() === selectedStudent);
         if (studentResult) {
-          const studentSubSum = targetSubjects.reduce((sAcc, subName) => {
-            return sAcc + (studentResult.subjects?.[subName]?.total || 0);
-          }, 0);
-          averageScore = studentSubSum / subCount;
+          const vals = targetSubjects
+            .map(subName => studentResult.subjects?.[subName]?.total)
+            .filter(v => typeof v === 'number');
+          const denom = isKgMode ? (vals.length || 1) : subCount;
+          averageScore = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / denom : 0;
         }
       }
 
@@ -167,14 +188,19 @@ export default function TrendAnalysis({
         }
 
         if (selectedStudent === 'class') {
+          let assessedCount = 0;
           const totalSub = results.reduce((sum, s) => {
             const sData = s.subjects?.[sub];
-            return sum + (sData ? sData.total : 0);
+            if (sData && typeof sData.total === 'number') {
+              assessedCount += 1;
+              return sum + sData.total;
+            }
+            return sum;
           }, 0);
-          value = totalSub / results.length;
+          value = assessedCount > 0 ? totalSub / assessedCount : 0;
         } else {
           const studentResult = results.find(s => (s.sn || s.id || '').toString() === selectedStudent);
-          if (studentResult && studentResult.subjects?.[sub]) {
+          if (studentResult && studentResult.subjects?.[sub] && typeof studentResult.subjects[sub].total === 'number') {
             value = studentResult.subjects[sub].total;
           }
         }

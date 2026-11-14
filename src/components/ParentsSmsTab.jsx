@@ -42,6 +42,7 @@ import {
   PARENT_REPORT_TTL_DAYS,
   buildParentReportUrl,
 } from '../utils/parentReportHelpers';
+import { SCHOOL_LEVELS, resolveSchoolLevel } from '../constants/curriculum';
 
 const QUICK_TOKEN_CHIPS = [
   '{parent_name}',
@@ -58,6 +59,21 @@ const QUICK_TOKEN_CHIPS = [
   '{school_name}',
 ];
 
+const KG_QUICK_TOKEN_CHIPS = [
+  '{parent_name}',
+  '{student_name}',
+  '{readiness_status}',
+  '{lit_rating}',
+  '{num_rating}',
+  '{owop_rating}',
+  '{creativity_rating}',
+  '{report_link}',
+  '{attendance}',
+  '{remark}',
+  '{reopening_date}',
+  '{school_name}',
+];
+
 function findSubjectScore(subjectsObj, keywords = []) {
   if (!subjectsObj || typeof subjectsObj !== 'object') return undefined;
   const entry = Object.entries(subjectsObj).find(([subName]) => {
@@ -67,6 +83,17 @@ function findSubjectScore(subjectsObj, keywords = []) {
   if (!entry || entry[1] === undefined || entry[1] === null) return undefined;
   const total = Number(entry[1].total);
   return Number.isFinite(total) ? Math.round(total * 10) / 10 : undefined;
+}
+
+function findKgAreaRating(subjectsObj, keywords = []) {
+  if (!subjectsObj || typeof subjectsObj !== 'object') return undefined;
+  const entry = Object.entries(subjectsObj).find(([subName]) => {
+    const lower = String(subName || '').toLowerCase();
+    return keywords.some((kw) => lower.includes(kw));
+  });
+  const val = entry?.[1];
+  if (!val || typeof val !== 'object') return undefined;
+  return val.rating || (val.grade && val.grade !== '-' ? val.grade : undefined);
 }
 
 /**
@@ -118,8 +145,40 @@ export default function ParentsSmsTab({
   const [pasteFillMode, setPasteFillMode] = useState('missing'); // 'missing' | 'all'
 
   // --- SMS Composer & Gateway State ---
-  const [selectedTemplateId, setSelectedTemplateId] = useState(SBA_SMS_TEMPLATES[0].id);
-  const [messageBody, setMessageBody] = useState(SBA_SMS_TEMPLATES[0].body);
+  const isKgMode =
+    resolveSchoolLevel(metadata?.classLevel, metadata?.level) === SCHOOL_LEVELS.KG ||
+    (computedResults || []).some((r) => Boolean(r?.isKgResult));
+
+  const visibleTemplates = useMemo(
+    () =>
+      SBA_SMS_TEMPLATES.filter((t) =>
+        isKgMode ? t.level !== 'SBA' : t.level !== 'KG'
+      ),
+    [isKgMode]
+  );
+
+  const visibleTokenChips = isKgMode ? KG_QUICK_TOKEN_CHIPS : QUICK_TOKEN_CHIPS;
+
+  const initialDefaultTemplate =
+    SBA_SMS_TEMPLATES.find((t) => t.id === (isKgMode ? 'kg_term_report' : 'term_report')) ||
+    SBA_SMS_TEMPLATES[0];
+
+  const [selectedTemplateId, setSelectedTemplateId] = useState(initialDefaultTemplate.id);
+  const [messageBody, setMessageBody] = useState(initialDefaultTemplate.body);
+  const prevIsKgModeRef = useRef(isKgMode);
+
+  useEffect(() => {
+    if (prevIsKgModeRef.current !== isKgMode) {
+      prevIsKgModeRef.current = isKgMode;
+      const nextDefault =
+        SBA_SMS_TEMPLATES.find((t) => t.id === (isKgMode ? 'kg_term_report' : 'term_report')) ||
+        SBA_SMS_TEMPLATES[0];
+      if (nextDefault) {
+        setSelectedTemplateId(nextDefault.id);
+        setMessageBody(nextDefault.body);
+      }
+    }
+  }, [isKgMode]);
   const [recipientMode, setRecipientMode] = useState('all'); // 'all' | 'selected'
   const [selectedSns, setSelectedSns] = useState(() =>
     students.filter((s) => isValidGhanaPhone(s.parentPhone)).map((s) => s.sn)
@@ -379,18 +438,29 @@ export default function ParentsSmsTab({
         const parentPhone = draft.parentPhone !== undefined ? draft.parentPhone : s.parentPhone || '';
         const res = resultBySn.get(s.sn);
         const subjectsObj = res?.subjects || {};
+        const isKgRes = Boolean(res?.isKgResult) || isKgMode;
         const subjectCount = Math.max(1, Object.keys(subjectsObj).length || fallbackSubjectCount);
-        const overallTotal = res ? Number(res.overallTotal || 0) : 0;
-        const averageScore = res ? Math.round((overallTotal / subjectCount) * 10) / 10 : 0;
+        const overallTotal = res && !isKgRes ? Number(res.overallTotal || 0) : 0;
+        const averageScore = res && !isKgRes ? Math.round((overallTotal / subjectCount) * 10) / 10 : 0;
 
         return {
           ...s,
           parentName,
           parentPhone,
           hasValidPhone: isValidGhanaPhone(parentPhone),
-          overallTotal: res ? overallTotal : undefined,
-          averageScore: res ? averageScore : undefined,
-          overallRank: res?.overallRank || '-',
+          isKgResult: isKgRes,
+          readinessStatus: res?.readinessStatus || (isKgRes ? 'Pending Observation' : undefined),
+          readinessScore: isKgRes ? res?.readinessScore : undefined,
+          masteryCounts: isKgRes ? res?.masteryCounts || {} : undefined,
+          litRating: isKgRes ? findKgAreaRating(subjectsObj, ['literacy', 'lang']) || '-' : undefined,
+          numRating: isKgRes ? findKgAreaRating(subjectsObj, ['numeracy', 'num']) || '-' : undefined,
+          owopRating: isKgRes ? findKgAreaRating(subjectsObj, ['world', 'owop']) || '-' : undefined,
+          creativityRating: isKgRes
+            ? findKgAreaRating(subjectsObj, ['creativity', 'creative']) || '-'
+            : undefined,
+          overallTotal: res && !isKgRes ? overallTotal : undefined,
+          averageScore: res && !isKgRes ? averageScore : undefined,
+          overallRank: isKgRes ? '—' : res?.overallRank || '-',
           classSize: computedResults?.length || students?.length || 0,
           subjects: subjectsObj,
           mathsScore: findSubjectScore(subjectsObj, ['math']),
@@ -398,7 +468,7 @@ export default function ParentsSmsTab({
           englishScore: findSubjectScore(subjectsObj, ['english']),
         };
       });
-  }, [students, draftContacts, computedResults, teacherSubjects]);
+  }, [students, draftContacts, computedResults, teacherSubjects, isKgMode]);
 
   const onboardStats = useMemo(() => {
     const total = enrichedLearners.length;
@@ -581,7 +651,19 @@ export default function ParentsSmsTab({
       return;
     }
     let matched = [];
-    if (group === 'top') {
+    if (group === 'kg_ontrack') {
+      matched = eligibleRecipients.filter((r) =>
+        ['Consistently Ready', 'Progressing Steadily'].includes(r.readinessStatus)
+      );
+    } else if (group === 'kg_support') {
+      matched = eligibleRecipients.filter((r) =>
+        ['Needs Guided Support', 'Emerging / Guided Practice'].includes(r.readinessStatus)
+      );
+    } else if (group === 'kg_consistent') {
+      matched = eligibleRecipients.filter(
+        (r) => r.readinessStatus === 'Consistently Ready' || (r.masteryCounts?.IND || 0) >= 2
+      );
+    } else if (group === 'top') {
       matched = eligibleRecipients.filter((r) => (r.averageScore ?? 0) >= 70);
     } else if (group === 'support') {
       matched = eligibleRecipients.filter((r) => r.averageScore !== undefined && r.averageScore < 50);
@@ -592,9 +674,13 @@ export default function ParentsSmsTab({
           (r.scienceScore !== undefined && r.scienceScore < 50)
       );
     } else if (group === 'boys') {
-      matched = eligibleRecipients.filter((r) => String(r.gender || '').toUpperCase() === 'M');
+      matched = eligibleRecipients.filter((r) =>
+        ['M', 'MALE', 'BOY'].includes(String(r.gender || '').trim().toUpperCase())
+      );
     } else if (group === 'girls') {
-      matched = eligibleRecipients.filter((r) => String(r.gender || '').toUpperCase() === 'F');
+      matched = eligibleRecipients.filter((r) =>
+        ['F', 'FEMALE', 'GIRL'].includes(String(r.gender || '').trim().toUpperCase())
+      );
     }
 
     setSelectedSns(matched.map((r) => r.sn));
@@ -655,6 +741,11 @@ export default function ParentsSmsTab({
       ptaDate: metadata?.ptaDate,
       reportLink: buildParentReportUrl('k8x2m9pqab'),
       schoolName: metadata?.schoolName,
+      litRating: previewStudent.litRating,
+      numRating: previewStudent.numRating,
+      owopRating: previewStudent.owopRating,
+      creativityRating: previewStudent.creativityRating,
+      readinessStatus: previewStudent.readinessStatus,
     });
   }, [messageBody, previewStudent, metadata, viewingTerm]);
 
@@ -1364,7 +1455,7 @@ export default function ParentsSmsTab({
                     2. Message Template
                   </label>
                   <div className="grid sm:grid-cols-2 gap-2">
-                    {SBA_SMS_TEMPLATES.map((tpl) => (
+                    {visibleTemplates.map((tpl) => (
                       <button
                         key={tpl.id}
                         type="button"
@@ -1405,7 +1496,7 @@ export default function ParentsSmsTab({
                     className="w-full p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#09090b] text-base sm:text-xs leading-relaxed text-zinc-900 dark:text-zinc-100 outline-none focus:bg-white dark:focus:bg-[#09090b] focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
                   />
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {QUICK_TOKEN_CHIPS.map((token) => (
+                    {visibleTokenChips.map((token) => (
                       <button
                         key={token}
                         type="button"
@@ -1585,27 +1676,55 @@ export default function ParentsSmsTab({
 
                 {/* Minimal Group Filter Chips */}
                 <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-                  <button
-                    type="button"
-                    onClick={() => selectSmsGroup('top')}
-                    className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
-                  >
-                    Avg ≥ 70%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectSmsGroup('support')}
-                    className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
-                  >
-                    Avg &lt; 50%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectSmsGroup('stem')}
-                    className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
-                  >
-                    Maths/Sci &lt; 50%
-                  </button>
+                  {isKgMode ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('kg_ontrack')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        On-Track (IND/DEV)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('kg_consistent')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        Consistent (IND)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('kg_support')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        Needs Support
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('top')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        Avg ≥ 70%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('support')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        Avg &lt; 50%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectSmsGroup('stem')}
+                        className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 touch-manipulation"
+                      >
+                        Maths/Sci &lt; 50%
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => selectSmsGroup('boys')}
@@ -1661,7 +1780,9 @@ export default function ParentsSmsTab({
                             </div>
                             <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                               {formatSmsName(r.name)}
-                              {r.averageScore !== undefined
+                              {r.isKgResult
+                                ? ` · ${r.readinessStatus || 'Pending Observation'}`
+                                : r.averageScore !== undefined
                                 ? ` · Avg ${r.averageScore}% (${r.overallRank})`
                                 : ''}
                             </div>

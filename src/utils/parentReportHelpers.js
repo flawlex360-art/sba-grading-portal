@@ -1,3 +1,12 @@
+import {
+  SCHOOL_LEVELS,
+  KG_SOCIAL_HABITS,
+  getKgProficiencyMeta,
+  normalizeKgRatingCode,
+  resolveSchoolLevel,
+} from '../constants/curriculum.js';
+import { calculateAgeFromDob } from './rosterHelpers.js';
+
 export const PARENT_REPORT_TTL_DAYS = 30;
 export const PARENT_REPORT_TTL_MS = PARENT_REPORT_TTL_DAYS * 24 * 60 * 60 * 1000;
 export const PARENT_REPORT_DOC_PREFIX = 'pr_';
@@ -101,16 +110,62 @@ function normalizeSubjectEntries(subjectsObj) {
   if (!subjectsObj || typeof subjectsObj !== 'object') return [];
   return Object.entries(subjectsObj)
     .filter(([, details]) => details && typeof details === 'object')
-    .map(([subjectName, details]) => ({
-      name: String(subjectName || '').trim(),
-      scaledSba: roundScore(details.scaledSba),
-      scaledExam: roundScore(details.scaledExam),
-      total: roundScore(details.total),
-      grade: details.grade !== undefined && details.grade !== null ? String(details.grade) : '-',
-      remark: String(details.remark || '').trim(),
-      rank: details.rank !== undefined && details.rank !== null ? String(details.rank) : '-',
-    }))
-    .filter((entry) => entry.name.length > 0 && (entry.total !== null || entry.scaledSba !== null || entry.scaledExam !== null));
+    .map(([subjectName, details]) => {
+      const mode = details.mode === 'kg' ? 'kg' : 'sba';
+      const rating = mode === 'kg' ? normalizeKgRatingCode(details.rating || details.grade) : '';
+      const meta = mode === 'kg' ? getKgProficiencyMeta(rating) : null;
+      return {
+        name: String(subjectName || '').trim(),
+        mode,
+        rating,
+        label: mode === 'kg' ? String(details.label || meta?.label || '').trim() : '',
+        note: String(details.note || '').trim(),
+        indicatorCount: Number(details.indicatorCount || 0) || 0,
+        indMasteredCount: Number(details.indMasteredCount || 0) || 0,
+        scaledSba: mode === 'kg' ? null : roundScore(details.scaledSba),
+        scaledExam: mode === 'kg' ? null : roundScore(details.scaledExam),
+        total: mode === 'kg' ? null : roundScore(details.total),
+        grade:
+          mode === 'kg'
+            ? rating || '-'
+            : details.grade !== undefined && details.grade !== null
+            ? String(details.grade)
+            : '-',
+        remark:
+          mode === 'kg'
+            ? String(details.note || meta?.label || '').trim()
+            : String(details.remark || '').trim(),
+        rank:
+          mode === 'kg'
+            ? '—'
+            : details.rank !== undefined && details.rank !== null
+            ? String(details.rank)
+            : '-',
+      };
+    })
+    .filter(
+      (entry) =>
+        entry.name.length > 0 &&
+        (entry.mode === 'kg' ||
+          entry.total !== null ||
+          entry.scaledSba !== null ||
+          entry.scaledExam !== null)
+    );
+}
+
+function normalizeSocialHabitsSnapshot(rawHabits) {
+  if (!rawHabits || typeof rawHabits !== 'object') return [];
+  return KG_SOCIAL_HABITS.map((habit) => {
+    const code = normalizeKgRatingCode(rawHabits[habit.id]);
+    if (!code) return null;
+    const meta = getKgProficiencyMeta(code);
+    return {
+      id: habit.id,
+      label: habit.label,
+      rating: code,
+      ratingLabel: meta.label,
+    };
+  }).filter(Boolean);
 }
 
 /**
@@ -139,21 +194,33 @@ export function buildParentReportSnapshot({
     institution?.schoolCrestUrl || metadata?.schoolCrestUrl || ''
   ).trim();
   const resolvedTerm = String(viewingTerm || metadata?.term || 'Term 1').trim() || 'Term 1';
+  const className = String(
+    metadata?.classLevel || metadata?.className || learner?.className || ''
+  ).trim();
   const subjects = normalizeSubjectEntries(learner?.subjects);
+  const isKgMode =
+    resolveSchoolLevel(className, metadata?.level) === SCHOOL_LEVELS.KG ||
+    Boolean(learner?.isKgResult) ||
+    subjects.some((s) => s.mode === 'kg');
+  const learnerAge = calculateAgeFromDob(learner?.dob, new Date(issuedMs));
 
   const avgRaw = learner?.averageScore ?? learner?.average;
   const avgNum =
-    avgRaw !== null && avgRaw !== undefined && avgRaw !== ''
+    !isKgMode && avgRaw !== null && avgRaw !== undefined && avgRaw !== ''
       ? roundScore(avgRaw)
       : null;
   const totalNum =
-    learner?.overallTotal !== null && learner?.overallTotal !== undefined && learner?.overallTotal !== ''
+    !isKgMode &&
+    learner?.overallTotal !== null &&
+    learner?.overallTotal !== undefined &&
+    learner?.overallTotal !== ''
       ? roundScore(learner.overallTotal)
       : null;
 
   return {
     isParentReportSnapshot: true,
     version: 1,
+    assessmentMode: isKgMode ? 'kg' : 'sba',
     token: cleanToken,
     createdAt: new Date(issuedMs).toISOString(),
     expiresAt: new Date(expiresAtMs).toISOString(),
@@ -163,7 +230,7 @@ export function buildParentReportSnapshot({
     schoolId: String(institution?.id || metadata?.institutionId || '').trim(),
     schoolName,
     schoolCrestUrl,
-    className: String(metadata?.classLevel || metadata?.className || learner?.className || '').trim(),
+    className,
     academicYear: String(metadata?.academicYear || '').trim(),
     term: resolvedTerm,
     timesOpen: metadata?.timesOpen !== undefined && metadata?.timesOpen !== null && metadata?.timesOpen !== ''
@@ -173,11 +240,18 @@ export function buildParentReportSnapshot({
     classSize: Number(learner?.classSize || 0) || null,
     studentSn: learner?.sn ?? null,
     studentName: String(learner?.name || 'Learner').trim() || 'Learner',
+    learnerAge,
     gender: String(learner?.gender || '').trim(),
     parentName: String(learner?.parentName || 'Parent/Guardian').trim() || 'Parent/Guardian',
-    overallTotal: totalNum,
-    average: avgNum,
-    overallRank: String(learner?.overallRank || learner?.position || '-').trim() || '-',
+    readinessStatus: isKgMode
+      ? String(learner?.readinessStatus || 'Pending Observation').trim()
+      : '',
+    socialHabits: isKgMode ? normalizeSocialHabitsSnapshot(learner?.socialHabits) : [],
+    overallTotal: isKgMode ? null : totalNum,
+    average: isKgMode ? null : avgNum,
+    overallRank: isKgMode
+      ? '—'
+      : String(learner?.overallRank || learner?.position || '-').trim() || '-',
     attendance: learner?.attendance !== undefined && learner?.attendance !== null ? String(learner.attendance) : '',
     conduct: String(learner?.conduct || '').trim(),
     interest: String(learner?.interest || '').trim(),

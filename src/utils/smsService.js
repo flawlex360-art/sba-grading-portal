@@ -24,7 +24,20 @@ export const SBA_SMS_TEMPLATES = [
   {
     id: 'term_report',
     label: 'End-of-Term Report Alert',
+    level: 'SBA',
     body: "Dear {parent_name}, {student_name} {term} ({class}): Score {total_score}, Avg {average}%, Pos {position}. Report: {report_link} - {school_name}",
+  },
+  {
+    id: 'kg_term_report',
+    label: 'Kindergarten Progress Alert',
+    level: 'KG',
+    body: "Dear {parent_name}, {student_name} {term} ({class}): {readiness_status} | Lit:{lit_rating}, Num:{num_rating}, OWOP:{owop_rating}, Creativity:{creativity_rating}. Report: {report_link} - {school_name}",
+  },
+  {
+    id: 'kg_learning_notice',
+    label: 'KG Developmental Support Notice',
+    level: 'KG',
+    body: "Dear {parent_name}, {student_name} ({class}) {term} update: Lit {lit_rating}, Num {num_rating}, OWOP {owop_rating}, Creativity {creativity_rating}. Kindly support playful practice at home. - {school_name}",
   },
   {
     id: 'pta_reminder',
@@ -34,6 +47,7 @@ export const SBA_SMS_TEMPLATES = [
   {
     id: 'stem_focus',
     label: 'Maths & Science Focus Alert',
+    level: 'SBA',
     body: 'Dear {parent_name}, {student_name} ({class}) scored Maths: {maths_score}% and Science: {science_score}% in {term}. Kindly supervise daily home study and revision. - {school_name}',
   },
   {
@@ -211,6 +225,11 @@ export function interpolateSmsTemplate(template, context = {}) {
     '{pta_date}': formatSmsDateDisplay(context.ptaDate),
     '{report_link}': String(context.reportLink || '').trim() || 'Link generated on send',
     '{school_name}': String(context.schoolName || 'Our School').trim() || 'Our School',
+    '{lit_rating}': cleanScore(context.litRating),
+    '{num_rating}': cleanScore(context.numRating),
+    '{owop_rating}': cleanScore(context.owopRating),
+    '{creativity_rating}': cleanScore(context.creativityRating),
+    '{readiness_status}': String(context.readinessStatus || '-').trim() || '-',
   };
 
   let output = template;
@@ -384,6 +403,11 @@ export async function dispatchParentSmsBatch({
       ptaDate: metadata?.ptaDate,
       reportLink: rec.reportLink,
       schoolName: metadata?.schoolName,
+      litRating: rec.litRating,
+      numRating: rec.numRating,
+      owopRating: rec.owopRating,
+      creativityRating: rec.creativityRating,
+      readinessStatus: rec.readinessStatus,
     });
 
     return {

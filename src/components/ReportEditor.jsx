@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Printer, User, Search, ChevronRight, FileCheck, Check } from 'lucide-react';
 import ReportCard from './ReportCard';
-import { computeCumulativePromotion, generateParentAdvisory } from '../utils/calculations';
+import { computeCumulativePromotion, generateParentAdvisory, generateKgParentAdvisory } from '../utils/calculations';
+import {
+  SCHOOL_LEVELS,
+  KG_PROFICIENCY_SCALE,
+  KG_SOCIAL_HABITS,
+  getDefaultSubjectsListForLevel,
+  resolveSchoolLevel,
+} from '../constants/curriculum';
+import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from '../constants/dropList';
 
 export default function ReportEditor({ 
   students, 
@@ -18,6 +26,9 @@ export default function ReportEditor({
   institution,
   termData
 }) {
+  const schoolLevel = resolveSchoolLevel(metadata?.classLevel, metadata?.level);
+  const isKgMode = schoolLevel === SCHOOL_LEVELS.KG || computedResults.some((r) => r?.isKgResult);
+
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -28,10 +39,32 @@ export default function ReportEditor({
   const [remarks, setRemarks] = useState('');
   const [promotedTo, setPromotedTo] = useState('');
   const [parentAdvisoryNote, setParentAdvisoryNote] = useState('');
+  const [socialHabits, setSocialHabits] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Compute cumulative promotion map when viewing Term 3
+  const buildDefaultAdvisory = (stu) => {
+    if (!stu) return '';
+    const studentResult = computedResults.find(r => r.sn === stu.sn);
+    if (isKgMode) {
+      const litRating =
+        studentResult?.subjects?.['Language & Literacy']?.rating ||
+        Object.values(studentResult?.subjects || {})[0]?.rating ||
+        '';
+      const numRating =
+        studentResult?.subjects?.['Numeracy']?.rating ||
+        Object.values(studentResult?.subjects || {})[1]?.rating ||
+        '';
+      return generateKgParentAdvisory(stu.name, litRating, numRating);
+    }
+    const mathScore = studentResult?.subjects?.['Mathematics']?.total ??
+                      studentResult?.subjects?.['Maths']?.total ?? 0;
+    const scienceScore = studentResult?.subjects?.['Science']?.total ??
+                         studentResult?.subjects?.['Integrated Science']?.total ?? 0;
+    return generateParentAdvisory(stu.name, mathScore, scienceScore);
+  };
+
+  // Compute cumulative promotion / readiness transition map when viewing Term 3
   const promotionMap = useMemo(() => {
     if (viewingTerm !== 'Term 3' || !termData) return {};
     let activeSubjects = [];
@@ -40,31 +73,21 @@ export default function ReportEditor({
       activeSubjects = teacherSubjects.map(s => s.name);
       subMap = teacherSubjects.reduce((acc, sub) => { acc[sub.name] = sub.key || sub.name; return acc; }, {});
     } else {
-      activeSubjects = ["English Language", "Mathematics", "Science", "Career Technology", "Social Studies", "Computing", "Religious and Moral Education", "Ghanaian Language", "Creative Arts & Design"];
-      const fallbackKeys = {
-        "English Language": "ENGLISH",
-        "Mathematics": "MATHS",
-        "Science": "SCIENCE",
-        "Career Technology": "CAREER_TECH",
-        "Social Studies": "SOCIAL_STUDIES",
-        "Computing": "COMPUTING",
-        "Religious and Moral Education": "RME",
-        "Ghanaian Language": "GHANAIAN_LANG",
-        "Creative Arts & Design": "CREATIVE_ARTS",
-        "French": "FRENCH",
-        "Arabic": "ARABIC"
-      };
-      subMap = activeSubjects.reduce((acc, name) => {
-        acc[name] = fallbackKeys[name] || name;
+      const defaults = getDefaultSubjectsListForLevel(schoolLevel);
+      activeSubjects = defaults.map(s => s.name);
+      subMap = defaults.reduce((acc, sub) => {
+        acc[sub.name] = sub.key;
         return acc;
       }, {});
     }
-    const list = computeCumulativePromotion(termData, students, activeSubjects, subMap, metadata.classLevel);
+    const list = computeCumulativePromotion(termData, students, activeSubjects, subMap, metadata.classLevel, {
+      level: schoolLevel,
+    });
     return list.reduce((acc, item) => {
       acc[item.sn] = item;
       return acc;
     }, {});
-  }, [termData, students, teacherSubjects, metadata.classLevel, viewingTerm]);
+  }, [termData, students, teacherSubjects, metadata.classLevel, viewingTerm, schoolLevel]);
 
   // Set first student as default if none selected or if students list changed to another class/term
   useEffect(() => {
@@ -100,13 +123,14 @@ export default function ReportEditor({
       setPromotedTo(student.promotedTo || '');
     }
 
+    setSocialHabits(
+      student.socialHabits && typeof student.socialHabits === 'object'
+        ? { ...student.socialHabits }
+        : {}
+    );
+
     // Auto-generate or load Parent Advisory Note
-    const studentResult = computedResults.find(r => r.sn === student.sn);
-    const mathScore = studentResult?.subjects?.['Mathematics']?.total ?? 
-                      studentResult?.subjects?.['Maths']?.total ?? 0;
-    const scienceScore = studentResult?.subjects?.['Science']?.total ?? 
-                         studentResult?.subjects?.['Integrated Science']?.total ?? 0;
-    const defaultAdvisory = generateParentAdvisory(student.name, mathScore, scienceScore);
+    const defaultAdvisory = buildDefaultAdvisory(student);
 
     if (student.parentAdvisoryNote !== undefined && student.parentAdvisoryNote !== '') {
       setParentAdvisoryNote(student.parentAdvisoryNote);
@@ -142,7 +166,10 @@ export default function ReportEditor({
       interest: updatedFields.hasOwnProperty('interest') ? updatedFields.interest : interest,
       remarks: updatedFields.hasOwnProperty('remarks') ? updatedFields.remarks : remarks,
       promotedTo: updatedFields.hasOwnProperty('promotedTo') ? updatedFields.promotedTo : promotedTo,
-      parentAdvisoryNote: updatedFields.hasOwnProperty('parentAdvisoryNote') ? updatedFields.parentAdvisoryNote : parentAdvisoryNote
+      parentAdvisoryNote: updatedFields.hasOwnProperty('parentAdvisoryNote') ? updatedFields.parentAdvisoryNote : parentAdvisoryNote,
+      ...(isKgMode || updatedFields.hasOwnProperty('socialHabits')
+        ? { socialHabits: updatedFields.hasOwnProperty('socialHabits') ? updatedFields.socialHabits : socialHabits }
+        : {}),
     };
     
     await onSave(updatedStudent);
@@ -196,8 +223,37 @@ export default function ReportEditor({
     interest,
     remarks: remarks,
     promotedTo,
-    parentAdvisoryNote
+    parentAdvisoryNote,
+    ...(isKgMode ? { socialHabits } : {}),
   } : null;
+
+  const effectiveConductList =
+    Array.isArray(dropLists?.conduct) && dropLists.conduct.length > 0
+      ? dropLists.conduct
+      : (isKgMode ? KG_CONDUCT : []);
+  const effectiveInterestList =
+    Array.isArray(dropLists?.interest) && dropLists.interest.length > 0
+      ? dropLists.interest
+      : (isKgMode ? KG_INTEREST : []);
+  const effectiveRemarksList =
+    Array.isArray(dropLists?.remarks) && dropLists.remarks.length > 0
+      ? dropLists.remarks
+      : (isKgMode ? KG_REMARKS : []);
+  const effectiveClassOptions =
+    Array.isArray(dropLists?.classes) && dropLists.classes.length > 0
+      ? dropLists.classes
+      : (isKgMode ? KG_CLASSES_DROPLIST : ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]);
+
+  const handleToggleSocialHabit = (habitId, code) => {
+    const nextHabits = { ...socialHabits };
+    if (nextHabits[habitId] === code) {
+      delete nextHabits[habitId];
+    } else {
+      nextHabits[habitId] = code;
+    }
+    setSocialHabits(nextHabits);
+    saveFormDirect({ socialHabits: nextHabits, attendance });
+  };
 
   return (
     <div className="space-y-6">
@@ -326,14 +382,18 @@ export default function ReportEditor({
                     {viewingTerm === 'Term 3' && (
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400">PROMOTED TO</label>
+                          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400">
+                            {isKgMode ? 'TRANSITION TO' : 'PROMOTED TO'}
+                          </label>
                           {promotionMap[selectedStudent?.sn] && (
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                               promotionMap[selectedStudent?.sn].passed 
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                             }`}>
-                              Auto: {promotionMap[selectedStudent?.sn].annualScore}%
+                              {isKgMode
+                                ? (promotionMap[selectedStudent?.sn].readinessStatus || 'Ready to Transition')
+                                : `Auto: ${promotionMap[selectedStudent?.sn].annualScore}%`}
                             </span>
                           )}
                         </div>
@@ -352,13 +412,56 @@ export default function ReportEditor({
                               ★ {promotionMap[selectedStudent?.sn].autoPromotedTo}
                             </option>
                           )}
-                          {(dropLists.classes || ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]).map((opt, idx) => (
+                          {effectiveClassOptions.map((opt, idx) => (
                             <option key={idx} value={opt}>{opt}</option>
                           ))}
                         </select>
                       </div>
                     )}
                   </div>
+
+                  {isKgMode && (
+                    <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                          Personal &amp; Social Habits Checklist
+                        </span>
+                        <span className="text-[9px] text-zinc-400">IND / DEV / EMG / NYS</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {KG_SOCIAL_HABITS.map((habit) => (
+                          <div
+                            key={habit.id}
+                            className="flex items-center justify-between gap-2 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/80 rounded-lg px-2.5 py-1.5"
+                          >
+                            <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-tight">
+                              {habit.label}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {KG_PROFICIENCY_SCALE.map((tier) => {
+                                const active = socialHabits?.[habit.id] === tier.code;
+                                return (
+                                  <button
+                                    key={tier.code}
+                                    type="button"
+                                    onClick={() => handleToggleSocialHabit(habit.id, tier.code)}
+                                    title={tier.label}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold border transition-colors ${
+                                      active
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-emerald-400'
+                                    }`}
+                                  >
+                                    {tier.code}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -373,7 +476,7 @@ export default function ReportEditor({
                         className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
                         <option value="">-- Select Conduct --</option>
-                        {(dropLists.conduct || []).map((opt, idx) => (
+                        {effectiveConductList.map((opt, idx) => (
                           <option key={idx} value={opt}>{opt}</option>
                         ))}
                       </select>
@@ -399,7 +502,7 @@ export default function ReportEditor({
                         className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
                         <option value="">-- Select Interest --</option>
-                        {(dropLists.interest || []).map((opt, idx) => (
+                        {effectiveInterestList.map((opt, idx) => (
                           <option key={idx} value={opt}>{opt}</option>
                         ))}
                       </select>
@@ -415,7 +518,9 @@ export default function ReportEditor({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">CLASS TEACHER'S REMARKS</label>
+                    <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 mb-1.5">
+                      {isKgMode ? "FACILITATOR'S REMARKS" : "CLASS TEACHER'S REMARKS"}
+                    </label>
                     <select
                       value={remarks}
                       onChange={(e) => {
@@ -426,7 +531,7 @@ export default function ReportEditor({
                       className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">-- Select Remarks --</option>
-                      {(dropLists.remarks || []).map((opt, idx) => (
+                      {effectiveRemarksList.map((opt, idx) => (
                         <option key={idx} value={opt}>{opt}</option>
                       ))}
                     </select>
@@ -443,17 +548,12 @@ export default function ReportEditor({
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-[10px] text-zinc-500 dark:text-zinc-400">
-                        PARENT ADVISORY NOTE (PAGE 2)
+                        {isKgMode ? 'EARLY LEARNING HOME ADVISORY (PAGE 2)' : 'PARENT ADVISORY NOTE (PAGE 2)'}
                       </label>
                       <button
                         type="button"
                         onClick={() => {
-                          const studentResult = computedResults.find(r => r.sn === selectedStudent?.sn);
-                          const mathScore = studentResult?.subjects?.['Mathematics']?.total ?? 
-                                            studentResult?.subjects?.['Maths']?.total ?? 0;
-                          const scienceScore = studentResult?.subjects?.['Science']?.total ?? 
-                                               studentResult?.subjects?.['Integrated Science']?.total ?? 0;
-                          const generated = generateParentAdvisory(selectedStudent?.name, mathScore, scienceScore);
+                          const generated = buildDefaultAdvisory(selectedStudent);
                           setParentAdvisoryNote(generated);
                           saveFormDirect({ parentAdvisoryNote: generated, attendance });
                         }}
@@ -467,11 +567,17 @@ export default function ReportEditor({
                       value={parentAdvisoryNote}
                       onChange={(e) => setParentAdvisoryNote(e.target.value)}
                       onBlur={(e) => saveFormDirect({ parentAdvisoryNote: e.target.value, attendance })}
-                      placeholder="Auto-generated parent advisory note for Maths and Science will appear here..."
+                      placeholder={
+                        isKgMode
+                          ? "Auto-generated early learning home play advice will appear here..."
+                          : "Auto-generated parent advisory note for Maths and Science will appear here..."
+                      }
                       className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans leading-relaxed"
                     />
                     <p className="text-[9px] text-zinc-400 mt-1">
-                      This note is automatically tailored to this learner's Mathematics and Science scores and prints on Page 2 of their report card.
+                      {isKgMode
+                        ? "This note is tailored to the learner's Language & Literacy and Numeracy progress and prints on Page 2."
+                        : "This note is automatically tailored to this learner's Mathematics and Science scores and prints on Page 2 of their report card."}
                     </p>
                   </div>
 

@@ -2,7 +2,7 @@ export const PROMOTION_THRESHOLD = 50; // percentage
 
 export const CLASS_PROGRESSION = {
   "KG 1": "KG 2",
-  "KG 2": "Basic 1",
+  "KG 2": "BS. 1",
   "Basic 1": "Basic 2",
   "Basic 2": "Basic 3",
   "Basic 3": "Basic 4",
@@ -59,6 +59,10 @@ export function isJhsClass(className = '') {
 export function resolveNextClass(classLevel = '') {
   const clean = String(classLevel).trim();
   if (CLASS_PROGRESSION[clean]) return CLASS_PROGRESSION[clean];
+  const kgMatch = clean.match(/^(?:KG\.?\s*|Kindergarten\s*)([12])$/i);
+  if (kgMatch) {
+    return kgMatch[1] === '1' ? 'KG 2' : 'BS. 1';
+  }
   const streamMatch = clean.match(/^(BS\.?\s*|Basic\s*)([1-9])\s*([A-Z])?$/i);
   if (streamMatch) {
     const prefix = streamMatch[1];

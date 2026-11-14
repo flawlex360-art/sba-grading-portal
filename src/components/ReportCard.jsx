@@ -1,5 +1,7 @@
 import React from 'react';
 import { getOrdinalSuffix, generateParentAdvisory } from '../utils/calculations';
+import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
+import KgReportCard from './KgReportCard';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
@@ -43,6 +45,26 @@ const DEFAULT_JHS_SUBJECTS = [
 export default function ReportCard({ student, metadata, calculatedScores, teacherSubjects, currentUser, viewingTerm, institution }) {
   if (!student) return null;
 
+  const matchedResult = Array.isArray(calculatedScores)
+    ? calculatedScores.find(s => s.sn === student.sn)
+    : null;
+  const isKgReport =
+    resolveSchoolLevel(metadata?.classLevel, metadata?.level) === SCHOOL_LEVELS.KG ||
+    Boolean(matchedResult?.isKgResult);
+
+  if (isKgReport) {
+    return (
+      <KgReportCard
+        student={student}
+        metadata={metadata}
+        calculatedScores={calculatedScores}
+        teacherSubjects={teacherSubjects}
+        viewingTerm={viewingTerm}
+        institution={institution}
+      />
+    );
+  }
+
   const subjects = teacherSubjects && teacherSubjects.length > 0 
     ? teacherSubjects.map(sub => ({ name: sub.name, key: sub.name }))
     : DEFAULT_JHS_SUBJECTS;
@@ -84,18 +106,12 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           alt="Ghana Coat of Arms" 
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
-        {institution?.schoolCrestUrl ? (
+        {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
           <img 
-            src={getDirectImageUrl(institution.schoolCrestUrl)} 
+            src={getDirectImageUrl(institution?.schoolCrestUrl || metadata?.schoolCrestUrl)} 
             alt="School Crest" 
             referrerPolicy="no-referrer"
             className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
-          />
-        ) : (
-          <img 
-            src="/icon.png" 
-            alt="School Crest" 
-            className="absolute right-0 top-1 w-32 h-32 object-contain scale-[1.2] origin-center"
           />
         )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>

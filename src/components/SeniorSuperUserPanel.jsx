@@ -5,6 +5,15 @@ import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Databa
 import toast from 'react-hot-toast';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
 import { SMS_PACKAGE_PRESETS, getSchoolSmsPackageSummary, normalizeSmsSenderId } from '../utils/mnotifyHelpers';
+import {
+  SCHOOL_LEVELS,
+  KG_LEARNING_AREAS,
+  PRIMARY_SUBJECTS_LIST,
+  JHS_SUBJECTS_LIST,
+  getKgIndicatorsForArea,
+  deriveKgAreaRatingFromIndicators,
+} from '../constants/curriculum';
+import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from '../constants/dropList';
 
 export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [institutions, setInstitutions] = useState([]);
@@ -75,29 +84,11 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
 
       const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-      const JHS_SUBJECTS = [
-        { name: "English Language", key: "ENG. LANG." },
-        { name: "Mathematics", key: "MATHS" },
-        { name: "Science", key: "SCIENCE" },
-        { name: "Career Technology", key: "C. TECH" },
-        { name: "Social Studies", key: "SOCIAL" },
-        { name: "Computing", key: "COMPUTING" },
-        { name: "Religious and Moral Education", key: "RME" },
-        { name: "Ghanaian Language", key: "GH. LANG." },
-        { name: "Creative Arts & Design", key: "C. ARTS" }
-      ];
-
-      const PRIMARY_SUBJECTS = [
-        { name: "English Language", key: "ENG. LANG." },
-        { name: "Mathematics", key: "MATHS" },
-        { name: "Science", key: "SCIENCE" },
-        { name: "History", key: "HISTORYY" },
-        { name: "Our World Our People", key: "OWOP" },
-        { name: "Computing", key: "COMPUTING" },
-        { name: "Religious and Moral Education", key: "RME" },
-        { name: "Ghanaian Language", key: "GH. LANG." },
-        { name: "Creative Arts", key: "C. ARTS" }
-      ];
+      const JHS_SUBJECTS = JHS_SUBJECTS_LIST.filter(
+        (s) => s.key !== 'FRENCH' && s.key !== 'ARABIC'
+      );
+      const PRIMARY_SUBJECTS = PRIMARY_SUBJECTS_LIST;
+      const KG_SUBJECTS = KG_LEARNING_AREAS;
 
       // 1. Create Admin
       const adminEmail = "demo@volta.edu";
@@ -125,18 +116,23 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
 
       // 2. Create Teachers
       const classes = [
-        { email: "p4@volta.edu", level: "Primary", className: "BS. 4", subList: PRIMARY_SUBJECTS },
-        { email: "p5@volta.edu", level: "Primary", className: "BS. 5", subList: PRIMARY_SUBJECTS },
-        { email: "p6@volta.edu", level: "Primary", className: "BS. 6", subList: PRIMARY_SUBJECTS },
-        { email: "jhs1@volta.edu", level: "JHS", className: "BS. 7", subList: JHS_SUBJECTS },
-        { email: "jhs2@volta.edu", level: "JHS", className: "BS. 8", subList: JHS_SUBJECTS },
-        { email: "jhs3@volta.edu", level: "JHS", className: "BS. 9", subList: JHS_SUBJECTS },
+        { email: "kg1@volta.edu", level: SCHOOL_LEVELS.KG, className: "KG 1", subList: KG_SUBJECTS },
+        { email: "kg2@volta.edu", level: SCHOOL_LEVELS.KG, className: "KG 2", subList: KG_SUBJECTS },
+        { email: "p4@volta.edu", level: SCHOOL_LEVELS.PRIMARY, className: "BS. 4", subList: PRIMARY_SUBJECTS },
+        { email: "p5@volta.edu", level: SCHOOL_LEVELS.PRIMARY, className: "BS. 5", subList: PRIMARY_SUBJECTS },
+        { email: "p6@volta.edu", level: SCHOOL_LEVELS.PRIMARY, className: "BS. 6", subList: PRIMARY_SUBJECTS },
+        { email: "jhs1@volta.edu", level: SCHOOL_LEVELS.JHS, className: "BS. 7", subList: JHS_SUBJECTS },
+        { email: "jhs2@volta.edu", level: SCHOOL_LEVELS.JHS, className: "BS. 8", subList: JHS_SUBJECTS },
+        { email: "jhs3@volta.edu", level: SCHOOL_LEVELS.JHS, className: "BS. 9", subList: JHS_SUBJECTS },
       ];
+
+      const kgRatingPool = ['IND', 'DEV', 'EMG', 'NYS'];
 
       for (const cls of classes) {
         toast.loading(`Creating ${cls.className}...`, { id: "demo" });
         const teacherUid = await createTeacherUser(cls.email, adminPassword);
-        
+        const isKg = cls.level === SCHOOL_LEVELS.KG;
+
         await setDoc(doc(db, "teachers", teacherUid), {
           name: `${cls.className} Teacher`,
           email: cls.email,
@@ -148,7 +144,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
         });
 
         // Generate Students with sn field (sequential number) as the app expects
-        const numStudents = randInt(38, 39);
+        const numStudents = isKg ? randInt(24, 28) : randInt(38, 39);
         const students = [];
         
         for (let i = 1; i <= numStudents; i++) {
@@ -159,26 +155,42 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
           });
         }
 
-        // Build grades keyed by SUBJECT_KEY -> { studentSN: { gw1, test, gw2, proj, exams } }
-        // This matches computeClassResults expectations exactly
         const grades = {};
         cls.subList.forEach(sub => {
           grades[sub.key] = {};
-          students.forEach(s => {
-            // Generate realistic bell-curve marks for an ideal classroom
-            const gw1 = randInt(12, 20);   // TEST 1 (out of 20)
-            const test = randInt(15, 30);   // GW (out of 30)
-            const gw2 = randInt(12, 20);   // TEST 2 (out of 20)
-            const proj = randInt(15, 30);   // PROJ (out of 30)
-            const exams = randInt(40, 95);  // End of Term Exam (out of 100)
-            grades[sub.key][s.sn] = {
-              gw1: gw1.toString(),
-              test: test.toString(),
-              gw2: gw2.toString(),
-              proj: proj.toString(),
-              exams: exams.toString()
-            };
-          });
+          if (isKg) {
+            const areaIndicators = getKgIndicatorsForArea(sub.key, cls.className);
+            students.forEach(s => {
+              const indicators = {};
+              areaIndicators.forEach((ind) => {
+                // Realistic skewed developmental distribution (mostly IND & DEV)
+                const roll = Math.random();
+                indicators[ind.id] = roll < 0.45 ? 'IND' : roll < 0.8 ? 'DEV' : roll < 0.94 ? 'EMG' : 'NYS';
+              });
+              const rating = deriveKgAreaRatingFromIndicators(indicators) || kgRatingPool[randInt(0, 1)];
+              grades[sub.key][s.sn] = {
+                mode: 'kg',
+                rating,
+                indicators,
+                note: ''
+              };
+            });
+          } else {
+            students.forEach(s => {
+              const gw1 = randInt(12, 20);   // TEST 1 (out of 20)
+              const test = randInt(15, 30);   // GW (out of 30)
+              const gw2 = randInt(12, 20);   // TEST 2 (out of 20)
+              const proj = randInt(15, 30);   // PROJ (out of 30)
+              const exams = randInt(40, 95);  // End of Term Exam (out of 100)
+              grades[sub.key][s.sn] = {
+                gw1: gw1.toString(),
+                test: test.toString(),
+                gw2: gw2.toString(),
+                proj: proj.toString(),
+                exams: exams.toString()
+              };
+            });
+          }
         });
 
         const schoolData = {
@@ -188,6 +200,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
             teacherName: `${cls.className} Teacher`,
             academicYear: "2023/2024",
             classLevel: cls.className,
+            level: cls.level,
             vacationDate: "",
             reopeningDate: "",
             attendance: "45",
@@ -200,13 +213,20 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
             "Term 3": { students: [], grades: {} }
           },
           activeTerm: "Term 1",
-          dropLists: {
-            conduct: ["Very Good", "Good", "Excellent", "Satisfactory", "Needs Improvement", "Respectful", "Attentive", "Polite", "Helpful", "Friendly"],
-            interest: ["Reading novels", "Researching topics", "Sports", "Creative Arts", "Music", "Gardening", "Information Technology", "Drawing", "Painting", "Public speaking", "Debating", "Science experiments", "Solving mathematics problems", "Cultural dancing", "Drama"],
-            attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable", "Respectful", "Confident", "Diligent", "Responsible", "Disciplined"],
-            remark: ["An excellent student! Keep it up.", "Good performance. Can do better.", "Hardworking and committed learner.", "Good progress made. Work harder.", "Needs to pay more attention in class.", "Must improve upon current academic standing.", "Highly motivated and dedicated learner.", "A promising student with a bright future."],
-            classes: ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]
-          }
+          dropLists: isKg
+            ? {
+                conduct: [...KG_CONDUCT],
+                interest: [...KG_INTEREST],
+                remarks: [...KG_REMARKS],
+                classes: [...KG_CLASSES_DROPLIST],
+              }
+            : {
+                conduct: ["Very Good", "Good", "Excellent", "Satisfactory", "Needs Improvement", "Respectful", "Attentive", "Polite", "Helpful", "Friendly"],
+                interest: ["Reading novels", "Researching topics", "Sports", "Creative Arts", "Music", "Gardening", "Information Technology", "Drawing", "Painting", "Public speaking", "Debating", "Science experiments", "Solving mathematics problems", "Cultural dancing", "Drama"],
+                attitude: ["Hardworking", "Cooperative", "Obedient", "Punctual", "Sociable", "Respectful", "Confident", "Diligent", "Responsible", "Disciplined"],
+                remark: ["An excellent student! Keep it up.", "Good performance. Can do better.", "Hardworking and committed learner.", "Good progress made. Work harder.", "Needs to pay more attention in class.", "Must improve upon current academic standing.", "Highly motivated and dedicated learner.", "A promising student with a bright future."],
+                classes: ["BS. 1", "BS. 2", "BS. 3", "BS. 4", "BS. 5", "BS. 6", "BS. 7", "BS. 8", "BS. 9"]
+              }
         };
 
         await setDoc(doc(db, "schools", teacherUid), schoolData);

@@ -284,91 +284,150 @@ export default function SchoolSmsConfigPanel({
       )}
 
       {/* Package Balance Overview */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-sm font-bold text-zinc-900 dark:text-white">
-              {canManagePackage ? 'Active School SMS Package' : 'School SMS Package Balance'}
-            </span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+      {!canManagePackage ? (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <Package className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="font-bold text-zinc-900 dark:text-white">School SMS Package</span>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
               {packageName}
             </span>
-          </div>
-          <span
-            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-              !enforceQuota
-                ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                : computedRemaining <= 0
-                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
-                  : computedRemaining <= 25
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-            }`}
-          >
-            {enforceQuota ? `${computedRemaining.toLocaleString()} SMS Left` : 'Unlimited Quota'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2.5 text-center">
-          <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
-            <div className="text-[11px] font-semibold text-zinc-500 uppercase">Allocated</div>
-            <div className="text-base font-extrabold text-zinc-900 dark:text-white">
-              {parsedAllocated.toLocaleString()}
-            </div>
-          </div>
-          <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
-            <div className="text-[11px] font-semibold text-zinc-500 uppercase">Used</div>
-            <div className="text-base font-extrabold text-amber-600 dark:text-amber-400">
-              {parsedUsed.toLocaleString()}
-            </div>
-          </div>
-          <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
-            <div className="text-[11px] font-semibold text-zinc-500 uppercase">Remaining</div>
-            <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-              {computedRemaining.toLocaleString()}
-            </div>
-          </div>
-        </div>
-
-        {enforceQuota && parsedAllocated > 0 && (
-          <div>
-            <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-              <div
-                className={`h-full transition-all duration-300 ${
-                  computedRemaining <= 0
-                    ? 'bg-rose-500'
-                    : usagePct >= 85
-                      ? 'bg-amber-500'
-                      : 'bg-emerald-500'
-                }`}
-                style={{ width: `${Math.min(100, Math.max(0, 100 - usagePct))}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[11px] text-zinc-500 mt-1">
-              <span>{100 - usagePct}% remaining</span>
-              <span>{usagePct}% consumed</span>
-            </div>
-          </div>
-        )}
-
-        {!canManagePackage && (
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-[11px]">
-            <span className="text-zinc-500 dark:text-zinc-400">
-              SMS package credits and gateway settings are managed by the Senior Super User.
-            </span>
             <span
-              className={`px-2 py-0.5 rounded-full font-bold ${
+              className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                 summary.isGatewayReady
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                  : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
               }`}
             >
               {summary.isGatewayReady ? 'SMS Service: Active' : 'SMS Service: Pending Setup'}
             </span>
           </div>
-        )}
-      </div>
+
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 tabular-nums">
+            <div className="flex items-center gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+              <span>
+                Allocated:{' '}
+                <strong className="font-bold text-zinc-900 dark:text-white">
+                  {parsedAllocated.toLocaleString()}
+                </strong>
+              </span>
+              <span>
+                Used:{' '}
+                <strong className="font-bold text-amber-600 dark:text-amber-400">
+                  {parsedUsed.toLocaleString()}
+                </strong>
+              </span>
+              <span>
+                Remaining:{' '}
+                <strong className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {computedRemaining.toLocaleString()}
+                </strong>
+              </span>
+            </div>
+
+            {enforceQuota && parsedAllocated > 0 && (
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="w-20 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      computedRemaining <= 0
+                        ? 'bg-rose-500'
+                        : usagePct >= 85
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, 100 - usagePct))}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-zinc-400">{100 - usagePct}%</span>
+              </div>
+            )}
+
+            <span
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                !enforceQuota
+                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                  : computedRemaining <= 0
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                    : computedRemaining <= 25
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+              }`}
+            >
+              {enforceQuota ? `${computedRemaining.toLocaleString()} SMS Left` : 'Unlimited Quota'}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-bold text-zinc-900 dark:text-white">
+                Active School SMS Package
+              </span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                {packageName}
+              </span>
+            </div>
+            <span
+              className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                !enforceQuota
+                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                  : computedRemaining <= 0
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                    : computedRemaining <= 25
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+              }`}
+            >
+              {enforceQuota ? `${computedRemaining.toLocaleString()} SMS Left` : 'Unlimited Quota'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2.5 text-center">
+            <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
+              <div className="text-[11px] font-semibold text-zinc-500 uppercase">Allocated</div>
+              <div className="text-base font-extrabold text-zinc-900 dark:text-white">
+                {parsedAllocated.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
+              <div className="text-[11px] font-semibold text-zinc-500 uppercase">Used</div>
+              <div className="text-base font-extrabold text-amber-600 dark:text-amber-400">
+                {parsedUsed.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5">
+              <div className="text-[11px] font-semibold text-zinc-500 uppercase">Remaining</div>
+              <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                {computedRemaining.toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {enforceQuota && parsedAllocated > 0 && (
+            <div>
+              <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    computedRemaining <= 0
+                      ? 'bg-rose-500'
+                      : usagePct >= 85
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, 100 - usagePct))}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] text-zinc-500 mt-1">
+                <span>{100 - usagePct}% remaining</span>
+                <span>{usagePct}% consumed</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* mNotify Credentials & Verification (Senior Super User only) */}
       {canManagePackage && (

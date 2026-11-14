@@ -19,6 +19,12 @@ import {
   getParentReportDocId,
   isParentReportExpired,
 } from '../utils/parentReportHelpers';
+import {
+  SCHOOL_LEVELS,
+  KG_PROFICIENCY_SCALE,
+  getKgProficiencyMeta,
+  resolveSchoolLevel,
+} from '../constants/curriculum';
 
 function formatReadableDate(rawValue) {
   if (!rawValue) return '';
@@ -36,6 +42,10 @@ function formatReadableDate(rawValue) {
 function getGradeBadgeClass(grade) {
   const g = String(grade || '').trim().toUpperCase();
   if (!g || g === '-') return 'bg-slate-100 text-slate-600 border-slate-200';
+  if (g === 'IND') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (g === 'DEV') return 'bg-sky-50 text-sky-700 border-sky-200';
+  if (g === 'EMG') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (g === 'NYS') return 'bg-rose-50 text-rose-700 border-rose-200';
   const num = Number(g);
   if (!Number.isNaN(num)) {
     if (num <= 2) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -150,6 +160,14 @@ export default function PublicParentReportView({ token }) {
   }
 
   const subjects = Array.isArray(report.subjects) ? report.subjects : [];
+  const isKgReport =
+    report.assessmentMode === 'kg' ||
+    resolveSchoolLevel(report.className) === SCHOOL_LEVELS.KG ||
+    subjects.some((s) => s.mode === 'kg');
+  const kgSocialHabits = Array.isArray(report.socialHabits) ? report.socialHabits : [];
+  const kgAssessedCount = isKgReport
+    ? subjects.filter((s) => Boolean(s.rating || (s.grade && s.grade !== '-'))).length
+    : 0;
   const validUntil = formatReadableDate(report.expiresAt);
   const reopeningDisplay = formatReadableDate(report.reopeningDate);
   const attendanceLabel = report.attendance
@@ -197,7 +215,7 @@ export default function PublicParentReportView({ token }) {
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-100/90">
-                  Terminal Academic Summary
+                  {isKgReport ? 'Kindergarten Developmental Progress' : 'Terminal Academic Summary'}
                 </p>
                 <h1 className="text-base sm:text-lg font-bold leading-snug break-words">
                   {report.schoolName}
@@ -228,12 +246,19 @@ export default function PublicParentReportView({ token }) {
                   {report.studentName}
                 </h2>
               </div>
-              {report.className && (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  {report.className}
-                  {report.classSize ? ` • ${report.classSize} Learners` : ''}
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {report.learnerAge !== null && report.learnerAge !== undefined && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    Age: {report.learnerAge} yrs
+                  </span>
+                )}
+                {report.className && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {report.className}
+                    {report.classSize ? ` • ${report.classSize} Learners` : ''}
+                  </span>
+                )}
+              </div>
             </div>
             {report.parentName && (
               <p className="text-xs text-slate-500 mt-1.5">
@@ -242,45 +267,119 @@ export default function PublicParentReportView({ token }) {
             )}
           </div>
 
-          {/* 3 Primary Performance KPI Pills */}
-          <div className="grid grid-cols-3 gap-2.5 p-4 border-b border-slate-100">
-            <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 text-center">
-              <p className="text-[11px] font-medium text-slate-500">Overall Total</p>
-              <p className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5 tabular-nums">
-                {report.overallTotal !== null && report.overallTotal !== undefined
-                  ? report.overallTotal
-                  : '-'}
-              </p>
+          {/* Primary KPI Strip */}
+          {isKgReport ? (
+            <div className="grid grid-cols-3 gap-2.5 p-4 border-b border-slate-100">
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                <p className="text-[11px] font-medium text-slate-500">Learning Areas</p>
+                <p className="text-base sm:text-lg font-extrabold text-slate-900 mt-0.5 tabular-nums">
+                  {kgAssessedCount} / {subjects.length || 4}
+                </p>
+              </div>
+              <div className="col-span-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3 flex flex-col justify-center text-center">
+                <p className="text-[11px] font-medium text-emerald-700">Developmental Readiness</p>
+                <p className="text-sm sm:text-base font-extrabold text-emerald-900 mt-0.5 leading-snug">
+                  {report.readinessStatus || 'Pending Observation'}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3 text-center">
-              <p className="text-[11px] font-medium text-emerald-700">Average</p>
-              <p className="text-lg sm:text-xl font-extrabold text-emerald-800 mt-0.5 tabular-nums">
-                {report.average !== null && report.average !== undefined
-                  ? `${report.average}%`
-                  : '-'}
-              </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2.5 p-4 border-b border-slate-100">
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                <p className="text-[11px] font-medium text-slate-500">Overall Total</p>
+                <p className="text-lg sm:text-xl font-extrabold text-slate-900 mt-0.5 tabular-nums">
+                  {report.overallTotal !== null && report.overallTotal !== undefined
+                    ? report.overallTotal
+                    : '-'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-3 text-center">
+                <p className="text-[11px] font-medium text-emerald-700">Average</p>
+                <p className="text-lg sm:text-xl font-extrabold text-emerald-800 mt-0.5 tabular-nums">
+                  {report.average !== null && report.average !== undefined
+                    ? `${report.average}%`
+                    : '-'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 p-3 text-center">
+                <p className="text-[11px] font-medium text-amber-800">Position</p>
+                <p className="text-lg sm:text-xl font-extrabold text-amber-900 mt-0.5">
+                  {report.overallRank || '-'}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl bg-amber-50/70 border border-amber-200/80 p-3 text-center">
-              <p className="text-[11px] font-medium text-amber-800">Position</p>
-              <p className="text-lg sm:text-xl font-extrabold text-amber-900 mt-0.5">
-                {report.overallRank || '-'}
-              </p>
-            </div>
-          </div>
+          )}
 
-          {/* Subject Breakdown (Mobile-first Zero-Overflow Rows) */}
-          <div className="px-4 py-4">
-            <div className="flex items-center justify-between mb-3">
+          {/* Subject / Learning Area Breakdown */}
+          <div className="px-4 py-4 space-y-3">
+            <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                Subject Breakdown ({subjects.length})
+                {isKgReport
+                  ? `Learning Areas (${subjects.length})`
+                  : `Subject Breakdown (${subjects.length})`}
               </h3>
-              <span className="text-[11px] text-slate-400">Class + Exam = 100%</span>
+              <span className="text-[11px] text-slate-400">
+                {isKgReport ? 'NaCCA Developmental Scale' : 'Class + Exam = 100%'}
+              </span>
             </div>
 
             {subjects.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-500">
-                No subject scores recorded for this term yet.
+                {isKgReport
+                  ? 'No kindergarten learning area observations recorded yet.'
+                  : 'No subject scores recorded for this term yet.'}
+              </div>
+            ) : isKgReport ? (
+              <div className="space-y-2.5">
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/90 overflow-hidden">
+                  {subjects.map((subj) => {
+                    const code = subj.rating || (subj.grade !== '-' ? subj.grade : '');
+                    const profMeta = getKgProficiencyMeta(code);
+                    return (
+                      <div key={subj.name} className="px-3.5 py-3 bg-white space-y-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-slate-800">{subj.name}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {code ? profMeta.label : 'Pending Observation'}
+                              {subj.indicatorCount > 0 && (
+                                <>
+                                  {' '}
+                                  &bull; {subj.indMasteredCount}/{subj.indicatorCount} milestones IND
+                                </>
+                              )}
+                            </p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center justify-center min-w-[44px] h-7 px-2.5 rounded-lg border text-xs font-bold shrink-0 ${getGradeBadgeClass(
+                              code || '-'
+                            )}`}
+                          >
+                            {code || '-'}
+                          </span>
+                        </div>
+                        {subj.note && (
+                          <p className="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100 leading-relaxed">
+                            {subj.note}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Compact Proficiency Key */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                  {KG_PROFICIENCY_SCALE.map((tier) => (
+                    <div
+                      key={tier.code}
+                      className="rounded-lg bg-slate-50 border border-slate-200/70 px-2 py-1.5 text-slate-600"
+                    >
+                      <span className="font-bold text-slate-800">{tier.code}</span>: {tier.shortLabel}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/90 overflow-hidden">
@@ -325,6 +424,33 @@ export default function PublicParentReportView({ token }) {
                 ))}
               </div>
             )}
+
+            {isKgReport && kgSocialHabits.length > 0 && (
+              <div className="pt-1">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Personal &amp; Social Habits
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {kgSocialHabits.map((habit) => (
+                    <div
+                      key={habit.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1.5"
+                    >
+                      <span className="text-xs font-medium text-slate-700 truncate">
+                        {habit.label}
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold shrink-0 ${getGradeBadgeClass(
+                          habit.rating
+                        )}`}
+                      >
+                        {habit.rating}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Attendance, Conduct, Remarks & Reopening */}
@@ -362,7 +488,7 @@ export default function PublicParentReportView({ token }) {
               <div className="rounded-xl bg-emerald-50/60 border border-emerald-200/70 px-3.5 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 flex items-center gap-1.5">
                   <Award className="w-3.5 h-3.5 text-emerald-700" />
-                  Class Teacher&apos;s Remark
+                  {isKgReport ? "Facilitator's Observation" : "Class Teacher's Remark"}
                 </p>
                 <p className="text-xs sm:text-sm text-slate-800 mt-1 leading-relaxed">
                   {report.remarks}
@@ -372,7 +498,7 @@ export default function PublicParentReportView({ token }) {
 
             {report.promotedTo && (
               <div className="rounded-xl bg-sky-50 border border-sky-200 px-3.5 py-2.5 text-xs font-semibold text-sky-900">
-                Promotion Status: {report.promotedTo}
+                {isKgReport ? 'Transition Status' : 'Promotion Status'}: {report.promotedTo}
               </div>
             )}
           </div>
