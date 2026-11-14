@@ -16,7 +16,7 @@ import {
   resolveSchoolLevel,
 } from '../constants/curriculum.js';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './mnotifyHelpers.js';
-import { normalizeStudentName } from './rosterHelpers.js';
+import { normalizeDateOfBirth, normalizeStudentName } from './rosterHelpers.js';
 import {
   buildParentReportSnapshot,
   buildParentReportUrl,
@@ -147,6 +147,24 @@ export function mergeStudentReportUpdate(studentsList = [], updatedStudent) {
  * @param {Array<object>} fallbackStudents
  * @returns {Record<string, Array<object>>}
  */
+function applyStudentOnboardingPatch(stu, patch) {
+  const next = {
+    ...stu,
+    parentName: patch.parentName || '',
+    parentPhone: patch.parentPhone || '',
+  };
+  if (Object.prototype.hasOwnProperty.call(patch, 'dateOfBirth')) {
+    const cleanDob = normalizeDateOfBirth(patch.dateOfBirth);
+    if (cleanDob) {
+      next.dateOfBirth = cleanDob;
+    } else {
+      delete next.dateOfBirth;
+    }
+    delete next.dob;
+  }
+  return next;
+}
+
 export function applyParentContactUpdatesToTerms(
   serverTerms = {},
   activeTerm = 'Term 1',
@@ -166,16 +184,16 @@ export function applyParentContactUpdatesToTerms(
     if (!patch) return stu;
     const cleanNameKey = normalizeStudentName(stu.name);
     if (cleanNameKey) {
-      contactByNormName.set(cleanNameKey, {
+      const termPatch = {
         parentName: patch.parentName || '',
         parentPhone: patch.parentPhone || '',
-      });
+      };
+      if (Object.prototype.hasOwnProperty.call(patch, 'dateOfBirth')) {
+        termPatch.dateOfBirth = normalizeDateOfBirth(patch.dateOfBirth);
+      }
+      contactByNormName.set(cleanNameKey, termPatch);
     }
-    return {
-      ...stu,
-      parentName: patch.parentName || '',
-      parentPhone: patch.parentPhone || '',
-    };
+    return applyStudentOnboardingPatch(stu, patch);
   });
 
   const updatedTermStudentsMap = { [activeTerm]: nextActiveStudents };
@@ -189,11 +207,7 @@ export function applyParentContactUpdatesToTerms(
       const matchPatch = contactByNormName.get(normalizeStudentName(stu.name));
       if (!matchPatch) return stu;
       modified = true;
-      return {
-        ...stu,
-        parentName: matchPatch.parentName,
-        parentPhone: matchPatch.parentPhone,
-      };
+      return applyStudentOnboardingPatch(stu, matchPatch);
     });
     if (modified) {
       updatedTermStudentsMap[termKey] = nextList;

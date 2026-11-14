@@ -19,7 +19,6 @@ import {
   normalizeStudentName,
   normalizeGender,
   normalizeDateOfBirth,
-  calculateAgeFromDob,
   parsePastedRosterText,
   stripInternalRowFields,
   buildRosterCommitPayload,
@@ -33,14 +32,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
   const nextRowId = useCallback((prefix) => {
     rowSeqRef.current += 1;
     return `${prefix}-${rowSeqRef.current}`;
-  }, []);
-
-  const todayIso = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   }, []);
 
   const makeBlankDraftRow = useCallback(
@@ -62,7 +53,7 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
     (student, existingRowId = null) => {
       const cleanName = normalizeStudentName(student?.name);
       const cleanGender = normalizeGender(student?.gender);
-      const cleanDob = normalizeDateOfBirth(student?.dateOfBirth);
+      const cleanDob = normalizeDateOfBirth(student?.dateOfBirth || student?.dob);
       return {
         _rowId: existingRowId || nextRowId('enr'),
         _origSn: student?.sn,
@@ -449,9 +440,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
     const genderChangedCount = enrolledRows.filter(
       (r) => normalizeGender(r.gender) !== r._origGender
     ).length;
-    const dobChangedCount = enrolledRows.filter(
-      (r) => normalizeDateOfBirth(r.dateOfBirth) !== (r._origDob || '')
-    ).length;
 
     return {
       hasError: preview.hasError,
@@ -462,7 +450,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
       deletedCount,
       renamedCount,
       genderChangedCount,
-      dobChangedCount,
     };
   }, [enrolledRows, draftRows, students]);
 
@@ -587,25 +574,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
     }
   };
 
-  const handleEnrolledDobChange = (rowId, value) => {
-    if (isReadOnly) return;
-    setEnrolledRows((prev) =>
-      prev.map((r) => (r._rowId === rowId ? { ...r, dateOfBirth: value } : r))
-    );
-    if (saveStatus === 'error') setSaveStatus('pending');
-
-    const hasDraftText = latestStateRef.current.draftRows.some((d) => normalizeStudentName(d.name) !== '');
-    const hasStructuralEnrolledDiff =
-      latestStateRef.current.enrolledRows.length !== latestStateRef.current.students.length ||
-      latestStateRef.current.enrolledRows.some((r) => normalizeStudentName(r.name) !== r._origName);
-
-    if (!hasDraftText && !hasStructuralEnrolledDiff) {
-      scheduleAutoSave(1200, false);
-    } else {
-      scheduleAutoSave(3500, true);
-    }
-  };
-
   const handleDraftNameChange = (rowId, value) => {
     if (isReadOnly) return;
     setDraftRows((prev) => {
@@ -625,16 +593,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
         return { ...d, gender: nextGender };
       })
     );
-    if (saveStatus === 'error') setSaveStatus('pending');
-    scheduleAutoSave(3500, true);
-  };
-
-  const handleDraftDobChange = (rowId, value) => {
-    if (isReadOnly) return;
-    setDraftRows((prev) => {
-      const updated = prev.map((d) => (d._rowId === rowId ? { ...d, dateOfBirth: value } : d));
-      return ensureTrailingBlankDraft(updated, enrolledRows.length);
-    });
     if (saveStatus === 'error') setSaveStatus('pending');
     scheduleAutoSave(3500, true);
   };
@@ -1050,9 +1008,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
       if (changeSummary.genderChangedCount > 0) {
         parts.push(`${changeSummary.genderChangedCount} sex updated`);
       }
-      if (changeSummary.dobChangedCount > 0) {
-        parts.push(`${changeSummary.dobChangedCount} DOB updated`);
-      }
     }
     return parts.join(' · ') || 'Unsaved changes';
   }, [changeSummary]);
@@ -1219,15 +1174,13 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
         className="glass-card rounded-xl overflow-hidden"
       >
         <div className="overflow-x-auto sm:max-h-[65vh] sm:overflow-y-auto">
-          <table className="w-full min-w-[640px] border-collapse text-left">
+          <table className="w-full border-collapse text-left">
             <thead className="sticky top-0 z-10 bg-zinc-100/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               <tr>
-                <th className="w-11 py-2.5 pl-3 sm:pl-4 pr-1 text-center">#</th>
-                <th className="min-w-[200px] py-2.5 px-2 sm:px-3">Learner Name</th>
-                <th className="w-[92px] py-2.5 px-1 text-center">Sex</th>
-                <th className="w-[152px] py-2.5 px-2">Date of Birth</th>
-                <th className="w-[70px] py-2.5 px-2 text-center">Age</th>
-                {!isReadOnly && <th className="w-10 py-2.5 pr-2 sm:pr-3 text-center"></th>}
+                <th className="w-8 sm:w-11 py-2.5 pl-2.5 sm:pl-4 pr-1 text-center">#</th>
+                <th className="py-2.5 px-1.5 sm:px-3">Learner Name</th>
+                <th className="w-[84px] sm:w-[92px] py-2.5 px-1 text-center">Sex</th>
+                {!isReadOnly && <th className="w-9 sm:w-10 py-2.5 pr-2 sm:pr-3 text-center"></th>}
               </tr>
             </thead>
 
@@ -1241,7 +1194,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                   normalizeGender(row.gender) !== row._origGender ||
                   normalizeDateOfBirth(row.dateOfBirth) !== (row._origDob || '');
                 const isConfirmingDel = confirmDeleteId === row._rowId;
-                const age = calculateAgeFromDob(row.dateOfBirth);
 
                 return (
                   <tr
@@ -1255,7 +1207,7 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                     }`}
                   >
                     <td
-                      className={`py-1.5 pl-3 sm:pl-4 pr-1 text-center text-xs font-medium tabular-nums align-middle ${
+                      className={`py-1.5 pl-2.5 sm:pl-4 pr-1 text-center text-xs font-medium tabular-nums align-middle ${
                         isMissingGender
                           ? 'border-l-2 border-l-amber-400 text-amber-600 dark:text-amber-400'
                           : 'text-zinc-400 dark:text-zinc-500'
@@ -1304,35 +1256,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                       )}
                     </td>
 
-                    <td className="py-1 px-1.5 sm:px-2 align-middle">
-                      <input
-                        type="date"
-                        readOnly={isReadOnly}
-                        disabled={isReadOnly}
-                        max={todayIso}
-                        value={row.dateOfBirth || ''}
-                        onChange={(e) => handleEnrolledDobChange(row._rowId, e.target.value)}
-                        aria-label={`Learner ${row.sn} date of birth`}
-                        className={`w-full px-2 py-1.5 rounded-lg text-base sm:text-xs font-medium tabular-nums outline-none transition-colors border border-transparent ${
-                          isReadOnly
-                            ? 'bg-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
-                            : 'bg-transparent text-zinc-700 dark:text-zinc-200 hover:border-zinc-200 dark:hover:border-zinc-700 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400 dark:focus:border-zinc-600'
-                        }`}
-                      />
-                    </td>
-
-                    <td className="py-1.5 px-2 text-center align-middle">
-                      <span
-                        className={`text-xs font-semibold tabular-nums whitespace-nowrap ${
-                          age !== null
-                            ? 'text-zinc-800 dark:text-zinc-200'
-                            : 'text-zinc-300 dark:text-zinc-600'
-                        }`}
-                      >
-                        {age !== null ? `${age} yrs` : '—'}
-                      </span>
-                    </td>
-
                     {!isReadOnly && (
                       <td className="py-1.5 pr-2 sm:pr-3 text-center align-middle">
                         <button
@@ -1358,7 +1281,7 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
               {!isReadOnly && visibleEnrolledRows.length > 0 && visibleDraftRows.length > 0 && (
                 <tr className="bg-zinc-50/70 dark:bg-zinc-900/50 border-y border-zinc-100 dark:border-zinc-800">
                   <td
-                    colSpan={6}
+                    colSpan={4}
                     className="px-3 sm:px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
                   >
                     New Learners
@@ -1372,7 +1295,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                 const hasGender = normalizeGender(draft.gender) !== 'U';
                 const hasDob = normalizeDateOfBirth(draft.dateOfBirth) !== '';
                 const canClearDraft = hasText || hasGender || hasDob || draftRows.length > 1;
-                const draftAge = calculateAgeFromDob(draft.dateOfBirth);
 
                 return (
                   <tr
@@ -1383,7 +1305,7 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                         : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30'
                     }`}
                   >
-                    <td className="py-1.5 pl-3 sm:pl-4 pr-1 text-center align-middle">
+                    <td className="py-1.5 pl-2.5 sm:pl-4 pr-1 text-center align-middle">
                       <span
                         className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-semibold tabular-nums ${
                           hasText
@@ -1428,29 +1350,6 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
                       )}
                     </td>
 
-                    <td className="py-1 px-1.5 sm:px-2 align-middle">
-                      <input
-                        type="date"
-                        max={todayIso}
-                        value={draft.dateOfBirth || ''}
-                        onChange={(e) => handleDraftDobChange(draft._rowId, e.target.value)}
-                        aria-label={`New learner ${dIdx + 1} date of birth`}
-                        className="w-full px-2 py-1.5 rounded-lg text-base sm:text-xs font-medium tabular-nums bg-transparent border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400 dark:focus:border-zinc-600 outline-none text-zinc-700 dark:text-zinc-200 transition-colors"
-                      />
-                    </td>
-
-                    <td className="py-1.5 px-2 text-center align-middle">
-                      <span
-                        className={`text-xs font-semibold tabular-nums whitespace-nowrap ${
-                          draftAge !== null
-                            ? 'text-zinc-800 dark:text-zinc-200'
-                            : 'text-zinc-300 dark:text-zinc-600'
-                        }`}
-                      >
-                        {draftAge !== null ? `${draftAge} yrs` : '—'}
-                      </span>
-                    </td>
-
                     <td className="py-1.5 pr-2 sm:pr-3 text-center align-middle">
                       {canClearDraft && (
                         <button
@@ -1472,7 +1371,7 @@ const Roster = ({ students = [], metadata = {}, onSave, isReadOnly = false }) =>
               {visibleEnrolledRows.length === 0 && visibleDraftRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isReadOnly ? 5 : 6}
+                    colSpan={isReadOnly ? 3 : 4}
                     className="py-10 px-4 text-center text-sm text-zinc-400 dark:text-zinc-500"
                   >
                     {normalizedQuery

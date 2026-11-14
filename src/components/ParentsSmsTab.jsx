@@ -42,6 +42,10 @@ import {
   PARENT_REPORT_TTL_DAYS,
   buildParentReportUrl,
 } from '../utils/parentReportHelpers';
+import {
+  calculateAgeFromDob,
+  normalizeDateOfBirth,
+} from '../utils/rosterHelpers';
 import { SCHOOL_LEVELS, resolveSchoolLevel } from '../constants/curriculum';
 
 const QUICK_TOKEN_CHIPS = [
@@ -124,13 +128,22 @@ export default function ParentsSmsTab({
       : 'sms'
   );
 
-  // --- Parent Contact Draft State (keyed by student.sn) ---
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  // --- Parent Contact & Learner DOB Draft State (keyed by student.sn) ---
   const buildContactsMap = useCallback((list) => {
     const map = {};
     for (const s of list || []) {
       map[s.sn] = {
         parentName: s.parentName ? String(s.parentName) : '',
         parentPhone: s.parentPhone ? String(s.parentPhone) : '',
+        dateOfBirth: normalizeDateOfBirth(s.dateOfBirth || s.dob || ''),
       };
     }
     return map;
@@ -242,13 +255,16 @@ export default function ParentsSmsTab({
       const draft = draftsMap[s.sn] || {};
       const nextName = normalizeParentName(draft.parentName || '');
       const nextPhone = normalizePhoneInput(draft.parentPhone || '');
+      const nextDob = normalizeDateOfBirth(draft.dateOfBirth || '');
       const origName = normalizeParentName(s.parentName || '');
       const origPhone = normalizePhoneInput(s.parentPhone || '');
+      const origDob = normalizeDateOfBirth(s.dateOfBirth || s.dob || '');
 
-      if (nextName !== origName || nextPhone !== origPhone) {
+      if (nextName !== origName || nextPhone !== origPhone || nextDob !== origDob) {
         updates[s.sn] = {
           parentName: nextName,
           parentPhone: nextPhone,
+          dateOfBirth: nextDob,
         };
         changedCount += 1;
       }
@@ -296,11 +312,18 @@ export default function ParentsSmsTab({
           if (!(sn in next)) continue;
           const prevName = normalizeParentName(entry.parentName || '');
           const prevPhone = normalizePhoneInput(entry.parentPhone || '');
+          const prevDob = normalizeDateOfBirth(entry.dateOfBirth || '');
           const savedEntry = committed[sn];
-          if (savedEntry && (prevName !== savedEntry.parentName || prevPhone !== savedEntry.parentPhone)) {
+          if (
+            savedEntry &&
+            (prevName !== savedEntry.parentName ||
+              prevPhone !== savedEntry.parentPhone ||
+              prevDob !== (savedEntry.dateOfBirth || ''))
+          ) {
             next[sn] = {
               parentName: entry.parentName,
               parentPhone: entry.parentPhone,
+              dateOfBirth: entry.dateOfBirth || '',
             };
           }
         }
@@ -357,15 +380,15 @@ export default function ParentsSmsTab({
         await saveFn(updates);
         if (!silent) {
           toast.success(
-            `Saved parent contacts (${changedCount} learner${changedCount === 1 ? '' : 's'} updated)`
+            `Saved parent & learner details (${changedCount} learner${changedCount === 1 ? '' : 's'} updated)`
           );
         }
         return true;
       } catch (err) {
         lastCommittedContactsRef.current = null;
-        console.error('Failed to save parent contacts:', err);
+        console.error('Failed to save parent & learner details:', err);
         if (isMountedRef.current) setContactSaveStatus('error');
-        toast.error('Could not save parent contacts. Tap Save to retry.');
+        toast.error('Could not save details. Tap Save to retry.');
         return false;
       } finally {
         isSavingContactsRef.current = false;
@@ -436,6 +459,10 @@ export default function ParentsSmsTab({
         const draft = draftContacts[s.sn] || {};
         const parentName = draft.parentName !== undefined ? draft.parentName : s.parentName || '';
         const parentPhone = draft.parentPhone !== undefined ? draft.parentPhone : s.parentPhone || '';
+        const dateOfBirth =
+          draft.dateOfBirth !== undefined
+            ? normalizeDateOfBirth(draft.dateOfBirth)
+            : normalizeDateOfBirth(s.dateOfBirth || s.dob || '');
         const res = resultBySn.get(s.sn);
         const subjectsObj = res?.subjects || {};
         const isKgRes = Boolean(res?.isKgResult) || isKgMode;
@@ -447,6 +474,7 @@ export default function ParentsSmsTab({
           ...s,
           parentName,
           parentPhone,
+          dateOfBirth,
           hasValidPhone: isValidGhanaPhone(parentPhone),
           isKgResult: isKgRes,
           readinessStatus: res?.readinessStatus || (isKgRes ? 'Pending Observation' : undefined),
@@ -498,6 +526,7 @@ export default function ParentsSmsTab({
       [sn]: {
         parentName: field === 'parentName' ? value : prev[sn]?.parentName || '',
         parentPhone: field === 'parentPhone' ? value : prev[sn]?.parentPhone || '',
+        dateOfBirth: field === 'dateOfBirth' ? value : prev[sn]?.dateOfBirth || '',
       },
     }));
     if (contactSaveStatus === 'error') setContactSaveStatus('pending');
@@ -567,6 +596,7 @@ export default function ParentsSmsTab({
         next[studentRow.sn] = {
           parentName: parsed.parentName || next[studentRow.sn]?.parentName || '',
           parentPhone: parsed.parentPhone || next[studentRow.sn]?.parentPhone || '',
+          dateOfBirth: next[studentRow.sn]?.dateOfBirth || '',
         };
       }
       return next;
@@ -1099,7 +1129,7 @@ export default function ParentsSmsTab({
                 No Learners Yet
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-                Add learners in the <strong>Roster</strong> tab first, then enter each guardian&apos;s name and phone number here.
+                Add learners in the <strong>Roster</strong> tab first, then enter each learner&apos;s date of birth and guardian&apos;s contact details here.
               </p>
               {onGoToRoster && (
                 <button
@@ -1198,19 +1228,22 @@ export default function ParentsSmsTab({
                 </div>
               )}
 
-              {/* Responsive Spreadsheet Table */}
+              {/* Responsive Onboarding List */}
               <div
                 ref={onboardingWrapperRef}
                 onBlur={handleOnboardingBlur}
                 className="glass-card rounded-xl overflow-hidden"
               >
-                <div className="hidden md:grid md:grid-cols-12 gap-3 px-4 py-2.5 bg-zinc-100/95 dark:bg-zinc-900/95 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  <div className="col-span-4 pl-1"># &amp; Learner</div>
-                  <div className="col-span-4">Parent / Guardian Name</div>
-                  <div className="col-span-4">Telephone Number</div>
+                <div className="hidden lg:grid lg:grid-cols-12 gap-3 px-4 py-2.5 bg-zinc-100/95 dark:bg-zinc-900/95 border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  <div className="col-span-3 pl-1"># &amp; Learner</div>
+                  <div className="col-span-3 text-blue-700 dark:text-blue-300">
+                    Learner&apos;s DOB (Child Only)
+                  </div>
+                  <div className="col-span-3">Parent / Guardian Name</div>
+                  <div className="col-span-3">Parent Telephone</div>
                 </div>
 
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80 md:max-h-[64vh] md:overflow-y-auto">
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80 lg:max-h-[64vh] lg:overflow-y-auto">
                   {visibleOnboardRows.length === 0 ? (
                     <div className="p-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
                       No learners match your current filter.
@@ -1220,11 +1253,12 @@ export default function ParentsSmsTab({
                       const rawPhone = String(row.parentPhone || '');
                       const digitsCount = rawPhone.replace(/\D/g, '').length;
                       const phoneInvalid = digitsCount > 0 && !row.hasValidPhone;
+                      const learnerAge = calculateAgeFromDob(row.dateOfBirth);
 
                       return (
                         <div
                           key={row.sn}
-                          className={`p-3 sm:px-4 sm:py-2.5 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 items-center transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/40 ${
+                          className={`p-3 sm:px-4 sm:py-2.5 grid grid-cols-1 lg:grid-cols-12 gap-2.5 lg:gap-3 items-start lg:items-center transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/40 ${
                             !row.hasValidPhone && digitsCount === 0
                               ? 'border-l-2 border-l-amber-400'
                               : phoneInvalid
@@ -1233,7 +1267,7 @@ export default function ParentsSmsTab({
                           }`}
                         >
                           {/* Learner Identity */}
-                          <div className="md:col-span-4 flex items-center justify-between gap-2 min-w-0">
+                          <div className="lg:col-span-3 flex items-center justify-between gap-2 min-w-0">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <span className="w-6 text-xs font-medium text-zinc-400 dark:text-zinc-500 tabular-nums shrink-0 text-center">
                                 {row.sn}
@@ -1257,9 +1291,62 @@ export default function ParentsSmsTab({
                             </div>
                           </div>
 
+                          {/* Learner Date of Birth (Child Only) */}
+                          <div className="lg:col-span-3 min-w-0">
+                            <div className="lg:hidden flex items-center justify-between gap-2 mb-1">
+                              <label
+                                htmlFor={`learner-dob-${row.sn}`}
+                                className="text-[11px] font-semibold text-blue-700 dark:text-blue-300"
+                              >
+                                Learner&apos;s Date of Birth (Child — NOT Parent)
+                              </label>
+                              {learnerAge !== null && (
+                                <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 tabular-nums shrink-0">
+                                  Age: {learnerAge} yrs
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <input
+                                id={`learner-dob-${row.sn}`}
+                                type="date"
+                                readOnly={isReadOnly}
+                                disabled={isReadOnly}
+                                max={todayIso}
+                                value={row.dateOfBirth || ''}
+                                onChange={(e) =>
+                                  handleContactFieldChange(row.sn, 'dateOfBirth', e.target.value)
+                                }
+                                aria-label={`Learner's date of birth (child only) for ${row.name}`}
+                                className={`min-w-0 flex-1 px-2.5 py-1.5 rounded-lg border text-base sm:text-xs font-medium tabular-nums outline-none transition-all ${
+                                  isReadOnly
+                                    ? 'bg-transparent border-transparent text-zinc-500 dark:text-zinc-400 cursor-default'
+                                    : 'bg-blue-50/40 dark:bg-blue-950/15 border-blue-200/80 dark:border-blue-900/50 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-[#09090b] focus:border-blue-500 dark:focus:border-blue-500'
+                                }`}
+                              />
+                              <span
+                                title="Calculated learner age"
+                                className={`hidden lg:inline-flex items-center justify-center min-w-[44px] px-1.5 py-1 rounded-md text-[11px] font-semibold tabular-nums shrink-0 ${
+                                  learnerAge !== null
+                                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200'
+                                    : 'text-zinc-300 dark:text-zinc-600'
+                                }`}
+                              >
+                                {learnerAge !== null ? `${learnerAge} yrs` : '—'}
+                              </span>
+                            </div>
+                          </div>
+
                           {/* Parent / Guardian Name Input */}
-                          <div className="md:col-span-4">
+                          <div className="lg:col-span-3 min-w-0">
+                            <label
+                              htmlFor={`parent-name-${row.sn}`}
+                              className="lg:hidden block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1"
+                            >
+                              Parent / Guardian Name
+                            </label>
                             <input
+                              id={`parent-name-${row.sn}`}
                               ref={(el) => {
                                 if (el) parentNameRefs.current[row.sn] = el;
                                 else delete parentNameRefs.current[row.sn];
@@ -1284,38 +1371,47 @@ export default function ParentsSmsTab({
                           </div>
 
                           {/* Telephone Number Input + Status Icon */}
-                          <div className="md:col-span-4 relative">
-                            <input
-                              ref={(el) => {
-                                if (el) parentPhoneRefs.current[row.sn] = el;
-                                else delete parentPhoneRefs.current[row.sn];
-                              }}
-                              type="tel"
-                              inputMode="tel"
-                              readOnly={isReadOnly}
-                              value={row.parentPhone}
-                              onChange={(e) =>
-                                handleContactFieldChange(row.sn, 'parentPhone', e.target.value)
-                              }
-                              onKeyDown={(e) => handleParentPhoneKeyDown(e, row.sn)}
-                              placeholder="024XXXXXXX"
-                              enterKeyHint="next"
-                              aria-label={`Parent phone for ${row.name}`}
-                              className={`w-full pl-3 pr-8 py-1.5 rounded-lg border text-base sm:text-sm font-mono outline-none transition-all ${
-                                phoneInvalid
-                                  ? 'bg-white dark:bg-[#09090b] border-red-400 dark:border-red-700 text-red-700 dark:text-red-400'
-                                  : row.hasValidPhone
-                                  ? 'bg-zinc-50/70 dark:bg-[#09090b] border-emerald-300/80 dark:border-emerald-800/60 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400'
-                                  : 'bg-zinc-50/70 dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400'
-                              }`}
-                            />
-                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                              {row.hasValidPhone ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                              ) : phoneInvalid ? (
-                                <AlertCircle className="w-4 h-4 text-red-500" />
-                              ) : null}
-                            </span>
+                          <div className="lg:col-span-3 min-w-0">
+                            <label
+                              htmlFor={`parent-phone-${row.sn}`}
+                              className="lg:hidden block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1"
+                            >
+                              Parent / Guardian Phone
+                            </label>
+                            <div className="relative">
+                              <input
+                                id={`parent-phone-${row.sn}`}
+                                ref={(el) => {
+                                  if (el) parentPhoneRefs.current[row.sn] = el;
+                                  else delete parentPhoneRefs.current[row.sn];
+                                }}
+                                type="tel"
+                                inputMode="tel"
+                                readOnly={isReadOnly}
+                                value={row.parentPhone}
+                                onChange={(e) =>
+                                  handleContactFieldChange(row.sn, 'parentPhone', e.target.value)
+                                }
+                                onKeyDown={(e) => handleParentPhoneKeyDown(e, row.sn)}
+                                placeholder="024XXXXXXX"
+                                enterKeyHint="next"
+                                aria-label={`Parent phone for ${row.name}`}
+                                className={`w-full pl-3 pr-8 py-1.5 rounded-lg border text-base sm:text-sm font-mono outline-none transition-all ${
+                                  phoneInvalid
+                                    ? 'bg-white dark:bg-[#09090b] border-red-400 dark:border-red-700 text-red-700 dark:text-red-400'
+                                    : row.hasValidPhone
+                                    ? 'bg-zinc-50/70 dark:bg-[#09090b] border-emerald-300/80 dark:border-emerald-800/60 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400'
+                                    : 'bg-zinc-50/70 dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:bg-white dark:focus:bg-[#09090b] focus:border-zinc-400'
+                                }`}
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                {row.hasValidPhone ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                ) : phoneInvalid ? (
+                                  <AlertCircle className="w-4 h-4 text-red-500" />
+                                ) : null}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1902,7 +1998,7 @@ export default function ParentsSmsTab({
               <span className="text-xs sm:text-sm font-medium truncate">
                 {contactSaveStatus === 'error'
                   ? 'Save failed — check connection'
-                  : `${pendingContactChanges.changedCount} contact edit${
+                  : `${pendingContactChanges.changedCount} detail edit${
                       pendingContactChanges.changedCount === 1 ? '' : 's'
                     } ready`}
               </span>
@@ -1935,7 +2031,7 @@ export default function ParentsSmsTab({
                 ) : (
                   <>
                     <Check className="w-3.5 h-3.5" />
-                    Save Contacts
+                    Save Details
                   </>
                 )}
               </button>
