@@ -144,9 +144,9 @@ export default function KgReportCard({
       <table className="w-full border-collapse border border-zinc-950 text-sm">
         <thead>
           <tr className="bg-zinc-100 font-bold uppercase text-xs text-left border-b border-zinc-950">
-            <th className="border border-zinc-950 px-3 py-2 min-w-[165px]">Learning Area</th>
-            <th className="border border-zinc-950 px-2 py-2 text-center w-36">Proficiency Level</th>
-            <th className="border border-zinc-950 px-2 py-2 text-center w-24">Milestones</th>
+            <th className="border border-zinc-950 px-3 py-2 min-w-[155px]">Learning Area</th>
+            <th className="border border-zinc-950 px-2 py-2 text-center w-44 whitespace-nowrap">Proficiency Level</th>
+            <th className="border border-zinc-950 px-2 py-2 text-center w-24 whitespace-nowrap">Milestones</th>
             <th className="border border-zinc-950 px-3 py-2">Facilitator&apos;s Observation Note</th>
           </tr>
         </thead>
@@ -173,12 +173,19 @@ export default function KgReportCard({
                 <td className="border border-zinc-950 px-3 py-2.5 font-bold text-black text-xs">
                   {area.name}
                 </td>
-                <td className="border border-zinc-950 px-2 py-2.5 text-center">
+                <td className="border border-zinc-950 px-2 py-2.5 text-center whitespace-nowrap">
                   <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-extrabold uppercase ${badgeStyle}`}
+                    className={`inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded border text-[10px] font-extrabold uppercase whitespace-nowrap ${badgeStyle}`}
                   >
-                    <span>{ratingCode || '—'}</span>
-                    <span>• {meta.label}</span>
+                    {ratingCode ? (
+                      <>
+                        <span>{ratingCode}</span>
+                        <span>&bull;</span>
+                        <span>{meta.label}</span>
+                      </>
+                    ) : (
+                      <span>Pending</span>
+                    )}
                   </span>
                 </td>
                 <td className="border border-zinc-950 px-2 py-2.5 text-center text-xs font-mono font-semibold text-zinc-700">
@@ -211,7 +218,7 @@ export default function KgReportCard({
               >
                 <span className="font-medium text-zinc-800">{habit.label}</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase shrink-0 ${badgeStyle}`}
+                  className={`px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase whitespace-nowrap shrink-0 ${badgeStyle}`}
                 >
                   {habitCode ? `${habitCode} • ${habitMeta.shortLabel}` : '—'}
                 </span>
