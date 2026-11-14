@@ -496,6 +496,13 @@ export default function PublicParentReportView({ token }) {
                 {isKgReport ? 'Transition Status' : 'Promotion Status'}: {report.promotedTo}
               </div>
             )}
+
+            {report.headTeacherName && (
+              <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs">
+                <span className="text-slate-500 font-medium">Headteacher</span>
+                <span className="font-bold text-slate-800 capitalize">{report.headTeacherName}</span>
+              </div>
+            )}
           </div>
 
           {/* Privacy & Auto-Expiry Footer */}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Save, School, Calendar, Users, Award, Percent, Check } from 'lucide-react';
 import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
+import { resolveHeadTeacherName } from '../utils/schoolDataHandlers';
 
-export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYearlyData, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
+export default function Dashboard({ metadata, institution, onSave, onStartNewYear, onExportYearlyData, students, computedResults, teacherSubjects, isReadOnly, viewingTerm }) {
   const [formData, setFormData] = useState({ ...metadata });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -76,6 +77,7 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
   const rollNumberDisplay = formData.rollNumber !== undefined && formData.rollNumber !== 0
     ? formData.rollNumber
     : totalStudents;
+  const adminHeadTeacherName = resolveHeadTeacherName(institution, formData);
 
   return (
     <div className="space-y-6">
@@ -168,7 +170,7 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
               Admin Provisioned Settings (Read-Only)
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">SCHOOL NAME</label>
                 <input
@@ -184,6 +186,17 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
                   type="text"
                   disabled
                   value={formData.district}
+                  className="w-full bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 cursor-not-allowed font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">HEADTEACHER'S NAME</label>
+                <input
+                  type="text"
+                  disabled
+                  readOnly
+                  value={adminHeadTeacherName}
+                  placeholder="Set by Headteacher / School Admin"
                   className="w-full bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 cursor-not-allowed font-medium"
                 />
               </div>
@@ -231,7 +244,7 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
               Class Administration (Editable by Teacher)
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">TEACHER'S NAME</label>
                 <input
@@ -242,18 +255,6 @@ export default function Dashboard({ metadata, onSave, onStartNewYear, onExportYe
                   placeholder="Enter your name"
                   disabled={isReadOnly}
                   required
-                  className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1">HEADTEACHER'S NAME</label>
-                <input
-                  type="text"
-                  name="headTeacherName"
-                  value={formData.headTeacherName || ''}
-                  onChange={handleChange}
-                  placeholder="Enter headteacher's name"
-                  disabled={isReadOnly}
                   className="w-full bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 font-medium disabled:opacity-50"
                 />
               </div>

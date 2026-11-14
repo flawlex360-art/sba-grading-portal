@@ -3,7 +3,7 @@ import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount, res
 import { collection, doc, setDoc, updateDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
-  Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
+  Sun, Moon, Pencil, Check, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
   LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen, MessageSquare, Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -30,6 +30,7 @@ import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from '../con
 import {
   buildTeacherSubjectInfo,
   buildClassTermMetadata,
+  resolveHeadTeacherName,
   normalizeGatewayConfig,
   saveStudentReportTransaction,
   saveParentContactsTransaction,
@@ -45,6 +46,9 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
   const [teachersLoading, setTeachersLoading] = useState(true);
   const [institution, setInstitution] = useState(propInstitution);
   const [editingSubjectTeacherId, setEditingSubjectTeacherId] = useState('');
+  const [editingHeadTeacher, setEditingHeadTeacher] = useState(false);
+  const [headTeacherInput, setHeadTeacherInput] = useState(propInstitution?.headTeacherName || '');
+  const [savingHeadTeacher, setSavingHeadTeacher] = useState(false);
 
   const handlePackageSaved = (updated) => {
     const next = institution ? { ...institution, ...updated } : updated;
@@ -59,6 +63,61 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
     setInstitution((prev) => (prev ? { ...prev, smsPackage: updatedPkg } : prev));
     if (typeof onInstitutionUpdate === 'function') {
       onInstitutionUpdate((prev) => (prev ? { ...prev, smsPackage: updatedPkg } : prev));
+    }
+  };
+
+  useEffect(() => {
+    if (!editingHeadTeacher) {
+      setHeadTeacherInput(institution?.headTeacherName || '');
+    }
+  }, [institution?.headTeacherName, editingHeadTeacher]);
+
+  const handleSaveHeadteacherName = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!institution?.id) {
+      toast.error("No active institution linked to your session.");
+      return;
+    }
+
+    const cleanName = headTeacherInput.trim();
+    const hadExistingName = Boolean(String(institution?.headTeacherName || '').trim());
+    if (!cleanName && !hadExistingName) {
+      toast.error("Please enter the headteacher's name.");
+      return;
+    }
+
+    setSavingHeadTeacher(true);
+    try {
+      await setDoc(
+        doc(db, "institutions", institution.id),
+        { headTeacherName: cleanName },
+        { merge: true }
+      );
+
+      // Sync to existing Form Master class documents so legacy per-class metadata matches everywhere
+      const classTeacherDocs = teachers.filter(
+        (t) => t.uid && t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher'
+      );
+      if (classTeacherDocs.length > 0) {
+        await Promise.allSettled(
+          classTeacherDocs.map((t) =>
+            updateDoc(doc(db, "schools", t.uid), { 'metadata.headTeacherName': cleanName })
+          )
+        );
+      }
+
+      handlePackageSaved({ headTeacherName: cleanName });
+      setEditingHeadTeacher(false);
+      toast.success(
+        cleanName
+          ? `Headteacher's name updated to "${cleanName}". Applied across all teacher portals and report cards.`
+          : "Headteacher's name cleared."
+      );
+    } catch (err) {
+      console.error("Failed to save headteacher name:", err);
+      toast.error("Failed to update headteacher's name. Please try again.");
+    } finally {
+      setSavingHeadTeacher(false);
     }
   };
 
@@ -130,8 +189,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
   };
 
   useEffect(() => {
-    if (institution) fetchTeachersList();
-  }, [institution]);
+    if (institution?.id) fetchTeachersList();
+  }, [institution?.id]);
 
   useEffect(() => {
     const handleAfterPrint = () => {
@@ -160,10 +219,76 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
                 <span className="font-black tracking-tight text-sm text-zinc-900 dark:text-zinc-100 uppercase">Administrator Panel</span>
                 <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-300 dark:border-emerald-700">SUPER ADMIN</span>
               </div>
-              {institution?.schoolName && (
-                <p className="text-xs font-bold text-emerald-ink dark:text-emerald-400 tracking-wide mt-0.5">
-                  {institution.schoolName}
-                </p>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-0.5">
+                {institution?.schoolName && (
+                  <p className="text-xs font-bold text-emerald-ink dark:text-emerald-400 tracking-wide">
+                    {institution.schoolName}
+                  </p>
+                )}
+                {institution?.id && !editingHeadTeacher && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHeadTeacherInput(institution?.headTeacherName || '');
+                      setEditingHeadTeacher(true);
+                    }}
+                    title="Set or update the Headteacher's name (applied read-only across every teacher portal and all report cards)"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all ${
+                      institution?.headTeacherName
+                        ? 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:border-emerald-500/60 hover:text-emerald-700 dark:hover:text-emerald-300'
+                        : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700/70 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wider opacity-75">Headteacher:</span>
+                    <span>{institution?.headTeacherName || 'Set Name'}</span>
+                    <Pencil className="w-3 h-3 shrink-0 opacity-80" />
+                  </button>
+                )}
+              </div>
+              {institution?.id && editingHeadTeacher && (
+                <form
+                  onSubmit={handleSaveHeadteacherName}
+                  className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 mt-1.5"
+                >
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Headteacher:
+                  </label>
+                  <input
+                    type="text"
+                    value={headTeacherInput}
+                    onChange={(e) => setHeadTeacherInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setHeadTeacherInput(institution?.headTeacherName || '');
+                        setEditingHeadTeacher(false);
+                      }
+                    }}
+                    placeholder="Enter headteacher's full name"
+                    disabled={savingHeadTeacher}
+                    autoFocus
+                    className="select-text bg-white dark:bg-zinc-900 border border-emerald-500/70 dark:border-emerald-500/60 rounded-lg px-2.5 py-1 text-xs font-semibold text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 w-56 sm:w-64"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingHeadTeacher}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    {savingHeadTeacher ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingHeadTeacher}
+                    onClick={() => {
+                      setHeadTeacherInput(institution?.headTeacherName || '');
+                      setEditingHeadTeacher(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold transition-colors disabled:opacity-50"
+                    title="Cancel"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </form>
               )}
             </div>
           </div>
@@ -342,7 +467,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
 
 
   // Default initial school template for newly registered teachers
-  const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr) => {
+  const getInitialSchoolData = (tName, cName, sName, dist, trm, acadYr, headTchName = '') => {
     const termMap = { "ONE": "Term 1", "TWO": "Term 2", "THREE": "Term 3" };
     const mappedActiveTerm = termMap[trm] || "Term 1";
     const resolvedLevel = resolveSchoolLevel(cName);
@@ -358,6 +483,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
         term: trm,
         academicYear: acadYr,
         teacherName: tName,
+        headTeacherName: headTchName || resolveHeadTeacherName(institution, null),
         date: new Date().toISOString().split('T')[0],
         nextTermBegins: "",
         timesOpen: 57
@@ -506,7 +632,8 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
             classLevel: editClass,
             term: institution?.activeTerm === 'Term 3' ? 'THREE' : (institution?.activeTerm === 'Term 2' ? 'TWO' : 'ONE'),
             academicYear: institution?.academicYear || editAcademicYear.trim(),
-            teacherName: finalEditName
+            teacherName: finalEditName,
+            headTeacherName: resolveHeadTeacherName(institution, currentData.metadata),
           }
         }, { merge: true });
       } else {

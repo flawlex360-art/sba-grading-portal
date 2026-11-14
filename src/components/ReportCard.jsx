@@ -1,6 +1,7 @@
 import React from 'react';
 import { getOrdinalSuffix, generateParentAdvisory } from '../utils/calculations';
 import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
+import { resolveHeadTeacherName } from '../utils/schoolDataHandlers';
 import KgReportCard from './KgReportCard';
 import SchoolCrestImage from './SchoolCrestImage';
 
@@ -255,8 +256,8 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           <div className="space-y-0.5">
             <div className="border-t border-zinc-500 pt-1 mx-auto max-w-[200px]" />
             <div>Headteacher's Signature</div>
-            {metadata.headTeacherName && (
-              <div className="text-zinc-600 dark:text-zinc-400 capitalize font-medium">{metadata.headTeacherName}</div>
+            {resolveHeadTeacherName(institution, metadata) && (
+              <div className="text-zinc-600 dark:text-zinc-400 capitalize font-medium">{resolveHeadTeacherName(institution, metadata)}</div>
             )}
           </div>
         </div>

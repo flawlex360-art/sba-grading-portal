@@ -8,6 +8,7 @@ import {
 } from '../constants/curriculum';
 import { generateKgParentAdvisory } from '../utils/calculations';
 import { calculateAgeFromDob } from '../utils/rosterHelpers';
+import { resolveHeadTeacherName } from '../utils/schoolDataHandlers';
 import SchoolCrestImage from './SchoolCrestImage';
 
 function formatDate(dateStr) {
@@ -275,8 +276,8 @@ export default function KgReportCard({
           <div className="space-y-0.5">
             <div className="border-t border-zinc-500 pt-1 mx-auto max-w-[200px]" />
             <div>Headteacher&apos;s Signature</div>
-            {metadata.headTeacherName && (
-              <div className="text-zinc-600 capitalize font-medium">{metadata.headTeacherName}</div>
+            {resolveHeadTeacherName(institution, metadata) && (
+              <div className="text-zinc-600 capitalize font-medium">{resolveHeadTeacherName(institution, metadata)}</div>
             )}
           </div>
         </div>

@@ -67,6 +67,22 @@ export function parseReportTokenFromPathname(pathname) {
 }
 
 /**
+ * Resolves the authoritative Headteacher's name for a class or report card.
+ * When the School Admin has set `headTeacherName` on the institution document
+ * (even if cleared intentionally), that institutional value takes precedence
+ * over any legacy per-class metadata value.
+ * @param {object|null|undefined} institution
+ * @param {object|null|undefined} metadata
+ * @returns {string}
+ */
+export function resolveHeadTeacherName(institution, metadata) {
+  if (institution && Object.prototype.hasOwnProperty.call(institution, 'headTeacherName')) {
+    return String(institution.headTeacherName || '').trim();
+  }
+  return String(metadata?.headTeacherName || '').trim();
+}
+
+/**
  * Builds the canonical parent report URL included in SMS messages.
  * @param {string} token
  * @param {string} [origin]
@@ -177,6 +193,7 @@ export function buildParentReportSnapshot({
   const schoolCrestUrl = String(
     institution?.schoolCrestUrl || metadata?.schoolCrestUrl || ''
   ).trim();
+  const headTeacherName = resolveHeadTeacherName(institution, metadata);
   const resolvedTerm = String(viewingTerm || metadata?.term || 'Term 1').trim() || 'Term 1';
   const className = String(
     metadata?.classLevel || metadata?.className || learner?.className || ''
@@ -214,6 +231,7 @@ export function buildParentReportSnapshot({
     schoolId: String(institution?.id || metadata?.institutionId || '').trim(),
     schoolName,
     schoolCrestUrl,
+    headTeacherName,
     className,
     academicYear: String(metadata?.academicYear || '').trim(),
     term: resolvedTerm,

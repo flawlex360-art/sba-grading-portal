@@ -29,6 +29,7 @@ import {
 import {
   DEFAULT_JHS_SUBJECT_MAP,
   DEFAULT_PRIMARY_SUBJECT_MAP,
+  resolveHeadTeacherName,
   saveStudentReportTransaction,
   saveParentContactsTransaction,
   cleanupExpiredParentReportsInDoc,
@@ -300,7 +301,7 @@ export default function App() {
             <div class="sig-block">
               <div class="sig-line"></div>
               <div class="sig-title">Headmaster</div>
-              <div class="sig-sub">${metadata?.headTeacherName || ''}</div>
+              <div class="sig-sub">${resolveHeadTeacherName(institution, metadata)}</div>
               <div class="sig-sub">Signature, Date & Stamp</div>
             </div>
           </div>
@@ -557,6 +558,18 @@ export default function App() {
     return () => unsub();
   }, [institution?.id]);
 
+  // Keep class metadata aligned live whenever School Admin updates Headteacher's Name
+  useEffect(() => {
+    if (!institution || !Object.prototype.hasOwnProperty.call(institution, 'headTeacherName')) {
+      return;
+    }
+    const instHeadTeacherName = String(institution.headTeacherName || '').trim();
+    setMetadata((prev) => {
+      if (!prev || prev.headTeacherName === instHeadTeacherName) return prev;
+      return { ...prev, headTeacherName: instHeadTeacherName };
+    });
+  }, [institution]);
+
   const fetchTeacherData = async (uid, instId, currentProf = null, chosenClass = null, authUid = null) => {
     setIsLoading(true);
     try {
@@ -695,6 +708,7 @@ export default function App() {
           classLevel: chosenClass?.className || data.metadata?.classLevel || currentProf?.assignedClass || "BS. 7",
           schoolName: effectiveInst?.schoolName || data.metadata?.schoolName || "School Name",
           academicYear: effectiveInst?.academicYear || data.metadata?.academicYear || "2026/2027",
+          headTeacherName: resolveHeadTeacherName(effectiveInst, data.metadata),
           level: resolveSchoolLevel(data.metadata?.classLevel || activeClassEntry?.className || currentProf?.assignedClass || '', currentProf?.level || data.metadata?.level)
         };
         setMetadata(mergedMetadata);
@@ -767,6 +781,7 @@ export default function App() {
           metadata: {
             schoolName: fetchedInstData?.schoolName || "My School Name",
             district: "My District",
+            headTeacherName: resolveHeadTeacherName(fetchedInstData || institution, null),
             classLevel: initClassName,
             level: initLevel,
             term: "1st Term",
@@ -914,11 +929,16 @@ export default function App() {
 
   const handleSaveMetadata = async (newMeta) => {
     if (isSubjectTeacherMode) return;
-    setMetadata(newMeta);
+    const lockedHeadTeacherName = resolveHeadTeacherName(institution, metadata);
+    const sanitizedMeta = {
+      ...(newMeta || {}),
+      headTeacherName: lockedHeadTeacherName,
+    };
+    setMetadata(sanitizedMeta);
     const targetDocId = activeSchoolDocId || currentUser?.uid;
     if (currentUser && targetDocId) {
       try {
-        await setDoc(doc(db, "schools", targetDocId), { metadata: newMeta }, { merge: true });
+        await setDoc(doc(db, "schools", targetDocId), { metadata: sanitizedMeta }, { merge: true });
       } catch (e) {
         console.error("Metadata sync error:", e);
       }
@@ -1606,6 +1626,7 @@ if (userProfile?.isSeniorSuperUser) {
         {!isSubjectTeacherMode && activeTab === 'dashboard' && (
           <Dashboard
             metadata={metadata}
+            institution={institution}
             students={students}
             computedResults={computedResults}
             onSave={handleSaveMetadata}

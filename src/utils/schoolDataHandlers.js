@@ -23,6 +23,7 @@ import {
   generateReportToken,
   getParentReportDocId,
   partitionExpiredReportLinks,
+  resolveHeadTeacherName,
 } from './parentReportHelpers.js';
 
 export {
@@ -31,6 +32,7 @@ export {
   DEFAULT_PRIMARY_SUBJECT_MAP,
   DEFAULT_JHS_SUBJECT_MAP,
   resolveSchoolLevel,
+  resolveHeadTeacherName,
 };
 
 /**
@@ -106,6 +108,7 @@ export function buildClassTermMetadata({ classData, selectedTeacher, institution
   return {
     ...baseMeta,
     schoolName: institution?.schoolName || baseMeta.schoolName || '',
+    headTeacherName: resolveHeadTeacherName(institution, baseMeta),
     academicYear,
     year: baseMeta.year || academicYear,
     classLevel,
