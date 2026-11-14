@@ -18,18 +18,23 @@ import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults, isJhsClass } from './utils/calculations';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
-import { normalizeStudentName } from './utils/rosterHelpers';
 import {
-  PARENT_REPORT_TTL_MS,
-  buildParentReportSnapshot,
-  buildParentReportUrl,
-  generateReportToken,
-  getParentReportDocId,
   parseReportTokenFromPathname,
   partitionExpiredReportLinks,
 } from './utils/parentReportHelpers';
+import {
+  DEFAULT_JHS_SUBJECT_MAP,
+  DEFAULT_PRIMARY_SUBJECT_MAP,
+  saveStudentReportTransaction,
+  saveParentContactsTransaction,
+  cleanupExpiredParentReportsInDoc,
+  publishParentReportsInDoc,
+  deleteParentReportsInDoc,
+  appendSmsLogInDoc,
+  recordInstitutionSmsUsageTransaction,
+} from './utils/schoolDataHandlers';
 import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
-import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot, writeBatch, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -57,30 +62,6 @@ const MAIN_TABS = [
   { id: 'trends', name: 'Progress & Trends', icon: TrendingUp },
   { id: 'parents', name: 'Parents & SMS', icon: MessageSquare }
 ];
-
-const DEFAULT_JHS_SUBJECT_MAP = {
-  "English Language": "ENG. LANG.",
-  "Mathematics": "MATHS",
-  "Science": "SCIENCE",
-  "Career Technology": "C. TECH",
-  "Social Studies": "SOCIAL",
-  "Computing": "COMPUTING",
-  "Religious and Moral Education": "RME",
-  "Ghanaian Language": "GH. LANG.",
-  "Creative Arts & Design": "C. ARTS"
-};
-
-const DEFAULT_PRIMARY_SUBJECT_MAP = {
-  "English Language": "ENG. LANG.",
-  "Mathematics": "MATHS",
-  "Science": "SCIENCE",
-  "History": "HISTORYY",
-  "Our World Our People": "OWOP",
-  "Computing": "COMPUTING",
-  "Religious and Moral Education": "RME",
-  "Ghanaian Language": "GH. LANG.",
-  "Creative Arts": "C. ARTS"
-};
 
 export default function App() {
   const publicReportToken =
@@ -130,35 +111,13 @@ export default function App() {
 
   // Opportunistically batch-delete expired 30-day parent report snapshots without background crons
   const cleanupExpiredParentReports = async (targetDocId, rawLinks = activeParentReportLinksRef.current) => {
-    const { activeLinks, expiredTokens } = partitionExpiredReportLinks(rawLinks, Date.now());
-    activeParentReportLinksRef.current = activeLinks;
-    if (!db || !(auth?.currentUser || currentUser) || !targetDocId || expiredTokens.length === 0) {
+    if (!db || !(auth?.currentUser || currentUser) || !targetDocId) {
+      const { activeLinks } = partitionExpiredReportLinks(rawLinks, Date.now());
+      activeParentReportLinksRef.current = activeLinks;
       return activeLinks;
     }
-
-    try {
-      const toDeleteNow = expiredTokens.slice(0, 100);
-      const remainingExpiredSet = new Set(expiredTokens.slice(100));
-      const keptRemaining = (Array.isArray(rawLinks) ? rawLinks : []).filter((item) =>
-        remainingExpiredSet.has(String(item?.token || '').trim().toLowerCase())
-      );
-      const nextTracking = [...activeLinks, ...keptRemaining];
-
-      const batch = writeBatch(db);
-      toDeleteNow.forEach((tok) => {
-        const snapDocId = getParentReportDocId(tok);
-        if (snapDocId) {
-          batch.delete(doc(db, 'schools', snapDocId));
-        }
-      });
-      batch.update(doc(db, 'schools', targetDocId), {
-        activeParentReportLinks: nextTracking,
-      });
-      await batch.commit();
-      activeParentReportLinksRef.current = activeLinks;
-    } catch (err) {
-      console.warn('Expired parent report cleanup warning:', err);
-    }
+    const activeLinks = await cleanupExpiredParentReportsInDoc({ db, targetDocId, rawLinks });
+    activeParentReportLinksRef.current = activeLinks;
     return activeLinks;
   };
 
@@ -1005,66 +964,15 @@ export default function App() {
     if (!currentUser || !targetDocId) return;
     if (!contactUpdatesBySn || Object.keys(contactUpdatesBySn).length === 0) return;
 
-    const schoolRef = doc(db, "schools", targetDocId);
-    let updatedTermStudentsMap = {};
-
     try {
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(schoolRef);
-        const sData = snap.exists() ? snap.data() : {};
-        const serverTerms = sData.terms ? structuredClone(sData.terms) : {};
-        const activeStudents = Array.isArray(serverTerms[activeTerm]?.students)
-          ? serverTerms[activeTerm].students
-          : (studentsRef.current || []);
-
-        const contactByNormName = new Map();
-        const nextActiveStudents = activeStudents.map((stu) => {
-          const patch = contactUpdatesBySn[stu.sn];
-          if (!patch) return stu;
-          const cleanNameKey = normalizeStudentName(stu.name);
-          if (cleanNameKey) {
-            contactByNormName.set(cleanNameKey, {
-              parentName: patch.parentName || '',
-              parentPhone: patch.parentPhone || ''
-            });
-          }
-          return {
-            ...stu,
-            parentName: patch.parentName || '',
-            parentPhone: patch.parentPhone || ''
-          };
-        });
-
-        updatedTermStudentsMap[activeTerm] = nextActiveStudents;
-        const fieldPathUpdates = [
-          new FieldPath('terms', activeTerm, 'students'),
-          nextActiveStudents
-        ];
-
-        // Propagate parent contacts by matching learner name across all other terms cleanly
-        Object.keys(serverTerms).forEach((termKey) => {
-          if (termKey === activeTerm) return;
-          const list = serverTerms[termKey]?.students;
-          if (!Array.isArray(list) || list.length === 0 || contactByNormName.size === 0) return;
-          let modified = false;
-          const nextList = list.map((stu) => {
-            const matchPatch = contactByNormName.get(normalizeStudentName(stu.name));
-            if (!matchPatch) return stu;
-            modified = true;
-            return {
-              ...stu,
-              parentName: matchPatch.parentName,
-              parentPhone: matchPatch.parentPhone
-            };
-          });
-          if (modified) {
-            updatedTermStudentsMap[termKey] = nextList;
-            fieldPathUpdates.push(new FieldPath('terms', termKey, 'students'), nextList);
-          }
-        });
-
-        tx.update(schoolRef, ...fieldPathUpdates);
+      const updatedTermStudentsMap = await saveParentContactsTransaction({
+        db,
+        targetDocId,
+        activeTerm,
+        contactUpdatesBySn,
+        fallbackStudents: studentsRef.current || [],
       });
+      if (!updatedTermStudentsMap) return;
 
       const activeUpdated = updatedTermStudentsMap[activeTerm];
       if (activeUpdated) {
@@ -1100,16 +1008,13 @@ export default function App() {
   };
 
   const handleAddSmsLog = async (newLog) => {
-    const updatedLogs = [newLog, ...(smsLogsRef.current || [])].slice(0, 50);
+    const prevLogs = smsLogsRef.current || [];
+    const updatedLogs = [newLog, ...prevLogs].slice(0, 50);
     smsLogsRef.current = updatedLogs;
     setSmsLogs(updatedLogs);
     const targetDocId = activeSchoolDocId || currentUser?.uid;
     if (currentUser && targetDocId) {
-      try {
-        await setDoc(doc(db, "schools", targetDocId), { smsLogs: updatedLogs }, { merge: true });
-      } catch (e) {
-        console.error("SMS log sync error:", e);
-      }
+      await appendSmsLogInDoc({ db, targetDocId, prevLogs, newLog });
     }
   };
 
@@ -1119,165 +1024,44 @@ export default function App() {
       return { linksBySn: {}, createdTokens: [] };
     }
 
-    const nowMs = Date.now();
-    const cleanActiveLinks = await cleanupExpiredParentReports(targetDocId, activeParentReportLinksRef.current);
-    const existingTokensSet = new Set(cleanActiveLinks.map((item) => item.token));
-
-    const linksBySn = {};
-    const createdTokens = [];
-    const newTrackingEntries = [];
-    const writeOps = [];
-
-    for (const learner of targetLearners) {
-      let token = '';
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const candidate = generateReportToken(10);
-        if (!existingTokensSet.has(candidate)) {
-          token = candidate;
-          existingTokensSet.add(candidate);
-          break;
-        }
-      }
-      if (!token) token = generateReportToken(12);
-
-      const snapshotData = buildParentReportSnapshot({
-        learner,
-        metadata,
-        institution,
-        viewingTerm,
-        teacherUid: currentUser.uid,
-        token,
-        nowMs,
-      });
-      snapshotData.expireAt = Timestamp.fromMillis(snapshotData.expiresAtMs);
-
-      const snapDocId = getParentReportDocId(token);
-      if (!snapDocId) continue;
-
-      writeOps.push({ snapDocId, snapshotData });
-      createdTokens.push(token);
-      linksBySn[learner.sn] = {
-        token,
-        url: buildParentReportUrl(token),
-      };
-      newTrackingEntries.push({
-        token,
-        expiresAtMs: snapshotData.expiresAtMs,
-        studentSn: learner.sn,
-        term: snapshotData.term,
-      });
-    }
-
-    // Write snapshots in chunks (safe well under Firestore 500-write batch limit)
-    for (let i = 0; i < writeOps.length; i += 200) {
-      const chunk = writeOps.slice(i, i + 200);
-      const batch = writeBatch(db);
-      chunk.forEach(({ snapDocId, snapshotData }) => {
-        batch.set(doc(db, 'schools', snapDocId), snapshotData);
-      });
-      await batch.commit();
-    }
-
-    // Maintain bounded tracking list on teacher/class doc and purge any old overflow snapshots
-    const { activeLinks: finalActiveLinks, expiredTokens: overflowTokens } = partitionExpiredReportLinks(
-      [...cleanActiveLinks, ...newTrackingEntries],
-      nowMs
-    );
-    activeParentReportLinksRef.current = finalActiveLinks;
-
-    try {
-      if (overflowTokens.length > 0) {
-        const purgeBatch = writeBatch(db);
-        overflowTokens.slice(0, 100).forEach((oldTok) => {
-          const oldDocId = getParentReportDocId(oldTok);
-          if (oldDocId) purgeBatch.delete(doc(db, 'schools', oldDocId));
-        });
-        purgeBatch.update(doc(db, 'schools', targetDocId), {
-          activeParentReportLinks: finalActiveLinks,
-        });
-        await purgeBatch.commit();
-      } else {
-        await updateDoc(doc(db, 'schools', targetDocId), {
-          activeParentReportLinks: finalActiveLinks,
-        });
-      }
-    } catch (err) {
-      console.warn('Parent report tracking update warning:', err);
-    }
-
-    return { linksBySn, createdTokens };
+    const result = await publishParentReportsInDoc({
+      db,
+      targetDocId,
+      targetLearners,
+      activeLinks: activeParentReportLinksRef.current,
+      metadata,
+      institution,
+      viewingTerm,
+      teacherUid: currentUser.uid,
+    });
+    activeParentReportLinksRef.current = result.activeLinks;
+    return { linksBySn: result.linksBySn, createdTokens: result.createdTokens };
   };
 
   const handleDeleteParentReports = async (tokens = []) => {
     const targetDocId = activeSchoolDocId || currentUser?.uid;
-    const cleanTokens = [...new Set(
-      (Array.isArray(tokens) ? tokens : [])
-        .map((t) => String(t || '').trim().toLowerCase())
-        .filter((t) => Boolean(getParentReportDocId(t)))
-    )];
-
-    if (!db || !currentUser || !targetDocId || cleanTokens.length === 0) return;
-
-    try {
-      const deleteSet = new Set(cleanTokens);
-      const nextTracking = (activeParentReportLinksRef.current || []).filter(
-        (item) => !deleteSet.has(String(item?.token || '').trim().toLowerCase())
-      );
-      activeParentReportLinksRef.current = nextTracking;
-
-      for (let i = 0; i < cleanTokens.length; i += 200) {
-        const chunk = cleanTokens.slice(i, i + 200);
-        const batch = writeBatch(db);
-        chunk.forEach((tok) => {
-          const snapDocId = getParentReportDocId(tok);
-          if (snapDocId) batch.delete(doc(db, 'schools', snapDocId));
-        });
-        if (i + 200 >= cleanTokens.length) {
-          batch.update(doc(db, 'schools', targetDocId), {
-            activeParentReportLinks: nextTracking,
-          });
-        }
-        await batch.commit();
-      }
-    } catch (err) {
-      console.warn('Failed to delete unused parent report snapshots:', err);
-    }
+    if (!db || !currentUser || !targetDocId) return;
+    const nextTracking = await deleteParentReportsInDoc({
+      db,
+      targetDocId,
+      tokens,
+      activeLinks: activeParentReportLinksRef.current,
+    });
+    activeParentReportLinksRef.current = nextTracking;
   };
 
   const handleRecordSmsUsage = async (creditsConsumed = 0, extra = {}) => {
-    const delta = Math.max(0, Math.round(Number(creditsConsumed) || 0));
-    if (!institution?.id || delta <= 0) return;
-
-    const instRef = doc(db, "institutions", institution.id);
-    const nowIso = new Date().toISOString();
-    try {
-      const updatedPkg = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(instRef);
-        const current = snap.exists() ? snap.data() : {};
-        const prevPkg =
-          current?.smsPackage && typeof current.smsPackage === 'object' ? current.smsPackage : {};
-        const nextUsed = Math.max(0, Math.round(Number(prevPkg.creditsUsed || 0) + delta));
-        const nextPkg = {
-          ...prevPkg,
-          packageId: prevPkg.packageId || 'custom',
-          packageName: prevPkg.packageName || 'School Package',
-          creditsAllocated: Math.max(0, Math.round(Number(prevPkg.creditsAllocated) || 0)),
-          creditsUsed: nextUsed,
-          enforceQuota: prevPkg.enforceQuota !== false,
-          lastUsedAt: nowIso,
-          updatedAt: nowIso,
-          ...(extra?.latestMnotifyCreditLeft !== null && extra?.latestMnotifyCreditLeft !== undefined
-            ? { lastMnotifyBalance: Number(extra.latestMnotifyCreditLeft) }
-            : {}),
-        };
-        tx.set(instRef, { smsPackage: nextPkg }, { merge: true });
-        return nextPkg;
-      });
+    if (!institution?.id) return;
+    const updatedPkg = await recordInstitutionSmsUsageTransaction({
+      db,
+      institutionId: institution.id,
+      creditsConsumed,
+      extra,
+    });
+    if (updatedPkg) {
       setInstitution((prev) =>
         prev && prev.id === institution.id ? { ...prev, smsPackage: updatedPkg } : prev
       );
-    } catch (e) {
-      console.error("SMS credit deduction error:", e);
     }
   };
 
@@ -1363,15 +1147,17 @@ export default function App() {
       }
     }));
 
-    // 3. Send the authoritative latest roster to Firebase using FieldPath
+    // 3. Send the authoritative update transactionally to Firebase
     const targetDocId = activeSchoolDocId || currentUser?.uid;
     if (currentUser && targetDocId) {
       try {
-        await updateDoc(
-          doc(db, "schools", targetDocId),
-          new FieldPath('terms', activeTerm, 'students'),
-          latestRoster
-        );
+        await saveStudentReportTransaction({
+          db,
+          targetDocId,
+          termKey: activeTerm,
+          updatedStudent,
+          fallbackStudents: latestRoster,
+        });
       } catch (e) {
         console.error("Report comments sync error:", e);
       }
@@ -1540,7 +1326,7 @@ if (userProfile?.isSeniorSuperUser) {
   if (userProfile?.isAdmin) {
     return (
       <>
-        <AdminPanel adminUser={currentUser} institution={institution} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
+        <AdminPanel adminUser={currentUser} institution={institution} onInstitutionUpdate={setInstitution} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
         <Toaster 
           position="top-center" 
           toastOptions={{

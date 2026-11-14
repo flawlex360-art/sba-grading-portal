@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, createTeacherUser, updateTeacherPassword, deleteTeacherAccount } from '../utils/firebase';
 import { collection, doc, setDoc, updateDoc, getDocs, getDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 import { 
   UserPlus, Users, LogOut, Shield, CheckCircle, AlertCircle, Sparkles, 
   Sun, Moon, Pencil, X, Trash2, Server, CloudUpload, RefreshCw, Eye, EyeOff, FastForward,
-  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen, MessageSquare
+  LayoutDashboard, FileSpreadsheet, Archive, Printer, Settings, BookOpen, MessageSquare, Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConsolidatedView from './ConsolidatedView';
@@ -13,8 +13,20 @@ import TrendAnalysis from './TrendAnalysis';
 import ReportCard from './ReportCard';
 import Gradebook from './Gradebook';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
+import ParentsSmsTab from './ParentsSmsTab';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults, isJhsClass } from '../utils/calculations';
+import {
+  buildTeacherSubjectInfo,
+  buildClassTermMetadata,
+  normalizeGatewayConfig,
+  saveStudentReportTransaction,
+  saveParentContactsTransaction,
+  publishParentReportsInDoc,
+  deleteParentReportsInDoc,
+  appendSmsLogInDoc,
+  recordInstitutionSmsUsageTransaction,
+} from '../utils/schoolDataHandlers';
 
 const getDirectImageUrl = (url) => {
   if (!url) return '';
@@ -30,12 +42,28 @@ const getDirectImageUrl = (url) => {
   return url;
 };
 
-export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, institution: propInstitution }) {
+export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, institution: propInstitution, onInstitutionUpdate }) {
   const [adminTab, setAdminTab] = useState('accounts');
   const [teachers, setTeachers] = useState([]);
   const [teachersLoading, setTeachersLoading] = useState(true);
   const [institution, setInstitution] = useState(propInstitution);
   const [editingSubjectTeacherId, setEditingSubjectTeacherId] = useState('');
+
+  const handlePackageSaved = (updated) => {
+    const next = institution ? { ...institution, ...updated } : updated;
+    setInstitution(next);
+    if (typeof onInstitutionUpdate === 'function' && next) {
+      onInstitutionUpdate(next);
+    }
+  };
+
+  const handleSmsPackageUpdated = (updatedPkg) => {
+    if (!updatedPkg) return;
+    setInstitution((prev) => (prev ? { ...prev, smsPackage: updatedPkg } : prev));
+    if (typeof onInstitutionUpdate === 'function') {
+      onInstitutionUpdate((prev) => (prev ? { ...prev, smsPackage: updatedPkg } : prev));
+    }
+  };
 
   useEffect(() => {
     if (propInstitution) {
@@ -170,7 +198,8 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
             { id: 'overview', name: 'Classes Overview', icon: LayoutDashboard },
             { id: 'reports', name: 'Report Cards', icon: FileSpreadsheet },
             { id: 'archives', name: 'Data Archives', icon: Archive },
-            { id: 'sms', name: 'SMS Package', icon: MessageSquare }
+            { id: 'sms', name: 'SMS Package', icon: Package },
+            { id: 'parents', name: 'Parents & SMS', icon: MessageSquare }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = adminTab === tab.id;
@@ -228,6 +257,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
               setPrintSingleStudent={setPrintSingleStudent} 
               setPrintData={setPrintData}
               institution={institution}
+              adminUser={adminUser}
             />
           )}
           {adminTab === 'archives' && <AdminArchivesTab institution={institution} />}
@@ -237,9 +267,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
                 <SchoolSmsConfigPanel
                   institution={institution}
                   canManagePackage={false}
-                  onSaved={(updated) =>
-                    setInstitution((prev) => (prev ? { ...prev, ...updated } : prev))
-                  }
+                  onSaved={handlePackageSaved}
                 />
               ) : (
                 <div className="text-sm text-zinc-500 py-8 text-center">
@@ -247,6 +275,14 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
                 </div>
               )}
             </div>
+          )}
+          {adminTab === 'parents' && (
+            <AdminParentsSmsTab
+              teachers={teachers.filter(t => t.role !== 'subject_teacher' && t.assignedClass !== 'Subject Teacher')}
+              institution={institution}
+              adminUser={adminUser}
+              onSmsPackageUpdated={handleSmsPackageUpdated}
+            />
           )}
           
         </main>
@@ -2096,28 +2132,12 @@ function AdminOverviewTab({ teachers }) {
 
   if (loading) return <div className="p-8 text-center text-zinc-500">Loading class overviews...</div>;
 
-  // Helper: build subjectMap & subjectsList from teacher's stored subjects
-  const buildSubjectInfo = (teacherProfile) => {
-    const subjects = teacherProfile?.subjects;
-    if (subjects && Array.isArray(subjects) && subjects.length > 0) {
-      const map = {};
-      subjects.forEach(sub => { map[sub.name] = sub.key; });
-      return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
-    }
-    // Fallback based on level
-    const isJHS = isJhsClass(teacherProfile?.assignedClass);
-    const fallback = isJHS
-      ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
-      : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
-    return { subjectMap: fallback, subjectsList: Object.keys(fallback), teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })) };
-  };
-
   if (selectedClass) {
     // Get term-specific data
     const termData = selectedClass.schoolData?.terms?.[selectedTerm] || { students: [], grades: {} };
     const termStudents = termData.students || [];
     const termGrades = termData.grades || {};
-    const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildSubjectInfo(selectedClass);
+    const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedClass);
 
     const computedResults = termStudents.length > 0
       ? computeClassResults(termStudents, termGrades, subjectsList, subjectMap)
@@ -2225,125 +2245,212 @@ function AdminOverviewTab({ teachers }) {
   );
 }
 
-function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrintData, institution }) {
+function useAdminClassRecords() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [classData, setClassData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedTerm, setSelectedTerm] = useState('Term 1');
+  const classDataRef = useRef(null);
 
-  // Find the selected teacher's profile to get their subjects
-  const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
+  const updateClassData = (updater) => {
+    setClassData((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      classDataRef.current = next;
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!selectedTeacherId) {
+      classDataRef.current = null;
       setClassData(null);
       return;
     }
+    let active = true;
     async function loadData() {
       setLoading(true);
       try {
         const docRef = doc(db, "schools", selectedTeacherId);
         const docSnap = await getDoc(docRef);
+        if (!active) return;
         if (docSnap.exists()) {
           const sData = docSnap.data();
-          const active = sData.activeTerm || 'Term 1';
-          setSelectedTerm(active);
+          const activeTermVal = sData.activeTerm || 'Term 1';
+          setSelectedTerm(activeTermVal);
+          classDataRef.current = sData;
           setClassData(sData);
         } else {
+          classDataRef.current = null;
           setClassData(null);
         }
       } catch (e) {
         console.error(e);
+        if (active) {
+          toast.error('Failed to load class records.');
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     loadData();
+    return () => {
+      active = false;
+    };
   }, [selectedTeacherId]);
 
-  // Build subject info from the teacher profile
-  const buildSubjectInfo = (teacherProfile) => {
-    const subjects = teacherProfile?.subjects;
-    if (subjects && Array.isArray(subjects) && subjects.length > 0) {
-      const map = {};
-      subjects.forEach(sub => { map[sub.name] = sub.key; });
-      return { subjectMap: map, subjectsList: subjects.map(s => s.name), teacherSubjects: subjects };
-    }
-    const isJHS = isJhsClass(teacherProfile?.assignedClass);
-    const fallback = isJHS
-      ? { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "Career Technology": "C. TECH", "Social Studies": "SOCIAL", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts & Design": "C. ARTS" }
-      : { "English Language": "ENG. LANG.", "Mathematics": "MATHS", "Science": "SCIENCE", "History": "HISTORYY", "Our World Our People": "OWOP", "Computing": "COMPUTING", "Religious and Moral Education": "RME", "Ghanaian Language": "GH. LANG.", "Creative Arts": "C. ARTS" };
-    return { subjectMap: fallback, subjectsList: Object.keys(fallback), teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })) };
+  return {
+    selectedTeacherId,
+    setSelectedTeacherId,
+    classData,
+    setClassData: updateClassData,
+    classDataRef,
+    loading,
+    selectedTerm,
+    setSelectedTerm,
   };
+}
 
-  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildSubjectInfo(selectedTeacher);
+function AdminClassTermSelector({
+  label,
+  teachers,
+  selectedTeacherId,
+  onSelectTeacher,
+  classData,
+  selectedTerm,
+  onSelectTerm,
+}) {
+  const termOptions = Object.keys(classData?.terms || {}).sort();
+
+  return (
+    <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 rounded-xl flex flex-col sm:flex-row sm:items-end gap-4 max-w-xl">
+      <div className="flex-1">
+        <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
+          {label}
+        </label>
+        <select
+          value={selectedTeacherId}
+          onChange={(e) => onSelectTeacher(e.target.value)}
+          className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
+        >
+          <option value="">-- Choose a Class --</option>
+          {teachers.map(t => (
+            <option key={t.uid} value={t.uid}>{t.assignedClass} ({t.name})</option>
+          ))}
+        </select>
+      </div>
+
+      {classData && termOptions.length > 0 && (
+        <div className="flex-1">
+          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
+            Select Term
+          </label>
+          <select
+            value={selectedTerm}
+            onChange={(e) => onSelectTerm(e.target.value)}
+            className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
+          >
+            {termOptions.map(term => (
+              <option key={term} value={term}>{term}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrintData, institution, adminUser }) {
+  const {
+    selectedTeacherId,
+    setSelectedTeacherId,
+    classData,
+    setClassData,
+    loading,
+    selectedTerm,
+    setSelectedTerm,
+  } = useAdminClassRecords();
+
+  const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
+  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
 
   const currentTermData = classData?.terms?.[selectedTerm] || { students: [], grades: {} };
   const currentStudents = currentTermData.students || [];
   const currentGrades = currentTermData.grades || {};
+  const mergedMetadata = buildClassTermMetadata({
+    classData,
+    selectedTeacher,
+    institution,
+    selectedTerm,
+  });
 
   const computedResults = currentStudents.length > 0 && classData
     ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap)
     : [];
 
+  const handleSaveStudentReport = async (updatedStudent) => {
+    if (!selectedTeacherId || !updatedStudent) return;
+    try {
+      const nextStudents = await saveStudentReportTransaction({
+        db,
+        targetDocId: selectedTeacherId,
+        termKey: selectedTerm,
+        updatedStudent,
+        fallbackStudents: currentStudents,
+      });
+      if (nextStudents) {
+        setClassData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            terms: {
+              ...(prev.terms || {}),
+              [selectedTerm]: {
+                ...(prev.terms?.[selectedTerm] || {}),
+                students: nextStudents,
+              },
+            },
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Admin report edit sync error:", e);
+      toast.error("Failed to save report card changes. Please check your connection.");
+    }
+  };
+
+  const adminEmail = adminUser?.email || 'admin@school.com';
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="glass-card p-6 border border-zinc-200 dark:border-zinc-800/80 rounded-xl flex items-end gap-4 max-w-xl">
-        <div className="flex-1">
-          <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
-            Select Class to View Report Cards
-          </label>
-          <select
-            value={selectedTeacherId}
-            onChange={(e) => setSelectedTeacherId(e.target.value)}
-            className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
-          >
-            <option value="">-- Choose a Class --</option>
-            {teachers.map(t => (
-              <option key={t.uid} value={t.uid}>{t.assignedClass} ({t.name})</option>
-            ))}
-          </select>
-        </div>
-        
-        {classData && (
-          <div className="flex-1">
-            <label className="block text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2 font-semibold">
-              Select Term
-            </label>
-            <select
-              value={selectedTerm}
-              onChange={(e) => setSelectedTerm(e.target.value)}
-              className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-ink"
-            >
-              {Object.keys(classData.terms || {}).map(term => (
-                <option key={term} value={term}>{term}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <AdminClassTermSelector
+        label="Select Class for Report Cards"
+        teachers={teachers}
+        selectedTeacherId={selectedTeacherId}
+        onSelectTeacher={setSelectedTeacherId}
+        classData={classData}
+        selectedTerm={selectedTerm}
+        onSelectTerm={setSelectedTerm}
+      />
 
       {loading && <div className="p-8 text-center text-zinc-500">Loading records...</div>}
 
       {classData && !loading && (
         <div className="mt-6">
-           <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 p-4 rounded-lg text-center mb-6 border border-amber-200 dark:border-amber-800 font-semibold text-sm shadow-sm">
-              ADMINISTRATIVE VIEW (READ-ONLY) - You can now batch print or preview individual report cards here.
-           </div>
            <ReportEditor
+              key={selectedTeacherId}
               students={currentStudents}
-              metadata={{...classData.metadata, term: selectedTerm}}
+              metadata={mergedMetadata}
               computedResults={computedResults}
               dropLists={classData.dropLists}
               institution={institution}
-              onSave={() => {}}
+              onSave={handleSaveStudentReport}
               onPrintAll={() => {
                 setPrintData({ 
                   students: currentStudents, 
-                  metadata: {...classData.metadata, term: selectedTerm}, 
+                  metadata: mergedMetadata, 
                   computedResults, 
                   teacherSubjects: tSubjects, 
-                  currentUser: { email: 'admin@school.com', uid: selectedTeacherId } 
+                  currentUser: { email: adminEmail, uid: selectedTeacherId } 
                 });
                 setPrintAll(true);
                 setTimeout(() => window.print(), 300);
@@ -2351,20 +2458,186 @@ function AdminReportsTab({ teachers, setPrintAll, setPrintSingleStudent, setPrin
               onPrintSingle={(s) => {
                 setPrintData({ 
                   students: [s], 
-                  metadata: {...classData.metadata, term: selectedTerm}, 
+                  metadata: mergedMetadata, 
                   computedResults, 
                   teacherSubjects: tSubjects, 
-                  currentUser: { email: 'admin@school.com', uid: selectedTeacherId } 
+                  currentUser: { email: adminEmail, uid: selectedTeacherId } 
                 });
                 setPrintSingleStudent(s);
                 setTimeout(() => window.print(), 300);
               }}
               teacherSubjects={tSubjects}
               viewingTerm={selectedTerm}
-              isReadOnly={true}
+              isReadOnly={false}
               termData={classData.terms}
            />
         </div>
+      )}
+    </div>
+  );
+}
+
+function AdminParentsSmsTab({ teachers, institution, adminUser, onSmsPackageUpdated }) {
+  const {
+    selectedTeacherId,
+    setSelectedTeacherId,
+    classData,
+    setClassData,
+    classDataRef,
+    loading,
+    selectedTerm,
+    setSelectedTerm,
+  } = useAdminClassRecords();
+
+  const selectedTeacher = teachers.find(t => t.uid === selectedTeacherId);
+  const { subjectMap, subjectsList, teacherSubjects: tSubjects } = buildTeacherSubjectInfo(selectedTeacher);
+
+  const currentTermData = classData?.terms?.[selectedTerm] || { students: [], grades: {} };
+  const currentStudents = currentTermData.students || [];
+  const currentGrades = currentTermData.grades || {};
+  const mergedMetadata = buildClassTermMetadata({
+    classData,
+    selectedTeacher,
+    institution,
+    selectedTerm,
+  });
+
+  const computedResults = currentStudents.length > 0 && classData
+    ? computeClassResults(currentStudents, currentGrades, subjectsList, subjectMap)
+    : [];
+
+  const handleSaveParentContacts = async (contactUpdatesBySn) => {
+    if (!selectedTeacherId || !contactUpdatesBySn || Object.keys(contactUpdatesBySn).length === 0) {
+      return;
+    }
+    const updatedTermStudentsMap = await saveParentContactsTransaction({
+      db,
+      targetDocId: selectedTeacherId,
+      activeTerm: selectedTerm,
+      contactUpdatesBySn,
+      fallbackStudents: currentStudents,
+    });
+    if (!updatedTermStudentsMap) return;
+
+    setClassData((prev) => {
+      if (!prev) return prev;
+      const nextTerms = { ...(prev.terms || {}) };
+      Object.entries(updatedTermStudentsMap).forEach(([tKey, tStudents]) => {
+        nextTerms[tKey] = {
+          ...(nextTerms[tKey] || {}),
+          students: tStudents,
+        };
+      });
+      return { ...prev, terms: nextTerms };
+    });
+  };
+
+  const handleSaveGatewayConfig = async (nextConfig) => {
+    if (!selectedTeacherId) return;
+    setClassData((prev) => (prev ? { ...prev, smsGatewayConfig: nextConfig } : prev));
+    try {
+      await setDoc(doc(db, "schools", selectedTeacherId), { smsGatewayConfig: nextConfig }, { merge: true });
+    } catch (e) {
+      console.error("Admin SMS gateway sync error:", e);
+    }
+  };
+
+  const handleAddSmsLog = async (newLog) => {
+    if (!selectedTeacherId) return;
+    const prevLogs = classDataRef.current?.smsLogs || [];
+    const updatedLogs = [newLog, ...prevLogs].slice(0, 50);
+    setClassData((prev) => (prev ? { ...prev, smsLogs: updatedLogs } : prev));
+    await appendSmsLogInDoc({
+      db,
+      targetDocId: selectedTeacherId,
+      prevLogs,
+      newLog,
+    });
+  };
+
+  const handlePublishParentReports = async (targetLearners = []) => {
+    if (!selectedTeacherId || !Array.isArray(targetLearners) || targetLearners.length === 0) {
+      return { linksBySn: {}, createdTokens: [] };
+    }
+    const activeLinks = classDataRef.current?.activeParentReportLinks || [];
+    const result = await publishParentReportsInDoc({
+      db,
+      targetDocId: selectedTeacherId,
+      targetLearners,
+      activeLinks,
+      metadata: mergedMetadata,
+      institution,
+      viewingTerm: selectedTerm,
+      teacherUid: selectedTeacherId || adminUser?.uid || '',
+    });
+    setClassData((prev) => (prev ? { ...prev, activeParentReportLinks: result.activeLinks } : prev));
+    return { linksBySn: result.linksBySn, createdTokens: result.createdTokens };
+  };
+
+  const handleDeleteParentReports = async (tokens = []) => {
+    if (!selectedTeacherId) return;
+    const activeLinks = classDataRef.current?.activeParentReportLinks || [];
+    const nextTracking = await deleteParentReportsInDoc({
+      db,
+      targetDocId: selectedTeacherId,
+      tokens,
+      activeLinks,
+    });
+    setClassData((prev) => (prev ? { ...prev, activeParentReportLinks: nextTracking } : prev));
+  };
+
+  const handleRecordSmsUsage = async (creditsConsumed = 0, extra = {}) => {
+    if (!institution?.id) return;
+    const updatedPkg = await recordInstitutionSmsUsageTransaction({
+      db,
+      institutionId: institution.id,
+      creditsConsumed,
+      extra,
+    });
+    if (updatedPkg && typeof onSmsPackageUpdated === 'function') {
+      onSmsPackageUpdated(updatedPkg);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <AdminClassTermSelector
+        label="Select Class for Parents & SMS"
+        teachers={teachers}
+        selectedTeacherId={selectedTeacherId}
+        onSelectTeacher={setSelectedTeacherId}
+        classData={classData}
+        selectedTerm={selectedTerm}
+        onSelectTerm={setSelectedTerm}
+      />
+
+      {!selectedTeacherId && (
+        <div className="glass-card p-10 text-center text-sm text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
+          Choose a class above to manage parent contacts and dispatch SMS alerts.
+        </div>
+      )}
+
+      {loading && <div className="p-8 text-center text-zinc-500">Loading class parent & SMS records...</div>}
+
+      {classData && !loading && (
+        <ParentsSmsTab
+          key={selectedTeacherId}
+          students={currentStudents}
+          computedResults={computedResults}
+          teacherSubjects={tSubjects}
+          metadata={mergedMetadata}
+          viewingTerm={selectedTerm}
+          onSaveParentContacts={handleSaveParentContacts}
+          gatewayConfig={normalizeGatewayConfig(classData.smsGatewayConfig)}
+          onSaveGatewayConfig={handleSaveGatewayConfig}
+          institution={institution}
+          onRecordSmsUsage={handleRecordSmsUsage}
+          smsLogs={Array.isArray(classData.smsLogs) ? classData.smsLogs : []}
+          onAddSmsLog={handleAddSmsLog}
+          onPublishParentReports={handlePublishParentReports}
+          onDeleteParentReports={handleDeleteParentReports}
+          isReadOnly={false}
+        />
       )}
     </div>
   );
