@@ -15,6 +15,7 @@ import ReportCard from './components/ReportCard';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import SeniorSuperUserPanel from './components/SeniorSuperUserPanel';
+import SchoolCrestImage from './components/SchoolCrestImage';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
@@ -40,20 +41,6 @@ import { auth, db, getFirebaseConfig, isConfigValid } from './utils/firebase';
 import { doc, getDoc, getDocFromServer, setDoc, updateDoc, FieldPath, deleteField, runTransaction, query, where, collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import toast, { Toaster } from 'react-hot-toast';
-
-const getDirectImageUrl = (url) => {
-  if (!url) return '';
-  let fileId = null;
-  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (dMatch && dMatch[1]) fileId = dMatch[1];
-  else if (idMatch && idMatch[1]) fileId = idMatch[1];
-  
-  if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
-  }
-  return url;
-};
 
 const MAIN_TABS = [
   { id: 'dashboard', name: 'Home', icon: LayoutDashboard },
@@ -1404,7 +1391,7 @@ if (userProfile?.isSeniorSuperUser) {
       <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] flex flex-col items-center justify-center p-6 text-center">
         <div className="glass-card max-w-md w-full p-8 border border-zinc-200 dark:border-zinc-800 space-y-4">
           {institution?.schoolCrestUrl && (
-            <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-16 h-16 object-contain mx-auto bg-white rounded p-1" alt="School Crest" />
+            <SchoolCrestImage src={institution.schoolCrestUrl} className="w-16 h-16 object-contain mx-auto bg-white rounded p-1" alt="School Crest" />
           )}
           <h2 className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wide">
             Subject Teacher Account Active
@@ -1463,7 +1450,7 @@ if (userProfile?.isSeniorSuperUser) {
       <header className="glass-panel sticky top-0 z-40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between no-print shadow-sm gap-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {institution?.schoolCrestUrl && (
-            <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
+            <SchoolCrestImage src={institution.schoolCrestUrl} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">

@@ -15,10 +15,10 @@ import {
 import { db } from '../utils/firebase';
 import {
   PARENT_REPORT_TTL_DAYS,
-  getDirectImageUrl,
   getParentReportDocId,
   isParentReportExpired,
 } from '../utils/parentReportHelpers';
+import SchoolCrestImage from './SchoolCrestImage';
 import {
   SCHOOL_LEVELS,
   KG_PROFICIENCY_SCALE,
@@ -63,14 +63,12 @@ export default function PublicParentReportView({ token }) {
   const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'expired' | 'error'
   const [report, setReport] = useState(null);
   const [expiredDateStr, setExpiredDateStr] = useState('');
-  const [crestFailed, setCrestFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     setStatus('loading');
     setReport(null);
     setExpiredDateStr('');
-    setCrestFailed(false);
 
     async function loadSnapshot() {
       const docId = getParentReportDocId(token);
@@ -200,19 +198,16 @@ export default function PublicParentReportView({ token }) {
           {/* School Header */}
           <div className="bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-800 text-white px-5 py-5">
             <div className="flex items-center gap-3.5">
-              {report.schoolCrestUrl && !crestFailed ? (
-                <img
-                  src={getDirectImageUrl(report.schoolCrestUrl)}
-                  referrerPolicy="no-referrer"
-                  alt={report.schoolName}
-                  onError={() => setCrestFailed(true)}
-                  className="w-12 h-12 rounded-xl object-contain bg-white p-1 shrink-0 shadow-xs"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
-                  <GraduationCap className="w-6 h-6 text-white" />
-                </div>
-              )}
+              <SchoolCrestImage
+                src={report.schoolCrestUrl}
+                alt={report.schoolName}
+                className="w-12 h-12 rounded-xl object-contain bg-white p-1 shrink-0 shadow-xs"
+                fallback={
+                  <div className="w-12 h-12 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-6 h-6 text-white" />
+                  </div>
+                }
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-100/90">
                   {isKgReport ? 'Kindergarten Developmental Progress' : 'Terminal Academic Summary'}

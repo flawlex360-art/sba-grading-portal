@@ -324,7 +324,8 @@ export default function KgAssessmentBook({
             const ratedIndicatorCount = areaIndicators.filter((ind) =>
               Boolean(normalizeKgRatingCode(entry.indicators?.[ind.id]))
             ).length;
-            const ageYears = student.dob ? calculateAgeFromDob(student.dob) : null;
+            const learnerDob = student?.dateOfBirth || student?.dob || '';
+            const ageYears = learnerDob ? calculateAgeFromDob(learnerDob) : null;
 
             return (
               <div

@@ -6,6 +6,9 @@ import {
   resolveSchoolLevel,
 } from '../constants/curriculum.js';
 import { calculateAgeFromDob } from './rosterHelpers.js';
+import { getDirectImageUrl } from './crestHelpers.js';
+
+export { getDirectImageUrl };
 
 export const PARENT_REPORT_TTL_DAYS = 30;
 export const PARENT_REPORT_TTL_MS = PARENT_REPORT_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -13,25 +16,6 @@ export const PARENT_REPORT_DOC_PREFIX = 'pr_';
 export const MAX_ACTIVE_REPORT_LINKS_ON_DOC = 200;
 
 const TOKEN_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-
-/**
- * Converts Google Drive sharing links to direct viewable image URLs for school crests.
- * @param {string} url
- * @returns {string}
- */
-export function getDirectImageUrl(url) {
-  if (!url) return '';
-  let fileId = null;
-  const dMatch = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const idMatch = String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (dMatch && dMatch[1]) fileId = dMatch[1];
-  else if (idMatch && idMatch[1]) fileId = idMatch[1];
-
-  if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
-  }
-  return String(url);
-}
 
 /**
  * Generates an unguessable lowercase alphanumeric token suitable for compact SMS URLs.
@@ -202,7 +186,7 @@ export function buildParentReportSnapshot({
     resolveSchoolLevel(className, metadata?.level) === SCHOOL_LEVELS.KG ||
     Boolean(learner?.isKgResult) ||
     subjects.some((s) => s.mode === 'kg');
-  const learnerAge = calculateAgeFromDob(learner?.dob, new Date(issuedMs));
+  const learnerAge = calculateAgeFromDob(learner?.dateOfBirth || learner?.dob, new Date(issuedMs));
 
   const avgRaw = learner?.averageScore ?? learner?.average;
   const avgNum =

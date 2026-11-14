@@ -14,6 +14,7 @@ import ReportCard from './ReportCard';
 import Gradebook from './Gradebook';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
 import ParentsSmsTab from './ParentsSmsTab';
+import SchoolCrestImage from './SchoolCrestImage';
 import { exportYearlyData } from '../utils/excelExport';
 import { computeClassResults } from '../utils/calculations';
 import {
@@ -37,20 +38,6 @@ import {
   appendSmsLogInDoc,
   recordInstitutionSmsUsageTransaction,
 } from '../utils/schoolDataHandlers';
-
-const getDirectImageUrl = (url) => {
-  if (!url) return '';
-  let fileId = null;
-  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (dMatch && dMatch[1]) fileId = dMatch[1];
-  else if (idMatch && idMatch[1]) fileId = idMatch[1];
-  
-  if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
-  }
-  return url;
-};
 
 export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, institution: propInstitution, onInstitutionUpdate }) {
   const [adminTab, setAdminTab] = useState('accounts');
@@ -166,7 +153,7 @@ export default function AdminPanel({ adminUser, onLogout, theme, toggleTheme, in
         <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 shadow-sm no-print">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
             {institution?.schoolCrestUrl && (
-              <img src={getDirectImageUrl(institution.schoolCrestUrl)} referrerPolicy="no-referrer" className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm shrink-0" alt="Crest" />
+              <SchoolCrestImage src={institution.schoolCrestUrl} className="w-8 h-8 object-contain bg-white rounded p-0.5 shadow-sm shrink-0" alt="Crest" />
             )}
             <div>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">

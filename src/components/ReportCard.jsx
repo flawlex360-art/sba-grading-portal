@@ -2,20 +2,7 @@ import React from 'react';
 import { getOrdinalSuffix, generateParentAdvisory } from '../utils/calculations';
 import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
 import KgReportCard from './KgReportCard';
-
-const getDirectImageUrl = (url) => {
-  if (!url) return '';
-  let fileId = null;
-  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (dMatch && dMatch[1]) fileId = dMatch[1];
-  else if (idMatch && idMatch[1]) fileId = idMatch[1];
-  
-  if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
-  }
-  return url;
-};
+import SchoolCrestImage from './SchoolCrestImage';
 
 // Date formatter helper: "2023-12-22" -> "Dec 22, 2023"
 function formatDate(dateStr) {
@@ -107,10 +94,9 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
-          <img 
-            src={getDirectImageUrl(institution?.schoolCrestUrl || metadata?.schoolCrestUrl)} 
-            alt="School Crest" 
-            referrerPolicy="no-referrer"
+          <SchoolCrestImage
+            src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
+            alt="School Crest"
             className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
           />
         )}

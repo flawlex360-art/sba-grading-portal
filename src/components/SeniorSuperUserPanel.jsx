@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
 import { db, createTeacherUser, deleteTeacherAccount } from '../utils/firebase';
-import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive, MessageSquare } from 'lucide-react';
+import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Database, ChevronDown, ChevronUp, Key, X, Save, Archive, MessageSquare, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
+import SchoolCrestImage from './SchoolCrestImage';
+import { compressCrestImageFile, isEmbeddedCrestDataUrl } from '../utils/crestHelpers';
 import { SMS_PACKAGE_PRESETS, getSchoolSmsPackageSummary, normalizeSmsSenderId } from '../utils/mnotifyHelpers';
 import {
   SCHOOL_LEVELS,
@@ -14,6 +16,82 @@ import {
   deriveKgAreaRatingFromIndicators,
 } from '../constants/curriculum';
 import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from '../constants/dropList';
+
+function CrestUploadInput({ value, onChange, compact = false }) {
+  const [processing, setProcessing] = useState(false);
+  const isEmbedded = isEmbeddedCrestDataUrl(value);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setProcessing(true);
+    try {
+      const dataUrl = await compressCrestImageFile(file);
+      onChange(dataUrl);
+      toast.success('Crest processed and ready to save permanently.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not process crest image.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        {value ? (
+          <SchoolCrestImage
+            src={value}
+            alt="Crest preview"
+            className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} object-contain rounded bg-white p-0.5 border border-zinc-200 dark:border-zinc-700 shrink-0`}
+            fallback={
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                Link Error
+              </span>
+            }
+          />
+        ) : null}
+        <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-600/10 hover:bg-violet-600/20 text-violet-700 dark:text-violet-300 border border-violet-500/25 text-[11px] font-bold cursor-pointer transition-colors shrink-0">
+          <Upload className="w-3 h-3" />
+          <span>{processing ? 'Processing...' : value ? 'Replace File' : 'Upload Crest'}</span>
+          <input
+            type="file"
+            accept="image/*"
+            disabled={processing}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </label>
+        {isEmbedded && (
+          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 px-1.5 py-0.5 rounded">
+            Stored in DB
+          </span>
+        )}
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {!isEmbedded && (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Or paste https://... image URL"
+          className={`w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs ${
+            compact ? 'px-2 py-1' : 'px-3 py-1.5'
+          }`}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
   const [institutions, setInstitutions] = useState([]);
@@ -572,8 +650,8 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                   <input type="text" required value={adminPassword} onChange={e => setAdminPassword(e.target.value)} placeholder="StrongPassword123!" className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs" />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">School Crest URL (Optional)</label>
-                  <input value={schoolCrestUrl} onChange={e => setSchoolCrestUrl(e.target.value)} placeholder="https://..." className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs" />
+                  <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">School Crest Image (Optional — Stored Permanently)</label>
+                  <CrestUploadInput value={schoolCrestUrl} onChange={setSchoolCrestUrl} />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Academic Year</label>
@@ -692,16 +770,22 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         {editingInstId === inst.id ? (
-                          <input 
-                            type="text" 
-                            value={editCrestUrl} 
-                            onChange={(e) => setEditCrestUrl(e.target.value)}
-                            placeholder="Crest URL"
-                            className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs px-2 py-1 rounded w-full focus:ring-violet-500 focus:border-violet-500"
-                          />
+                          <CrestUploadInput compact value={editCrestUrl} onChange={setEditCrestUrl} />
                         ) : (
                           inst.schoolCrestUrl ? (
-                            <img src={inst.schoolCrestUrl} alt="crest" className="w-6 h-6 object-contain rounded bg-white" />
+                            <SchoolCrestImage
+                              src={inst.schoolCrestUrl}
+                              alt="crest"
+                              className="w-7 h-7 object-contain rounded bg-white p-0.5 shadow-sm"
+                              fallback={
+                                <span
+                                  className="text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                                  title="External crest link failed to load — click Edit to upload the image permanently"
+                                >
+                                  Broken Link
+                                </span>
+                              }
+                            />
                           ) : (
                             <span className="text-[10px] text-zinc-500">None</span>
                           )

@@ -8,20 +8,7 @@ import {
 } from '../constants/curriculum';
 import { generateKgParentAdvisory } from '../utils/calculations';
 import { calculateAgeFromDob } from '../utils/rosterHelpers';
-
-const getDirectImageUrl = (url) => {
-  if (!url) return '';
-  let fileId = null;
-  const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (dMatch && dMatch[1]) fileId = dMatch[1];
-  else if (idMatch && idMatch[1]) fileId = idMatch[1];
-
-  if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
-  }
-  return url;
-};
+import SchoolCrestImage from './SchoolCrestImage';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -63,7 +50,8 @@ export default function KgReportCard({
   };
 
   const overallMax = metadata.timesOpen || 100;
-  const ageYears = student.dob ? calculateAgeFromDob(student.dob) : null;
+  const learnerDob = student?.dateOfBirth || student?.dob || '';
+  const ageYears = learnerDob ? calculateAgeFromDob(learnerDob) : null;
   const termDisplayMap = { 'Term 1': 'ONE', 'Term 2': 'TWO', 'Term 3': 'THREE' };
   const displayTerm = termDisplayMap[viewingTerm] || viewingTerm || metadata.term || '';
 
@@ -93,10 +81,9 @@ export default function KgReportCard({
           className="absolute left-0 top-1 w-16 h-16 object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
-          <img
-            src={getDirectImageUrl(institution?.schoolCrestUrl || metadata?.schoolCrestUrl)}
+          <SchoolCrestImage
+            src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
             alt="School Crest"
-            referrerPolicy="no-referrer"
             className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
           />
         )}

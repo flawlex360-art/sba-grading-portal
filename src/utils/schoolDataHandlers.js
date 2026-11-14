@@ -395,8 +395,8 @@ export async function publishParentReportsInDoc({
     });
   }
 
-  for (let i = 0; i < writeOps.length; i += 200) {
-    const chunk = writeOps.slice(i, i + 200);
+  for (let i = 0; i < writeOps.length; i += 40) {
+    const chunk = writeOps.slice(i, i + 40);
     const batch = writeBatch(db);
     chunk.forEach(({ snapDocId, snapshotData }) => {
       batch.set(doc(db, 'schools', snapDocId), snapshotData);
