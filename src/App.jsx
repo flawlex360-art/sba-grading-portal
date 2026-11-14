@@ -86,14 +86,8 @@ export default function App() {
   const publicReportToken =
     typeof window !== 'undefined' ? parseReportTokenFromPathname(window.location.pathname) : null;
 
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('school_active_tab') || 'dashboard';
-  });
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [theme, setTheme] = useState('light');
-
-  useEffect(() => {
-    localStorage.setItem('school_active_tab', activeTab);
-  }, [activeTab]);
   
   // Auth States
   const [currentUser, setCurrentUser] = useState(null);
@@ -1465,6 +1459,10 @@ export default function App() {
 
 
   const handleLogout = async () => {
+    try {
+      localStorage.removeItem('school_active_tab');
+    } catch {}
+    setActiveTab('dashboard');
     if (auth) {
       try {
         await signOut(auth);
@@ -1495,7 +1493,12 @@ export default function App() {
   if (!currentUser) {
     return (
       <>
-        <Login onLoginSuccess={(user) => setCurrentUser(user)} />
+        <Login
+          onLoginSuccess={(user) => {
+            setActiveTab('dashboard');
+            setCurrentUser(user);
+          }}
+        />
         <Toaster
           position="top-center"
           toastOptions={{

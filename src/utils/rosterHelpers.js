@@ -25,6 +25,87 @@ export function normalizeGender(raw) {
 }
 
 /**
+ * Normalize a learner's date of birth into canonical `YYYY-MM-DD`, or `''` if empty/invalid.
+ * Accepts `YYYY-MM-DD`, `YYYY/MM/DD`, `DD/MM/YYYY`, or `DD-MM-YYYY`.
+ */
+export function normalizeDateOfBirth(raw) {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  let year;
+  let month;
+  let day;
+
+  const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  const dmyMatch = !isoMatch ? trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/) : null;
+
+  if (isoMatch) {
+    year = Number(isoMatch[1]);
+    month = Number(isoMatch[2]);
+    day = Number(isoMatch[3]);
+  } else if (dmyMatch) {
+    day = Number(dmyMatch[1]);
+    month = Number(dmyMatch[2]);
+    year = Number(dmyMatch[3]);
+  } else {
+    return '';
+  }
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    year < 1900 ||
+    year > 2100 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return '';
+  }
+
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() + 1 !== month ||
+    probe.getUTCDate() !== day
+  ) {
+    return '';
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Compute integer age in years from a DOB string relative to `referenceDate`.
+ * Returns `null` when DOB is missing, invalid, in the future, or implausible (> 120 yrs).
+ */
+export function calculateAgeFromDob(dob, referenceDate = new Date()) {
+  const normalized = normalizeDateOfBirth(dob);
+  if (!normalized) return null;
+
+  const ref =
+    referenceDate instanceof Date && !Number.isNaN(referenceDate.getTime())
+      ? referenceDate
+      : new Date();
+
+  const [birthYear, birthMonth, birthDay] = normalized.split('-').map(Number);
+  const refYear = ref.getFullYear();
+  const refMonth = ref.getMonth() + 1;
+  const refDay = ref.getDate();
+
+  let age = refYear - birthYear;
+  if (refMonth < birthMonth || (refMonth === birthMonth && refDay < birthDay)) {
+    age -= 1;
+  }
+
+  if (age < 0 || age > 120) return null;
+  return age;
+}
+
+/**
  * Parse a multi-line pasted list (e.g., from WhatsApp, Notes, or Excel column)
  * into clean `{ name, gender }` entries. Strips numbering prefixes and optional
  * trailing gender tags such as `, M`, `- F`, `(Female)`, or tab-separated `M/F`.
@@ -84,6 +165,7 @@ export function stripInternalRowFields(studentObj) {
   delete copy._origSn;
   delete copy._origName;
   delete copy._origGender;
+  delete copy._origDob;
   delete copy._rawData;
   return copy;
 }
@@ -119,6 +201,7 @@ export function buildRosterCommitPayload({
       ...row,
       name: normalizedName,
       gender: normalizeGender(row.gender),
+      dateOfBirth: normalizeDateOfBirth(row.dateOfBirth),
     });
   }
 
@@ -141,6 +224,7 @@ export function buildRosterCommitPayload({
       _rawData: null,
       name: normalizedName,
       gender: normalizeGender(draft.gender),
+      dateOfBirth: normalizeDateOfBirth(draft.dateOfBirth),
     });
   }
 
@@ -148,9 +232,12 @@ export function buildRosterCommitPayload({
   const hasAddition = cleanDrafts.length > 0;
   const hasRename = cleanEnrolled.some((row) => row.name !== row._origName);
   const hasGenderChange = cleanEnrolled.some((row) => row.gender !== row._origGender);
+  const hasDobChange = cleanEnrolled.some(
+    (row) => row.dateOfBirth !== normalizeDateOfBirth(row._origDob)
+  );
   const needsReorder = hasDeletion || hasAddition || hasRename;
 
-  if (!needsReorder && !hasGenderChange) {
+  if (!needsReorder && !hasGenderChange && !hasDobChange) {
     return {
       hasError: false,
       hasChanges: false,
@@ -163,17 +250,22 @@ export function buildRosterCommitPayload({
   }
 
   if (!needsReorder) {
-    // Only gender values were toggled on existing rows; keep S/N order stable
+    // Only gender or DOB values changed on existing rows; keep S/N order stable
     const updatedRoster = [...cleanEnrolled]
       .sort((a, b) => (a._origSn ?? 0) - (b._origSn ?? 0))
       .map((row) => {
-        const base = stripInternalRowFields(row._rawData);
-        return {
-          ...base,
+        const next = {
+          ...stripInternalRowFields(row._rawData),
           sn: row._origSn,
           name: row.name,
           gender: row.gender,
         };
+        if (row.dateOfBirth) {
+          next.dateOfBirth = row.dateOfBirth;
+        } else {
+          delete next.dateOfBirth;
+        }
+        return next;
       });
 
     return {
@@ -204,13 +296,18 @@ export function buildRosterCommitPayload({
     if (item._origSn != null) {
       snMap[item._origSn] = newSn;
     }
-    const base = stripInternalRowFields(item._rawData);
-    return {
-      ...base,
+    const next = {
+      ...stripInternalRowFields(item._rawData),
       sn: newSn,
       name: item.name,
       gender: item.gender,
     };
+    if (item.dateOfBirth) {
+      next.dateOfBirth = item.dateOfBirth;
+    } else {
+      delete next.dateOfBirth;
+    }
+    return next;
   });
 
   return {
