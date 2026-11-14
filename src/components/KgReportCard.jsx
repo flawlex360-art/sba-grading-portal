@@ -269,33 +269,35 @@ export default function KgReportCard({
       </div>
 
       {/* 7. Signatures */}
-      <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase pt-6">
-        <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
-          <div>Class Facilitator&apos;s Signature</div>
-          {metadata.teacherName && (
-            <div className="text-zinc-600 capitalize font-medium">{metadata.teacherName}</div>
-          )}
+      <div className="break-inside-avoid pt-5">
+        <div className="grid grid-cols-2 gap-8 text-center text-[10px] font-bold uppercase">
+          <div className="space-y-0.5">
+            <div className="border-t border-zinc-500 pt-1 mx-auto max-w-[200px]" />
+            <div>Class Facilitator&apos;s Signature</div>
+            {metadata.teacherName && (
+              <div className="text-zinc-600 capitalize font-medium">{metadata.teacherName}</div>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <div className="border-t border-zinc-500 pt-1 mx-auto max-w-[200px]" />
+            <div>Headteacher&apos;s Signature</div>
+            {metadata.headTeacherName && (
+              <div className="text-zinc-600 capitalize font-medium">{metadata.headTeacherName}</div>
+            )}
+          </div>
         </div>
-        <div className="space-y-1">
-          <div className="border-t border-zinc-500 pt-1.5 mx-auto max-w-[200px]" />
-          <div>Headteacher&apos;s Signature</div>
-          {metadata.headTeacherName && (
-            <div className="text-zinc-600 capitalize font-medium">{metadata.headTeacherName}</div>
-          )}
-        </div>
-      </div>
 
-      <div className="text-center text-[9px] text-black mt-2 border-t border-zinc-100 pt-1 italic">
-        Madifor Technologies (0592664865)
+        <div className="text-center text-[9px] text-black mt-2 border-t border-zinc-100 pt-1 italic">
+          Madifor Technologies (0592664865)
+        </div>
       </div>
 
       {/* 8. NaCCA 4-Tier Developmental Scale Key */}
-      <div className="mt-3 pt-3 border-t border-zinc-200 break-inside-avoid">
+      <div className="print-page-break mt-3 pt-3 border-t border-zinc-200 break-inside-avoid">
         <span className="text-xs font-bold uppercase text-black block mb-2">
           NaCCA Kindergarten Developmental Proficiency Key
         </span>
-        <table className="w-full text-left text-[10px] border-collapse border border-zinc-300">
+        <table className="grading-key-table w-full text-left text-[10px] border-collapse border border-zinc-300">
           <thead className="bg-zinc-100 text-black font-bold">
             <tr>
               <th className="border border-zinc-300 px-2 py-1 w-20 text-center">Code</th>

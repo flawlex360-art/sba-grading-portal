@@ -83,7 +83,6 @@
     margin: 0 !important;
     padding: 0 !important;
     page-break-after: always !important;
-    page-break-inside: avoid !important;
     display: block !important;
     position: relative !important;
   }
@@ -92,14 +91,23 @@
     page-break-after: avoid !important;
   }
 
-  /* Optimize print font sizes and table spacing */
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  /* Match report card table font size to learner name (text-xs = 0.75rem = 13.5px) */
   .print-page table {
-    font-size: 11px !important;
+    font-size: 0.75rem !important;
     border-collapse: collapse !important;
   }
 
+  .print-page table.grading-key-table {
+    font-size: 11px !important;
+  }
+
   .print-page td, .print-page th {
-    padding: 3px 5px !important;
+    padding: 3px 6px !important;
     border: 1px solid black !important;
   }
 }
