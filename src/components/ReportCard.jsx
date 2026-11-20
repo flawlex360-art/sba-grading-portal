@@ -88,17 +88,17 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
     <div className="print-page bg-white text-black p-5 border border-zinc-200 shadow-lg max-w-[800px] mx-auto space-y-3.5 font-sans">
       
       {/* 1. Header block */}
-      <div className="text-center border-b-2 border-zinc-950 pb-2.5 relative px-20 min-h-[78px] flex flex-col justify-center">
-        <img 
-          src="/ghana-coa.svg" 
-          alt="Ghana Coat of Arms" 
-          className="absolute left-0 top-1 w-16 h-16 object-contain"
+      <div className="text-center border-b-2 border-zinc-950 pb-2.5 relative px-20 min-h-[82px] flex flex-col justify-center">
+        <img
+          src="/ghana-coa.svg"
+          alt="Ghana Coat of Arms"
+          className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
           <SchoolCrestImage
             src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
             alt="School Crest"
-            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
+            className="absolute right-0 top-0.5 w-[68px] h-[68px] object-contain"
           />
         )}
         <h1 className="text-xl font-bold uppercase tracking-wide leading-tight">Ghana Education Service</h1>

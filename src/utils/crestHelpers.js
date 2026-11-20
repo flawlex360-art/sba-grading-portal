@@ -83,8 +83,115 @@ export function getDirectImageUrl(url) {
 }
 
 /**
- * Reads an image File in the browser, resizes it cleanly onto a transparent canvas,
- * and encodes a compact WebP/PNG data URL that fits reliably inside Firestore.
+ * Computes the tight visible bounding box of an RGBA pixel buffer by trimming
+ * transparent or near-white outer margins while keeping a small breathing pad.
+ * Only marks `wasTrimmed: true` when meaningful empty padding (>6% on either axis) exists.
+ * @param {Uint8ClampedArray|Uint8Array} data
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ x: number, y: number, width: number, height: number, wasTrimmed: boolean }}
+ */
+export function computeVisibleBoundsFromRgba(data, width, height) {
+  const safeW = Math.max(1, Math.floor(Number(width) || 0));
+  const safeH = Math.max(1, Math.floor(Number(height) || 0));
+  const fallback = { x: 0, y: 0, width: safeW, height: safeH, wasTrimmed: false };
+  if (!data || data.length < safeW * safeH * 4) return fallback;
+
+  let minX = safeW;
+  let minY = safeH;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < safeH; y += 1) {
+    const rowOffset = y * safeW * 4;
+    for (let x = 0; x < safeW; x += 1) {
+      const i = rowOffset + x * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (a > 24 && (r < 240 || g < 240 || b < 240)) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return fallback;
+
+  const visW = maxX - minX + 1;
+  const visH = maxY - minY + 1;
+  if (visW < 10 || visH < 10) return fallback;
+
+  const pad = Math.max(2, Math.round(Math.max(visW, visH) * 0.02));
+  const x0 = Math.max(0, minX - pad);
+  const y0 = Math.max(0, minY - pad);
+  const x1 = Math.min(safeW, maxX + 1 + pad);
+  const y1 = Math.min(safeH, maxY + 1 + pad);
+  const cropW = x1 - x0;
+  const cropH = y1 - y0;
+
+  if (cropW >= safeW * 0.94 && cropH >= safeH * 0.94) {
+    return fallback;
+  }
+
+  return { x: x0, y: y0, width: cropW, height: cropH, wasTrimmed: true };
+}
+
+/**
+ * Inspects a decoded HTMLImageElement and returns a tightly cropped PNG data URL
+ * if excess blank/white/transparent margins are present, or `null` if already tight
+ * or unreadable (e.g. CORS-tainted canvas).
+ * @param {HTMLImageElement} img
+ * @returns {string|null}
+ */
+export function trimImageElementToDataUrl(img) {
+  if (!img || typeof document === 'undefined') return null;
+  const srcW = Math.max(0, Math.floor(img.naturalWidth || img.width || 0));
+  const srcH = Math.max(0, Math.floor(img.naturalHeight || img.height || 0));
+  if (srcW < 16 || srcH < 16) return null;
+
+  try {
+    const scanCanvas = document.createElement('canvas');
+    scanCanvas.width = srcW;
+    scanCanvas.height = srcH;
+    const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+    if (!scanCtx) return null;
+    scanCtx.clearRect(0, 0, srcW, srcH);
+    scanCtx.drawImage(img, 0, 0, srcW, srcH);
+    const { data } = scanCtx.getImageData(0, 0, srcW, srcH);
+    const bounds = computeVisibleBoundsFromRgba(data, srcW, srcH);
+    if (!bounds.wasTrimmed) return null;
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = bounds.width;
+    outCanvas.height = bounds.height;
+    const outCtx = outCanvas.getContext('2d');
+    if (!outCtx) return null;
+    outCtx.clearRect(0, 0, bounds.width, bounds.height);
+    outCtx.drawImage(
+      img,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      0,
+      0,
+      bounds.width,
+      bounds.height
+    );
+    const trimmedUrl = outCanvas.toDataURL('image/png');
+    return trimmedUrl && trimmedUrl.startsWith('data:image/') ? trimmedUrl : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads an image File in the browser, auto-trims blank margins, resizes it cleanly
+ * onto a transparent canvas, and encodes a compact WebP/PNG data URL that fits reliably inside Firestore.
  * @param {File} file
  * @returns {Promise<string>}
  */
@@ -120,8 +227,28 @@ export async function compressCrestImageFile(file) {
     el.src = rawDataUrl;
   });
 
-  const srcW = Math.max(1, img.naturalWidth || img.width || 240);
-  const srcH = Math.max(1, img.naturalHeight || img.height || 240);
+  const rawW = Math.max(1, img.naturalWidth || img.width || 240);
+  const rawH = Math.max(1, img.naturalHeight || img.height || 240);
+
+  // Auto-crop blank transparent/white margins before downscaling so uploaded crests stay sharp and full-sized
+  let cropBounds = { x: 0, y: 0, width: rawW, height: rawH, wasTrimmed: false };
+  try {
+    const scanCanvas = document.createElement('canvas');
+    scanCanvas.width = rawW;
+    scanCanvas.height = rawH;
+    const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+    if (scanCtx) {
+      scanCtx.clearRect(0, 0, rawW, rawH);
+      scanCtx.drawImage(img, 0, 0, rawW, rawH);
+      const { data } = scanCtx.getImageData(0, 0, rawW, rawH);
+      cropBounds = computeVisibleBoundsFromRgba(data, rawW, rawH);
+    }
+  } catch {
+    cropBounds = { x: 0, y: 0, width: rawW, height: rawH, wasTrimmed: false };
+  }
+
+  const srcW = cropBounds.width;
+  const srcH = cropBounds.height;
 
   const dimensionSteps = [280, 220, 180, 140];
   let bestCandidate = '';
@@ -141,7 +268,17 @@ export async function compressCrestImageFile(file) {
     ctx.clearRect(0, 0, targetW, targetH);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, targetW, targetH);
+    ctx.drawImage(
+      img,
+      cropBounds.x,
+      cropBounds.y,
+      srcW,
+      srcH,
+      0,
+      0,
+      targetW,
+      targetH
+    );
 
     const attempts = [
       canvas.toDataURL('image/webp', 0.88),

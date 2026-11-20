@@ -79,13 +79,13 @@ export default function KgReportCard({
         <img
           src="/ghana-coa.svg"
           alt="Ghana Coat of Arms"
-          className="absolute left-0 top-1 w-16 h-16 object-contain"
+          className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
           <SchoolCrestImage
             src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
             alt="School Crest"
-            className="absolute right-0 top-1 w-16 h-16 object-contain scale-[1.5] origin-center bg-white p-0.5 rounded"
+            className="absolute right-0 top-0.5 w-[68px] h-[68px] object-contain"
           />
         )}
         <h1 className="text-xl font-bold uppercase tracking-wide">Ghana Education Service</h1>
