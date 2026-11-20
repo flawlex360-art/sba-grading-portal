@@ -438,9 +438,9 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
   );
   
   // Custom metadata fields entered by the Admin for new accounts
-  const [schoolName, setSchoolName] = useState('Anglican JHS');
-  const [district, setDistrict] = useState('Kpando');
-    const [academicYear, setAcademicYear] = useState('2025/2026');
+  const [schoolName, setSchoolName] = useState(institution?.schoolName || '');
+  const [district, setDistrict] = useState('');
+  const [academicYear, setAcademicYear] = useState('2025/2026');
 
   const [loading, setLoading] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
@@ -559,13 +559,13 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
       if (schoolDocSnap.exists()) {
         const data = schoolDocSnap.data();
         const meta = data.metadata || {};
-        setEditSchoolName(meta.schoolName || 'Anglican JHS');
-        setEditDistrict(meta.district || 'Kpando');
+        setEditSchoolName(meta.schoolName || institution?.schoolName || '');
+        setEditDistrict(meta.district || '');
         setEditTerm(meta.term || 'ONE');
         setEditAcademicYear(meta.academicYear || '2025/2026');
       } else {
-        setEditSchoolName('Anglican JHS');
-        setEditDistrict('Kpando');
+        setEditSchoolName(institution?.schoolName || '');
+        setEditDistrict('');
         setEditTerm('ONE');
         setEditAcademicYear('2025/2026');
       }
@@ -914,7 +914,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                     required
                     value={district}
                     onChange={(e) => setDistrict(e.target.value)}
-                    placeholder="e.g. Kpando"
+                    placeholder="Enter district"
                     className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                   />
                 </div>
@@ -1223,6 +1223,7 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
                       required
                       value={editDistrict}
                       onChange={(e) => setEditDistrict(e.target.value)}
+                      placeholder="Enter district"
                       className="w-full bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-ink"
                     />
                   </div>

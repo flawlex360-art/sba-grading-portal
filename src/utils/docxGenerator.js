@@ -128,7 +128,7 @@ export const generateGradingSheetDocx = async (students, metadata) => {
           new Paragraph({
             children: [
               new TextRun({
-                text: metadata?.schoolName || 'KPANDO ANGLICAN BASIC SCHOOL',
+                text: metadata?.schoolName || 'SCHOOL ASSESSMENT PORTAL',
                 bold: true,
                 size: 24,
                 font: 'Calibri',
