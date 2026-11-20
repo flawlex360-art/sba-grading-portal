@@ -122,13 +122,17 @@
     box-sizing: border-box !important;
   }
 
-  /* Distribute Page 1 sections gracefully across the full A4 portrait height */
-  .report-page-one {
-    min-height: 263mm !important;
+  /* Distribute each of the 3 report card pages gracefully across full A4 portrait height */
+  .report-page-section {
+    min-height: 248mm !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
     box-sizing: border-box !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .report-card-table {
