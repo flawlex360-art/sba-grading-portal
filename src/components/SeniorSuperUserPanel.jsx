@@ -5,6 +5,7 @@ import { Building2, Plus, LogOut, CheckCircle, AlertCircle, Edit, Trash2, Databa
 import toast from 'react-hot-toast';
 import SchoolSmsConfigPanel from './SchoolSmsConfigPanel';
 import SchoolCrestImage from './SchoolCrestImage';
+import { MADIFOR_LOGO_DATA_URI } from '../utils/logoAsset';
 import { compressCrestImageFile, isEmbeddedCrestDataUrl } from '../utils/crestHelpers';
 import { SMS_PACKAGE_PRESETS, getSchoolSmsPackageSummary, normalizeSmsSenderId } from '../utils/mnotifyHelpers';
 import {
@@ -617,7 +618,15 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
       {/* Top Navbar */}
       <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/60 backdrop-blur px-6 py-4 flex flex-col sm:flex-row items-center justify-between flex-wrap gap-4 shadow-sm">
         <div className="flex items-center gap-2">
-          <img src="/icon.png" className="w-10 h-10 object-contain" alt="logo" />
+          <img
+            src={MADIFOR_LOGO_DATA_URI}
+            width="40"
+            height="40"
+            decoding="sync"
+            loading="eager"
+            className="w-10 h-10 object-contain"
+            alt="logo"
+          />
           <span className="font-bold tracking-tight text-sm uppercase text-violet-600 dark:text-violet-400">Senior Super User Portal</span>
         </div>
         <div className="flex flex-wrap justify-center sm:justify-end items-center gap-4">

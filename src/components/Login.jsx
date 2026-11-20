@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswor
 import { auth, db, isConfigValid, getFirebaseConfig } from '../utils/firebase';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { LogIn, Key, Mail, Lock, ShieldAlert, AlertCircle, HelpCircle, Save, Settings, Eye, EyeOff, X } from 'lucide-react';
+import { MADIFOR_LOGO_DATA_URI } from '../utils/logoAsset';
 
 export default function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -217,7 +218,16 @@ export default function Login({ onLoginSuccess }) {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col items-center mb-8 relative">
-          <img src="/icon.png" className="w-32 h-32 object-contain mb-3 select-none" alt="Madifor logo" />
+          <img
+            src={MADIFOR_LOGO_DATA_URI}
+            width="128"
+            height="128"
+            decoding="sync"
+            loading="eager"
+            fetchPriority="high"
+            className="w-32 h-32 object-contain mb-3 select-none"
+            alt="Madifor logo"
+          />
           <h1 className="text-xl font-bold tracking-tight text-white">Madifor Technologies SBA Portal</h1>
           <p className="text-xs text-zinc-400 mt-1 text-center">
             Sign in to access your classroom spreadsheets and report cards
