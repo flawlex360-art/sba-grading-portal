@@ -10,6 +10,7 @@ import { generateKgParentAdvisory } from '../utils/calculations';
 import { calculateAgeFromDob } from '../utils/rosterHelpers';
 import { resolveHeadTeacherName } from '../utils/schoolDataHandlers';
 import SchoolCrestImage from './SchoolCrestImage';
+import { GHANA_COA_DATA_URI } from '../utils/logoAsset';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -77,8 +78,13 @@ export default function KgReportCard({
       {/* 1. Header Block */}
       <div className="text-center border-b-2 border-zinc-950 pb-4 relative px-20 min-h-[90px] flex flex-col justify-center">
         <img
-          src="/ghana-coa.svg"
+          src={GHANA_COA_DATA_URI}
           alt="Ghana Coat of Arms"
+          width="68"
+          height="68"
+          decoding="sync"
+          loading="eager"
+          fetchPriority="high"
           className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (

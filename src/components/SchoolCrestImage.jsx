@@ -75,6 +75,8 @@ export default function SchoolCrestImage({
     <img
       src={displaySrc}
       alt={alt}
+      decoding="sync"
+      loading="eager"
       referrerPolicy={isExternal ? 'no-referrer' : undefined}
       onLoad={handleLoad}
       onError={() => {

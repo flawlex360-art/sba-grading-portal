@@ -4,6 +4,7 @@ import { resolveSchoolLevel, SCHOOL_LEVELS } from '../constants/curriculum';
 import { resolveHeadTeacherName } from '../utils/schoolDataHandlers';
 import KgReportCard from './KgReportCard';
 import SchoolCrestImage from './SchoolCrestImage';
+import { GHANA_COA_DATA_URI } from '../utils/logoAsset';
 
 // Date formatter helper: "2023-12-22" -> "Dec 22, 2023"
 function formatDate(dateStr) {
@@ -90,8 +91,13 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* 1. Header block */}
       <div className="text-center border-b-2 border-zinc-950 pb-2.5 relative px-20 min-h-[82px] flex flex-col justify-center">
         <img
-          src="/ghana-coa.svg"
+          src={GHANA_COA_DATA_URI}
           alt="Ghana Coat of Arms"
+          width="68"
+          height="68"
+          decoding="sync"
+          loading="eager"
+          fetchPriority="high"
           className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
         />
         {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
