@@ -49,8 +49,37 @@
   @apply px-4 py-1.5 text-xs font-semibold border-r border-zinc-200 dark:border-zinc-800 select-none cursor-pointer transition-colors duration-150 flex items-center gap-1.5;
 }
 
+/* Classic authoritative Georgia typography & crisp unclipped borders for Report Cards */
+.report-card-sheet {
+  font-family: Georgia, 'Times New Roman', Times, serif !important;
+  box-sizing: border-box;
+}
+
+.report-card-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1.5px solid #000 !important;
+  box-sizing: border-box;
+}
+
+.report-card-table th,
+.report-card-table td {
+  border: 1px solid #000 !important;
+  box-sizing: border-box;
+}
+
+.report-card-table tr > th:last-child,
+.report-card-table tr > td:last-child {
+  border-right: 1.5px solid #000 !important;
+}
+
 /* Print Layout Optimization */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 9mm 10mm;
+  }
+
   body {
     background-color: white !important;
     color: black !important;
@@ -87,6 +116,39 @@
     position: relative !important;
   }
 
+  /* Prevent subpixel clipping of table right border on Report Cards */
+  .print-page.report-card-sheet {
+    padding: 0 3px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Distribute Page 1 sections gracefully across the full A4 portrait height */
+  .report-page-one {
+    min-height: 263mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+  }
+
+  .report-card-table {
+    width: calc(100% - 2px) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    border-collapse: collapse !important;
+    border: 1.5px solid #000 !important;
+  }
+
+  .report-card-table th,
+  .report-card-table td {
+    border: 1px solid #000 !important;
+  }
+
+  .report-card-table tr > th:last-child,
+  .report-card-table tr > td:last-child {
+    border-right: 1.5px solid #000 !important;
+  }
+
   .print-page:last-child {
     page-break-after: avoid !important;
   }
@@ -96,17 +158,14 @@
     break-before: page !important;
   }
 
-  /* Match report card table font size to learner name (text-xs = 0.75rem = 13.5px) */
-  .print-page table {
+  /* Preserve non-report-card print tables (e.g. AnalyticsPrintLayout) */
+  .print-page:not(.report-card-sheet) table {
     font-size: 0.75rem !important;
     border-collapse: collapse !important;
   }
 
-  .print-page table.grading-key-table {
-    font-size: 11px !important;
-  }
-
-  .print-page td, .print-page th {
+  .print-page:not(.report-card-sheet) td,
+  .print-page:not(.report-card-sheet) th {
     padding: 3px 6px !important;
     border: 1px solid black !important;
   }
