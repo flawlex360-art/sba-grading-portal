@@ -117,7 +117,7 @@ export default function KgReportCard({
             {metadata.schoolName}
           </h3>
           <h4 className="text-[13px] font-bold text-black uppercase tracking-widest mt-1 border-t border-zinc-300 pt-1">
-            Kindergarten Developmental Progress Report - {displayTerm}
+            Kindergarten Developmental Progress Report
           </h4>
         </div>
 

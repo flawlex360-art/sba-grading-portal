@@ -149,7 +149,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
             {metadata.schoolName}
           </h3>
           <h4 className="text-[13.5px] font-bold text-black uppercase tracking-widest mt-1 border-t border-zinc-300 pt-1">
-            Learner&apos;s Report Card - {displayTerm}
+            Learner&apos;s Terminal Report Card
           </h4>
         </div>
 
