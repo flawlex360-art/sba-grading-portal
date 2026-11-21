@@ -49,9 +49,9 @@
   @apply px-4 py-1.5 text-xs font-semibold border-r border-zinc-200 dark:border-zinc-800 select-none cursor-pointer transition-colors duration-150 flex items-center gap-1.5;
 }
 
-/* Classic authoritative Georgia typography & crisp unclipped borders for Report Cards */
+/* Classic authoritative Book Antiqua typography & crisp unclipped borders for Report Cards only */
 .report-card-sheet {
-  font-family: Georgia, 'Times New Roman', Times, serif !important;
+  font-family: 'Book Antiqua', Palatino, 'Palatino Linotype', 'URW Palladio L', Georgia, serif !important;
   box-sizing: border-box;
 }
 
@@ -76,8 +76,7 @@
 /* Print Layout Optimization */
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 9mm 10mm;
+    margin: 8mm 10mm;
   }
 
   body {
@@ -122,9 +121,9 @@
     box-sizing: border-box !important;
   }
 
-  /* Distribute each of the 3 report card pages gracefully across full A4 portrait height */
+  /* Adapt each of the 2 report card pages gracefully to BOTH US Letter and A4 height */
   .report-page-section {
-    min-height: 248mm !important;
+    min-height: 95vh !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;

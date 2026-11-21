@@ -224,7 +224,6 @@ export default function Login({ onLoginSuccess }) {
             height="128"
             decoding="sync"
             loading="eager"
-            fetchPriority="high"
             className="w-32 h-32 object-contain mb-3 select-none"
             alt="Madifor logo"
           />

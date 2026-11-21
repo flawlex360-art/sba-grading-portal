@@ -92,103 +92,119 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
     ? student.parentAdvisoryNote
     : generateParentAdvisory(student.name, mathScore, scienceScore);
   
+  const isExtraCompact = subjects.length >= 12;
   const isCompactTable = subjects.length >= 11;
   const isMediumTable = subjects.length === 10;
-  const rowPadClass = isCompactTable ? 'py-[9px]' : isMediumTable ? 'py-[11.5px]' : 'py-[13.5px]';
-  const rowTextClass = isCompactTable ? 'text-[14.5px]' : isMediumTable ? 'text-[15px]' : 'text-[15.5px]';
+  const hasPromotionRow = Boolean(viewingTerm === 'Term 3' && student.promotedTo);
+  const compactFooterArea = isCompactTable || (isMediumTable && hasPromotionRow);
+  const rowPadClass = isExtraCompact
+    ? 'py-[3px]'
+    : isCompactTable
+      ? 'py-[3.5px]'
+      : isMediumTable
+        ? 'py-[4.5px]'
+        : hasPromotionRow
+          ? 'py-[5px]'
+          : 'py-[6.5px]';
+  const rowTextClass = isExtraCompact
+    ? 'text-[12.5px]'
+    : isCompactTable
+      ? 'text-[13px]'
+      : isMediumTable
+        ? 'text-[13.5px]'
+        : 'text-[14.5px]';
   const headTeacherName = resolveHeadTeacherName(institution, metadata);
 
   return (
     <div className="print-page report-card-sheet max-w-[820px] mx-auto space-y-6 print:space-y-0 text-black">
       {/* =================================================================== */}
-      {/* PAGE 1: Header, Bio, Enlarged Subject Results Table & Totals        */}
+      {/* PAGE 1: Header, Bio, Results Table, Totals, Conducts & Signatures   */}
       {/* =================================================================== */}
-      <div className="report-page-section bg-white text-black p-6 sm:p-8 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-5">
-        <div className="space-y-5">
-          {/* 1. Header block */}
-          <div className="text-center border-b-2 border-black pb-3 relative px-20 min-h-[86px] flex flex-col justify-center">
-            <img
-              src={GHANA_COA_DATA_URI}
-              alt="Ghana Coat of Arms"
-              width="68"
-              height="68"
-              decoding="sync"
-              loading="eager"
-              fetchPriority="high"
-              className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
+      <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[940px] flex flex-col justify-between gap-2">
+        {/* 1. Header block */}
+        <div className="text-center border-b-2 border-black pb-2 relative px-20 min-h-[76px] flex flex-col justify-center">
+          <img
+            src={GHANA_COA_DATA_URI}
+            alt="Ghana Coat of Arms"
+            width="68"
+            height="68"
+            decoding="sync"
+            loading="eager"
+            className="absolute left-0 top-0.5 w-[68px] h-[68px] object-contain"
+          />
+          {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
+            <SchoolCrestImage
+              src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
+              alt="School Crest"
+              className="absolute right-0 top-0.5 w-[68px] h-[68px] object-contain"
             />
-            {(institution?.schoolCrestUrl || metadata?.schoolCrestUrl) && (
-              <SchoolCrestImage
-                src={institution?.schoolCrestUrl || metadata?.schoolCrestUrl}
-                alt="School Crest"
-                className="absolute right-0 top-0.5 w-[68px] h-[68px] object-contain"
-              />
-            )}
-            <h1 className="text-[21px] font-bold uppercase tracking-wide leading-tight text-black">
-              Ghana Education Service
-            </h1>
-            <h2 className="text-[13.5px] font-bold uppercase text-black tracking-wider mt-1">
-              {metadata.district}
-            </h2>
-            <h3 className="text-[18px] font-bold uppercase text-black tracking-wide mt-0.5 leading-snug">
-              {metadata.schoolName}
-            </h3>
-            <h4 className="text-[14.5px] font-bold text-black uppercase tracking-widest mt-2 border-t border-zinc-300 pt-1.5">
-              Learner&apos;s Report Card - {displayTerm}
-            </h4>
+          )}
+          <h1 className="text-[19.5px] font-bold uppercase tracking-wide leading-tight text-black">
+            Ghana Education Service
+          </h1>
+          <h2 className="text-[12.5px] font-bold uppercase text-black tracking-wider mt-0.5">
+            {metadata.district}
+          </h2>
+          <h3 className="text-[16.5px] font-bold uppercase text-black tracking-wide mt-0.5 leading-snug">
+            {metadata.schoolName}
+          </h3>
+          <h4 className="text-[13.5px] font-bold text-black uppercase tracking-widest mt-1 border-t border-zinc-300 pt-1">
+            Learner&apos;s Report Card - {displayTerm}
+          </h4>
+        </div>
+
+        {/* 2. Metadata Grid */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12.5px] font-semibold pb-2 border-b border-zinc-300">
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Name:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{student.name}</span>
+          </div>
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Class Position:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight text-black">{result.overallRank}</span>
           </div>
 
-          {/* 2. Metadata Grid */}
-          <div className="grid grid-cols-2 gap-x-7 gap-y-3 text-[13.5px] font-semibold pb-3 border-b border-zinc-300">
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[132px] shrink-0 whitespace-nowrap">Name:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{student.name}</span>
-            </div>
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[162px] shrink-0 whitespace-nowrap">Class Position:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight text-black">{result.overallRank}</span>
-            </div>
-
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[132px] shrink-0 whitespace-nowrap">Class:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.classLevel}</span>
-            </div>
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[162px] shrink-0 whitespace-nowrap">No. On Roll:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{rollCount}</span>
-            </div>
-
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[132px] shrink-0 whitespace-nowrap">Academic Year:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.academicYear}</span>
-            </div>
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[162px] shrink-0 whitespace-nowrap">Term:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{displayTerm}</span>
-            </div>
-
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[132px] shrink-0 whitespace-nowrap">Date:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.date)}</span>
-            </div>
-            <div className="flex gap-2 items-end">
-              <span className="text-black font-bold uppercase w-[162px] shrink-0 whitespace-nowrap">Next Term Begins:</span>
-              <span className="font-bold text-[15px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.nextTermBegins)}</span>
-            </div>
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Class:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.classLevel}</span>
+          </div>
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">No. On Roll:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{rollCount}</span>
           </div>
 
-          {/* 3. Enlarged Subjects Table */}
-          <div className="w-full px-[1px] pt-1">
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Academic Year:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.academicYear}</span>
+          </div>
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Term:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{displayTerm}</span>
+          </div>
+
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Date:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.date)}</span>
+          </div>
+          <div className="flex gap-2 items-end">
+            <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Next Term Begins:</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.nextTermBegins)}</span>
+          </div>
+        </div>
+
+        {/* 3 & 4. Enlarged Subjects Table + Totals Bar */}
+        <div className="space-y-2">
+          <div className="w-full px-[1px]">
             <table className={`report-card-table w-full table-fixed border-collapse border-[1.5px] border-black ${rowTextClass}`}>
               <thead>
-                <tr className="bg-zinc-100 font-bold uppercase text-[12.5px] text-center border-b-[1.5px] border-black leading-tight text-black">
-                  <th className="border border-black px-2.5 py-3 text-left w-[30%]">Subject</th>
-                  <th className="border border-black px-1 py-3 w-[11.5%]">SBA Score (50%)</th>
-                  <th className="border border-black px-1 py-3 w-[11.5%]">Exams Score (50%)</th>
-                  <th className="border border-black px-1 py-3 w-[12%]">Total Score (100%)</th>
-                  <th className="border border-black px-1 py-3 w-[9.5%]">Grade</th>
-                  <th className="border border-black px-1 py-3 w-[9%]">Rank</th>
-                  <th className="border border-black px-2.5 py-3 text-left w-[16.5%]">Remarks</th>
+                <tr className="bg-zinc-100 font-bold uppercase text-[11.5px] text-center border-b-[1.5px] border-black leading-tight text-black">
+                  <th className="border border-black px-2 py-1.5 text-left w-[34%]">Subject</th>
+                  <th className="border border-black px-1 py-1.5 w-[11%]">SBA Score (50%)</th>
+                  <th className="border border-black px-1 py-1.5 w-[11%]">Exams Score (50%)</th>
+                  <th className="border border-black px-1 py-1.5 w-[11.5%]">Total Score (100%)</th>
+                  <th className="border border-black px-1 py-1.5 w-[8.5%]">Grade</th>
+                  <th className="border border-black px-1 py-1.5 w-[8%]">Rank</th>
+                  <th className="border border-black px-2 py-1.5 text-left w-[16%]">Remarks</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,25 +220,25 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
                   return (
                     <tr key={idx} className="leading-snug">
-                      <td className={`border border-black px-2.5 ${rowPadClass} text-left font-bold text-black`}>
+                      <td className={`border border-black px-2 ${rowPadClass} text-left font-bold text-black`}>
                         {sub.name}
                       </td>
-                      <td className={`border border-black px-1.5 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
+                      <td className={`border border-black px-1 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
                         {subRes.scaledSba.toFixed(1)}
                       </td>
-                      <td className={`border border-black px-1.5 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
+                      <td className={`border border-black px-1 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
                         {subRes.scaledExam.toFixed(1)}
                       </td>
-                      <td className={`border border-black px-1.5 ${rowPadClass} text-center font-bold tabular-nums text-black`}>
+                      <td className={`border border-black px-1 ${rowPadClass} text-center font-bold tabular-nums text-black`}>
                         {subRes.total.toFixed(1)}
                       </td>
-                      <td className={`border border-black px-1.5 ${rowPadClass} text-center font-bold tabular-nums text-black`}>
+                      <td className={`border border-black px-1 ${rowPadClass} text-center font-bold tabular-nums text-black`}>
                         {subRes.grade}
                       </td>
-                      <td className={`border border-black px-1.5 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
+                      <td className={`border border-black px-1 ${rowPadClass} text-center font-semibold tabular-nums text-black`}>
                         {subRes.rank}
                       </td>
-                      <td className={`border border-black px-2.5 ${rowPadClass} text-left font-semibold text-black`}>
+                      <td className={`border border-black px-2 ${rowPadClass} text-left font-semibold text-black`}>
                         {subRes.remark}
                       </td>
                     </tr>
@@ -231,72 +247,75 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* 4. Totals Summary & Page 1 Footer */}
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-6 text-[15px] font-semibold border-[1.5px] border-black rounded bg-zinc-50 px-4 py-3">
+          {/* 4. Totals Summary Strip */}
+          <div className="grid grid-cols-2 gap-6 text-[14px] font-semibold border-[1.5px] border-black rounded bg-zinc-50 px-3.5 py-1.5">
             <div className="flex gap-2 items-baseline">
               <span className="text-black font-bold uppercase whitespace-nowrap shrink-0">Overall Score:</span>
-              <span className="font-bold text-[16.5px] text-black">
+              <span className="font-bold text-[15px] text-black">
                 {result.overallTotal.toFixed(1)}{' '}
-                <span className="font-normal text-[14.5px] text-black">OUT OF {maxScore}</span>
+                <span className="font-normal text-[13.5px] text-black">OUT OF {maxScore}</span>
               </span>
             </div>
             <div className="flex gap-2 items-baseline">
               <span className="text-black font-bold uppercase whitespace-nowrap shrink-0">Attendance:</span>
-              <span className="font-bold text-[16.5px] text-black">
+              <span className="font-bold text-[15px] text-black">
                 {student.attendance || 0}{' '}
-                <span className="font-normal text-[14.5px] text-black">OUT OF {overallMax}</span>
+                <span className="font-normal text-[13.5px] text-black">OUT OF {overallMax}</span>
               </span>
             </div>
           </div>
+        </div>
 
-          <ReportPageFooter pageNum={1} totalPages={3} />
+        {/* 5. Conduct, Interest & Class Teacher's Remarks (Large & Parent-Readable on Page 1) */}
+        <ReportConductRemarksSection
+          conduct={student.conduct}
+          interest={student.interest}
+          remarks={student.remarks}
+          remarksLabel="Class Teacher's Remarks:"
+          promotedTo={hasPromotionRow ? student.promotedTo : ''}
+          promotedLabel="Promoted to:"
+          compact={compactFooterArea}
+        />
+
+        {/* 6. Signatures, Printed Names & Page 1 Footer (Locked on Page 1) */}
+        <div className="break-inside-avoid">
+          <ReportSignaturesBlock
+            teacherLabel="Class Teacher's Signature"
+            teacherName={metadata.teacherName}
+            headTeacherName={headTeacherName}
+            compact={compactFooterArea}
+          />
+          <ReportPageFooter pageNum={1} totalPages={2} />
         </div>
       </div>
 
       {/* =================================================================== */}
-      {/* PAGE 2: Conduct/Remarks, Signatures & Names, Grading Interpretation */}
+      {/* PAGE 2: Grading Interpretation, Academic Advisory & Acknowledgment  */}
       {/* =================================================================== */}
       <div className="print-page-break">
-        <div className="report-page-section bg-white text-black p-6 sm:p-8 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-5">
+        <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-4">
           <ReportContinuationHeader
             schoolName={metadata.schoolName}
             district={metadata.district}
-            sectionTitle="Conduct, Endorsement & Grading Interpretation"
+            sectionTitle="Grading Interpretation & Parent Academic Advisory"
             studentName={student.name}
             classLevel={metadata.classLevel}
             displayTerm={displayTerm}
           />
 
-          <ReportConductRemarksSection
-            conduct={student.conduct}
-            interest={student.interest}
-            remarks={student.remarks}
-            remarksLabel="Class Teacher's Remarks:"
-            promotedTo={viewingTerm === 'Term 3' ? student.promotedTo : ''}
-            promotedLabel="Promoted to:"
-          />
-
-          <ReportSignaturesBlock
-            teacherLabel="Class Teacher's Signature"
-            teacherName={metadata.teacherName}
-            headTeacherName={headTeacherName}
-          />
-
-          {/* Grading Interpretation Table (Full width for crisp alignment & legibility) */}
-          <div className="break-inside-avoid space-y-2.5">
+          {/* 7. Grading Interpretation Table (Starts Page 2 cleanly) */}
+          <div className="break-inside-avoid space-y-2">
             <span className="text-[14px] font-bold uppercase text-black block tracking-wide">
-              Grading Interpretation Key
+              Grading Interpretation
             </span>
             <div className="w-full px-[1px]">
               <table className="report-card-table grading-key-table w-full table-fixed text-left text-[13.5px] border-collapse border-[1.5px] border-black">
-                <thead className="bg-zinc-100 text-black font-bold uppercase text-[12px]">
+                <thead className="bg-zinc-100 text-black font-bold uppercase text-[11.5px]">
                   <tr>
-                    <th className="border border-black px-3 py-2 w-[32%]">Score Range</th>
-                    <th className="border border-black px-3 py-2 text-center w-[20%]">Grade</th>
-                    <th className="border border-black px-3 py-2 w-[48%]">Interpretation</th>
+                    <th className="border border-black px-3 py-1.5 w-[32%]">Score Range</th>
+                    <th className="border border-black px-3 py-1.5 text-center w-[20%]">Grade</th>
+                    <th className="border border-black px-3 py-1.5 w-[48%]">Interpretation</th>
                   </tr>
                 </thead>
                 <tbody className="text-black font-medium">
@@ -350,46 +369,28 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
             </div>
           </div>
 
-          <ReportPageFooter pageNum={2} totalPages={3} />
-        </div>
-      </div>
-
-      {/* =================================================================== */}
-      {/* PAGE 3: Parent / Guardian Academic Advisory & Acknowledgment Slip   */}
-      {/* =================================================================== */}
-      <div className="print-page-break">
-        <div className="report-page-section bg-white text-black p-6 sm:p-8 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-6">
-          <ReportContinuationHeader
-            schoolName={metadata.schoolName}
-            district={metadata.district}
-            sectionTitle="Parent / Guardian Academic Advisory & Acknowledgment"
-            studentName={student.name}
-            classLevel={metadata.classLevel}
-            displayTerm={displayTerm}
-          />
-
           {/* 8. PARENT / GUARDIAN ACADEMIC ADVISORY */}
-          <div className="break-inside-avoid space-y-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black pb-2">
-              <span className="text-[15px] font-bold uppercase text-black tracking-wide">
+          <div className="break-inside-avoid space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black pb-1.5">
+              <span className="text-[14px] font-bold uppercase text-black tracking-wide">
                 Parent / Guardian Academic Advisory
               </span>
-              <span className="text-[12px] font-bold text-zinc-700 uppercase">
+              <span className="text-[11.5px] font-bold text-zinc-700 uppercase">
                 Mathematics &amp; Science Diagnostic
               </span>
             </div>
 
-            <div className="bg-zinc-50 border-[1.5px] border-black rounded p-5 sm:p-6 text-[15px] leading-[1.75] text-black">
+            <div className="bg-zinc-50 border border-zinc-500 rounded p-4 text-[14px] leading-[1.6] text-black">
               <div className="whitespace-pre-line font-normal">{advisoryNote}</div>
             </div>
           </div>
 
           <ParentAcknowledgmentSlip
-            statementText={'"I have reviewed my ward\'s terminal performance, conduct, and recommendations across this report card."'}
+            statementText={'"I have reviewed my ward\'s terminal performance, conduct, and recommendations above."'}
             returnToLabel="class teacher"
           />
 
-          <ReportPageFooter pageNum={3} totalPages={3} />
+          <ReportPageFooter pageNum={2} totalPages={2} />
         </div>
       </div>
     </div>
