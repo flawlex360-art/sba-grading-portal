@@ -13,6 +13,8 @@ import {
   KG_LEARNING_AREAS,
   PRIMARY_SUBJECTS_LIST,
   JHS_SUBJECTS_LIST,
+  resolveSchoolLevel,
+  filterActiveSubjectsForLevel,
   getKgIndicatorsForArea,
   deriveKgAreaRatingFromIndicators,
 } from '../constants/curriculum';
@@ -419,6 +421,11 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
           const termData = sData.terms?.[termToArchive];
           if (termData) {
             const archiveId = `${instId}_${academicYear.replace('/', '-')}_${termToArchive.replace(' ', '')}_${teacherUid}`;
+            const archivedLevel = resolveSchoolLevel(tData.assignedClass, tData.level);
+            const activeSubList = filterActiveSubjectsForLevel(
+              tData.subjects || sData.subList || [],
+              archivedLevel
+            );
             archivePromises.push(
               setDoc(doc(db, "archives", archiveId), {
                 institutionId: instId,
@@ -426,7 +433,7 @@ export default function SeniorSuperUserPanel({ onLogout, theme, toggleTheme }) {
                 term: termToArchive,
                 teacherId: teacherUid,
                 teacherName: tData.name,
-                subList: tData.subjects || sData.subList || [],
+                subList: activeSubList,
                 grades: termData.grades || {},
                 students: termData.students || [],
                 archivedAt: new Date().toISOString()
