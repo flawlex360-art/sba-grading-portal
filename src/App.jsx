@@ -19,7 +19,7 @@ import SchoolCrestImage from './components/SchoolCrestImage';
 import { exportYearlyData } from './utils/excelExport';
 import TrendAnalysis from './components/TrendAnalysis';
 import { computeClassResults } from './utils/calculations';
-import { SCHOOL_LEVELS, DEFAULT_KG_SUBJECT_MAP, resolveSchoolLevel, isJhsClass } from './constants/curriculum';
+import { SCHOOL_LEVELS, DEFAULT_KG_SUBJECT_MAP, filterActiveSubjectsForLevel, resolveSchoolLevel, isJhsClass } from './constants/curriculum';
 import { KG_CONDUCT, KG_INTEREST, KG_REMARKS, KG_CLASSES_DROPLIST } from './constants/dropList';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './utils/mnotifyHelpers';
 import {
@@ -119,8 +119,9 @@ export default function App() {
     const resolvedLevel = resolveSchoolLevel(effectiveClassName, ownerProf?.level || metadata?.level);
     let fullClassSubjects = [];
 
-    if (ownerProf && Array.isArray(ownerProf.subjects) && ownerProf.subjects.length > 0) {
-      fullClassSubjects = ownerProf.subjects;
+    const filteredOwnerSubjects = filterActiveSubjectsForLevel(ownerProf?.subjects, resolvedLevel);
+    if (filteredOwnerSubjects.length > 0) {
+      fullClassSubjects = filteredOwnerSubjects;
     } else {
       const fallbackMap =
         resolvedLevel === SCHOOL_LEVELS.KG

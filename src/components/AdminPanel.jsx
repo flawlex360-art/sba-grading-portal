@@ -23,6 +23,7 @@ import {
   JHS_SUBJECTS_LIST,
   isJhsClass,
   resolveSchoolLevel,
+  filterActiveSubjectsForLevel,
   getDefaultSubjectsListForLevel,
   getInitialSelectedSubjectKeysForLevel,
 } from '../constants/curriculum';
@@ -542,7 +543,8 @@ function AdminAccountsTab({ teachers, fetchTeachersList, fetching, institution, 
     setEditClass(teacherClass);
     setEditLevel(resolvedEditLevel);
     const defaultSubs = getDefaultSubjectsListForLevel(resolvedEditLevel);
-    const activeSubjects = teacher.subjects || (
+    const cleanedExistingSubs = filterActiveSubjectsForLevel(teacher.subjects, resolvedEditLevel);
+    const activeSubjects = cleanedExistingSubs.length > 0 ? cleanedExistingSubs : (
       resolvedEditLevel === SCHOOL_LEVELS.JHS
         ? defaultSubs.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC')
         : defaultSubs

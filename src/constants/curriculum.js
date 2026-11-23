@@ -43,7 +43,6 @@ export const PRIMARY_SUBJECTS_LIST = [
   { name: 'Mathematics', key: 'MATHS' },
   { name: 'Science', key: 'SCIENCE' },
   { name: 'History', key: 'HISTORYY' },
-  { name: 'Our World Our People', key: 'OWOP' },
   { name: 'Computing', key: 'COMPUTING' },
   { name: 'Religious and Moral Education', key: 'RME' },
   { name: 'Ghanaian Language', key: 'GH. LANG.' },
@@ -137,6 +136,24 @@ export function getInitialSelectedSubjectKeysForLevel(level) {
   if (level === SCHOOL_LEVELS.KG) return KG_LEARNING_AREAS.map((s) => s.key);
   if (level === SCHOOL_LEVELS.PRIMARY) return PRIMARY_SUBJECTS_LIST.map((s) => s.key);
   return JHS_SUBJECTS_LIST.filter((s) => s.key !== 'FRENCH' && s.key !== 'ARABIC').map((s) => s.key);
+}
+
+/**
+ * Strips withdrawn non-KG subjects (such as Primary OWOP / "Our World Our People")
+ * while preserving "Our World & Our People" (OWOP) for Kindergarten (KG 1 & KG 2).
+ * @param {Array<{name: string, key: string}>} subjects
+ * @param {'KG'|'Primary'|'JHS'} level
+ * @returns {Array<{name: string, key: string}>}
+ */
+export function filterActiveSubjectsForLevel(subjects = [], level = SCHOOL_LEVELS.JHS) {
+  if (!Array.isArray(subjects)) return [];
+  if (level === SCHOOL_LEVELS.KG) return subjects;
+  return subjects.filter((sub) => {
+    const key = String(sub?.key || '').trim().toUpperCase();
+    const name = String(sub?.name || '').trim();
+    if (key === 'OWOP' || /our\s+world/i.test(name)) return false;
+    return true;
+  });
 }
 
 /**

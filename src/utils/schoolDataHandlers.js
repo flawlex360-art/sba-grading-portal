@@ -13,6 +13,7 @@ import {
   DEFAULT_KG_SUBJECT_MAP,
   DEFAULT_PRIMARY_SUBJECT_MAP,
   DEFAULT_JHS_SUBJECT_MAP,
+  filterActiveSubjectsForLevel,
   resolveSchoolLevel,
 } from '../constants/curriculum.js';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './mnotifyHelpers.js';
@@ -64,7 +65,7 @@ export function normalizeGatewayConfig(rawConfig) {
  */
 export function buildTeacherSubjectInfo(teacherProfile) {
   const resolvedLevel = resolveSchoolLevel(teacherProfile?.assignedClass, teacherProfile?.level);
-  const subjects = teacherProfile?.subjects;
+  const subjects = filterActiveSubjectsForLevel(teacherProfile?.subjects, resolvedLevel);
   if (Array.isArray(subjects) && subjects.length > 0) {
     const subjectMap = {};
     subjects.forEach((sub) => {
