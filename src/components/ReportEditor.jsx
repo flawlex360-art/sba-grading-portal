@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Printer, User, Search, ChevronRight, FileCheck, Check } from 'lucide-react';
 import ReportCard from './ReportCard';
+import ReportPaperPreview from './ReportPaperPreview';
 import { computeCumulativePromotion, generateParentAdvisory, generateKgParentAdvisory } from '../utils/calculations';
 import {
   SCHOOL_LEVELS,
@@ -304,7 +305,7 @@ export default function ReportEditor({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Left 5 Columns: Roster selection & direct editor form */}
-        <div className="lg:col-span-5 space-y-4 no-print">
+        <div className="lg:col-span-5 space-y-4 no-print min-w-0 w-full">
           
           {/* Student Selector Card */}
           <div className="glass-card p-4">
@@ -634,16 +635,18 @@ export default function ReportEditor({
 </div>
 
         {/* Right 7 Columns: Direct Input Card & Live HTML Report Card Preview */}
-        <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print">
-                    {previewStudent ? (
-            <ReportCard
-              student={previewStudent}
-              metadata={metadata}
-              calculatedScores={computedResults}
-              teacherSubjects={teacherSubjects}
-              viewingTerm={viewingTerm}
-              institution={institution}
-            />
+        <div className="lg:col-span-7 flex flex-col justify-start gap-6 no-print min-w-0 w-full">
+          {previewStudent ? (
+            <ReportPaperPreview>
+              <ReportCard
+                student={previewStudent}
+                metadata={metadata}
+                calculatedScores={computedResults}
+                teacherSubjects={teacherSubjects}
+                viewingTerm={viewingTerm}
+                institution={institution}
+              />
+            </ReportPaperPreview>
           ) : (
             <div className="glass-card p-12 text-center text-zinc-400 no-print">
               Select a student to edit and preview report card.

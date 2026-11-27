@@ -74,11 +74,11 @@ export function ReportConductRemarksSection({
       {rows.map((row) => (
         <div
           key={row.label}
-          className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-2.5"
+          className="flex flex-row items-baseline gap-2.5 min-w-0"
         >
           <span
             className={`${
-              compact ? 'text-[12.5px] sm:w-[205px]' : 'text-[13.5px] sm:w-[218px]'
+              compact ? 'text-[12.5px] w-[205px]' : 'text-[13.5px] w-[218px]'
             } text-black font-bold uppercase shrink-0 whitespace-nowrap`}
           >
             {row.label}
@@ -88,7 +88,7 @@ export function ReportConductRemarksSection({
               row.boldValue ? 'font-bold' : 'font-semibold'
             } ${
               compact ? 'text-[13.5px] leading-tight' : 'text-[15px] leading-snug'
-            } text-black border-b border-zinc-500 flex-1 pb-0.5`}
+            } text-black border-b border-zinc-500 flex-1 min-w-0 pb-0.5`}
           >
             {row.value}
           </span>

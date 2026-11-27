@@ -88,7 +88,7 @@ export default function KgReportCard({
       {/* =================================================================== */}
       {/* PAGE 1: Header, Bio, Learning Areas, Habits, Conducts & Signatures  */}
       {/* =================================================================== */}
-      <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[940px] flex flex-col justify-between gap-2">
+      <div className="report-page-section bg-white text-black p-7 border border-zinc-200 shadow-lg min-h-[940px] flex flex-col justify-between gap-2">
         {/* 1. Header Block */}
         <div className="text-center border-b-2 border-black pb-1.5 relative px-20 min-h-[76px] flex flex-col justify-center">
           <img
@@ -230,7 +230,7 @@ export default function KgReportCard({
             <div className="text-[11.5px] font-bold uppercase text-black tracking-wide mb-1">
               Personal &amp; Social Habits Checklist
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-0.5 text-[12.5px] leading-tight">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-0.5 text-[12.5px] leading-tight">
               {KG_SOCIAL_HABITS.map((habit) => {
                 const habitCode = normalizeKgRatingCode(socialHabits[habit.id]);
                 const habitMeta = getKgProficiencyMeta(habitCode);
@@ -289,7 +289,7 @@ export default function KgReportCard({
       {/* PAGE 2: NaCCA Proficiency Key, Home Advisory & Acknowledgment Slip  */}
       {/* =================================================================== */}
       <div className="print-page-break">
-        <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-5">
+        <div className="report-page-section bg-white text-black p-7 border border-zinc-200 shadow-lg min-h-[960px] flex flex-col justify-between gap-5">
           <ReportContinuationHeader
             schoolName={metadata.schoolName}
             district={metadata.district}

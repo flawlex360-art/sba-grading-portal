@@ -120,7 +120,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* =================================================================== */}
       {/* PAGE 1: Header, Bio, Results Table, Totals, Conducts & Signatures   */}
       {/* =================================================================== */}
-      <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[940px] flex flex-col justify-between gap-2">
+      <div className="report-page-section bg-white text-black p-7 border border-zinc-200 shadow-lg min-h-[940px] flex flex-col justify-between gap-2">
         {/* 1. Header block */}
         <div className="text-center border-b-2 border-black pb-2 relative px-20 min-h-[76px] flex flex-col justify-center">
           <img
@@ -155,40 +155,40 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
 
         {/* 2. Metadata Grid */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12.5px] font-semibold pb-2 border-b border-zinc-300">
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Name:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{student.name}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{student.name}</span>
           </div>
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Class Position:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight text-black">{result.overallRank}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight text-black">{result.overallRank}</span>
           </div>
 
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Class:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.classLevel}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{metadata.classLevel}</span>
           </div>
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">No. On Roll:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{rollCount}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{rollCount}</span>
           </div>
 
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Academic Year:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{metadata.academicYear}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{metadata.academicYear}</span>
           </div>
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Term:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{displayTerm}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{displayTerm}</span>
           </div>
 
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[124px] shrink-0 whitespace-nowrap">Date:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.date)}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{formatDate(metadata.date)}</span>
           </div>
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end min-w-0">
             <span className="text-black font-bold uppercase w-[148px] shrink-0 whitespace-nowrap">Next Term Begins:</span>
-            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 pb-0.5 leading-tight">{formatDate(metadata.nextTermBegins)}</span>
+            <span className="font-bold text-[14px] border-b border-zinc-500 flex-1 min-w-0 pb-0.5 leading-tight">{formatDate(metadata.nextTermBegins)}</span>
           </div>
         </div>
 
@@ -294,7 +294,7 @@ export default function ReportCard({ student, metadata, calculatedScores, teache
       {/* PAGE 2: Grading Interpretation, Academic Advisory & Acknowledgment  */}
       {/* =================================================================== */}
       <div className="print-page-break">
-        <div className="report-page-section bg-white text-black p-6 sm:p-7 border border-zinc-200 shadow-lg sm:min-h-[960px] flex flex-col justify-between gap-4">
+        <div className="report-page-section bg-white text-black p-7 border border-zinc-200 shadow-lg min-h-[960px] flex flex-col justify-between gap-4">
           <ReportContinuationHeader
             schoolName={metadata.schoolName}
             district={metadata.district}

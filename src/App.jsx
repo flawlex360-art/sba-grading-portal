@@ -1387,8 +1387,8 @@ if (userProfile?.isSeniorSuperUser) {
       <div className={`min-h-screen bg-zinc-50 dark:bg-[#09090b] transition-colors duration-300 flex flex-col ${isPrinting ? 'no-print hidden-for-print' : ''}`}>
       
       {/* 1. Header Bar */}
-      <header className="glass-panel sticky top-0 z-40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between no-print shadow-sm gap-2">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+      <header className="glass-panel sticky top-0 z-40 px-3 md:px-6 py-2.5 md:py-4 flex flex-wrap sm:flex-nowrap items-center justify-between no-print shadow-sm gap-2">
+        <div className="flex items-center gap-2.5 min-w-[140px] flex-1">
           {institution?.schoolCrestUrl && (
             <SchoolCrestImage src={institution.schoolCrestUrl} className="w-8 h-8 object-contain select-none bg-white rounded shadow-sm p-0.5 shrink-0" alt="School Crest" />
           )}
@@ -1410,7 +1410,7 @@ if (userProfile?.isSeniorSuperUser) {
         </div>
 
         {/* Global Controls */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2 max-w-full shrink-0">
           {/* User Profile Info */}
           <div className="hidden sm:flex flex-col text-right mr-2">
             <span className="text-xs font-bold text-zinc-750 dark:text-zinc-300">
@@ -1425,7 +1425,7 @@ if (userProfile?.isSeniorSuperUser) {
 
           {/* Class Switcher (Shown when teacher has access to multiple classes or is a Subject Teacher) */}
           {(accessibleClasses.length > 1 || userProfile?.role === 'subject_teacher') && (
-            <div className="relative group shrink-0">
+            <div className="relative group shrink-0 max-w-[148px] sm:max-w-none">
               <select
                 value={activeClassEntry?.classUid || ''}
                 onChange={(e) => {
@@ -1434,7 +1434,7 @@ if (userProfile?.isSeniorSuperUser) {
                   window.location.reload();
                 }}
                 title="Switch Assigned Class"
-                className="appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-3.5 sm:pr-8 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-zinc-900 text-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 hover:shadow-md"
+                className="w-full truncate appearance-none outline-none text-[10px] sm:text-xs font-black tracking-normal sm:tracking-wider pl-2 pr-5 sm:pl-3.5 sm:pr-8 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-zinc-900 text-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 hover:shadow-md"
               >
                 {accessibleClasses.map(cls => (
                   <option key={cls.classUid} value={cls.classUid} className="font-semibold text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900">
@@ -1451,7 +1451,7 @@ if (userProfile?.isSeniorSuperUser) {
           {/* Term Display (Subject Teachers locked to current term; Class Teachers can switch terms) */}
           {isSubjectTeacherMode ? (
             <div
-              className="shrink-0 text-[10px] sm:text-xs font-black tracking-wider px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl shadow-sm bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 select-none"
+              className="shrink-0 text-[10px] sm:text-xs font-black tracking-normal sm:tracking-wider px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl shadow-sm bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 select-none"
               title="Current Active Term"
             >
               {activeTerm}
@@ -1467,7 +1467,7 @@ if (userProfile?.isSeniorSuperUser) {
                   sessionStorage.setItem('targetViewingTerm', e.target.value);
                   window.location.reload();
                 }}
-                className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-wider pl-2 pr-6 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
+                className={`appearance-none outline-none text-[10px] sm:text-xs font-black tracking-normal sm:tracking-wider pl-2 pr-5 sm:pl-4 sm:pr-10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-sm ${
                   isReadOnly 
                     ? 'bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/40 dark:to-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:shadow-amber-500/10' 
                     : 'bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg focus:ring-2 focus:ring-emerald-500/20'
