@@ -1436,13 +1436,14 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
       return;
     }
 
-    // Determine default role type: if they already have role === 'subject_teacher' or only have 1-2 subjects assigned on a duplicate class, suggest 'subject_teacher'
+    // Determine default role type: only dedicated subject_teacher accounts default to 'subject_teacher';
+    // JHS Class Teachers (Form Masters) stay 'class_teacher' so they retain full access to their home class
     const existingAlloc = found.classAllocations || {};
     const hasExistingAlloc = Object.keys(existingAlloc).length > 0;
-    const isLikelySubjectOnly = found.role === 'subject_teacher' ||
-      (Array.isArray(found.subjects) && found.subjects.length > 0 && found.subjects.length <= 3);
+    const isDedicatedSubjectOnly =
+      found.role === 'subject_teacher' || found.assignedClass === 'Subject Teacher';
 
-    setTeacherRoleType(isLikelySubjectOnly ? 'subject_teacher' : 'class_teacher');
+    setTeacherRoleType(isDedicatedSubjectOnly ? 'subject_teacher' : 'class_teacher');
     setHomeClass(isJhsClass(found.assignedClass) ? found.assignedClass : 'BS. 7');
 
     if (hasExistingAlloc) {
@@ -1672,14 +1673,26 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
         // If reclaiming an email that was previously a Class Teacher before being deleted, remove any leftover blank school doc
         batch.delete(doc(db, "schools", targetUid));
       } else {
+        const existingT = teachers.find(t => t.uid === selectedTeacherUid);
         const isDedicated = teacherRoleType === 'subject_teacher';
-        batch.update(doc(db, "teachers", targetUid), {
+        const updatePayload = {
           role: isDedicated ? 'subject_teacher' : 'class_teacher',
           assignedClass: isDedicated ? 'Subject Teacher' : homeClass,
           level: 'JHS',
           classAllocations: builtAllocations,
           allocationKeys: builtKeys
-        });
+        };
+        if (!isDedicated && (!Array.isArray(existingT?.subjects) || existingT.subjects.length === 0)) {
+          const baseJhsSubs = JHS_SUBJECTS_LIST.filter(s => s.key !== 'FRENCH' && s.key !== 'ARABIC');
+          const ownExtraSubs = builtAllocations[targetUid]?.subjects || [];
+          ownExtraSubs.forEach(sub => {
+            if (!baseJhsSubs.some(cs => cs.key === sub.key)) {
+              baseJhsSubs.push(sub);
+            }
+          });
+          updatePayload.subjects = baseJhsSubs;
+        }
+        batch.update(doc(db, "teachers", targetUid), updatePayload);
 
         // If converted to Dedicated Subject Teacher, clean up any orphaned blank duplicate schools/{uid} document
         if (isDedicated) {
@@ -1837,6 +1850,11 @@ function AdminSubjectManagementTab({ teachers, fetchTeachersList, fetching, inst
                 {teacherRoleType === 'subject_teacher' && selectedTeacherUid && (
                   <p className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-lg p-2">
                     Saving as <strong>Dedicated Subject Teacher</strong> will link this login directly to the ticked JHS classes below and automatically remove any duplicate blank class record for this teacher.
+                  </p>
+                )}
+                {teacherRoleType === 'class_teacher' && selectedTeacherUid && (
+                  <p className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-lg p-2">
+                    As Class Teacher of <strong>{homeClass}</strong>, this account automatically retains <strong>full Gradebook access to all subjects</strong> in <strong>{homeClass}</strong>, plus subject-specific access to any other JHS classes ticked below.
                   </p>
                 )}
               </div>

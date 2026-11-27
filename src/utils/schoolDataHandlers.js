@@ -14,6 +14,7 @@ import {
   DEFAULT_PRIMARY_SUBJECT_MAP,
   DEFAULT_JHS_SUBJECT_MAP,
   filterActiveSubjectsForLevel,
+  isJhsClass,
   resolveSchoolLevel,
 } from '../constants/curriculum.js';
 import { DEFAULT_MNOTIFY_SENDER_ID, normalizeSmsSenderId } from './mnotifyHelpers.js';
@@ -93,6 +94,153 @@ export function buildTeacherSubjectInfo(teacherProfile) {
     subjectMap: fallback,
     subjectsList: Object.keys(fallback),
     teacherSubjects: Object.entries(fallback).map(([name, key]) => ({ name, key })),
+  };
+}
+
+/**
+ * Builds the list of classes accessible to a logged-in teacher.
+ * - Class Teachers (Form Masters) get their own home class first (`isFormMaster: true`),
+ *   plus any additional JHS classes allocated to them as a visiting Subject Teacher (`isFormMaster: false`).
+ * - Dedicated Subject Teachers (`role === 'subject_teacher'`) get only their allocated JHS classes (`isFormMaster: false`).
+ * @param {object|null|undefined} profile
+ * @param {string|null|undefined} uid
+ * @returns {Array<{ classUid: string, className: string, isFormMaster: boolean, allocatedSubjects: Array<{name: string, key: string}>|null }>}
+ */
+export function buildAccessibleClasses(profile, uid) {
+  if (!profile || !uid) return [];
+  const list = [];
+  const allocMap = profile.classAllocations || {};
+  const isDedicatedSubjectTeacher = profile.role === 'subject_teacher';
+
+  // 1. If the teacher is a Form Master / Class Teacher, add their home class first
+  if (!isDedicatedSubjectTeacher && profile.assignedClass && profile.assignedClass !== 'Subject Teacher') {
+    const homeIsJhs = isJhsClass(profile.assignedClass);
+    const homeAlloc = homeIsJhs ? allocMap[uid] : null;
+    list.push({
+      classUid: uid,
+      className: profile.assignedClass,
+      isFormMaster: true,
+      allocatedSubjects:
+        homeIsJhs && Array.isArray(homeAlloc?.subjects) && homeAlloc.subjects.length > 0
+          ? homeAlloc.subjects
+          : null,
+    });
+  }
+
+  // 2. Add any additional JHS classes allocated to this teacher (strictly JHS classes only)
+  const canHaveSubjectAllocations =
+    isDedicatedSubjectTeacher ||
+    !profile.assignedClass ||
+    profile.assignedClass === 'Subject Teacher' ||
+    isJhsClass(profile.assignedClass);
+
+  if (canHaveSubjectAllocations) {
+    Object.entries(allocMap).forEach(([targetUid, alloc]) => {
+      const cUid = alloc?.classUid || targetUid;
+      if (!cUid) return;
+      if (list.some((item) => item.classUid === cUid)) return;
+      if (alloc?.className && !isJhsClass(alloc.className)) return;
+      if (Array.isArray(alloc?.subjects) && alloc.subjects.length > 0) {
+        list.push({
+          classUid: cUid,
+          className: alloc.className || 'Assigned Class',
+          isFormMaster: false,
+          allocatedSubjects: alloc.subjects,
+        });
+      }
+    });
+  }
+
+  return list;
+}
+
+/**
+ * Resolves full class subjects (for Report Cards / Broadsheet / Overview) and Gradebook subjects
+ * for the currently active class view.
+ *
+ * IMPORTANT: Class Teachers (Form Masters) viewing their own home class (`!isSubjectTeacherMode`)
+ * ALWAYS receive full Gradebook access (`gradebookSubjects = fullClassSubjects`) so they can enter
+ * marks for ALL subjects in their class, even if they also teach specific JHS subjects.
+ * Gradebook tabs are restricted to `allocatedSubjects` ONLY in Subject Teacher mode
+ * (dedicated Subject Teachers, or when a Form Master switches to another teacher's JHS class).
+ *
+ * @param {object} params
+ * @returns {{
+ *   level: string,
+ *   subjectMap: Record<string, string>,
+ *   subjectsList: string[],
+ *   teacherSubjects: Array<{name: string, key: string}>,
+ *   gradebookSubjects: Array<{name: string, key: string}>
+ * }}
+ */
+export function resolveActiveTeacherSubjects({
+  userProfile = null,
+  classOwnerProfile = null,
+  activeClassEntry = null,
+  metadata = null,
+  isSubjectTeacherMode = false,
+} = {}) {
+  const ownerProf = classOwnerProfile || userProfile;
+  const effectiveClassName =
+    activeClassEntry?.className ||
+    metadata?.classLevel ||
+    userProfile?.assignedClass ||
+    'BS. 7';
+  const resolvedLevel = resolveSchoolLevel(
+    effectiveClassName,
+    ownerProf?.level || metadata?.level
+  );
+  let fullClassSubjects = [];
+
+  const filteredOwnerSubjects = filterActiveSubjectsForLevel(
+    ownerProf?.subjects,
+    resolvedLevel
+  );
+  if (filteredOwnerSubjects.length > 0) {
+    fullClassSubjects = [...filteredOwnerSubjects];
+  } else {
+    const fallbackMap =
+      resolvedLevel === SCHOOL_LEVELS.KG
+        ? DEFAULT_KG_SUBJECT_MAP
+        : resolvedLevel === SCHOOL_LEVELS.PRIMARY
+          ? DEFAULT_PRIMARY_SUBJECT_MAP
+          : DEFAULT_JHS_SUBJECT_MAP;
+    fullClassSubjects = Object.entries(fallbackMap).map(([name, key]) => ({
+      name,
+      key,
+    }));
+  }
+
+  // Ensure any allocated subjects (e.g. French or Arabic) for the active class are included in fullClassSubjects
+  const cleanedAllocSubjects = filterActiveSubjectsForLevel(
+    activeClassEntry?.allocatedSubjects,
+    resolvedLevel
+  );
+  if (cleanedAllocSubjects.length > 0) {
+    cleanedAllocSubjects.forEach((allocSub) => {
+      if (allocSub?.key && !fullClassSubjects.some((s) => s.key === allocSub.key)) {
+        fullClassSubjects = [...fullClassSubjects, allocSub];
+      }
+    });
+  }
+
+  const fullMap = {};
+  fullClassSubjects.forEach((sub) => {
+    fullMap[sub.name] = sub.key;
+  });
+
+  // Restrict Gradebook tabs ONLY when operating in Subject Teacher mode (not for a Class Teacher in their own class!)
+  const gradebookSubjects =
+    isSubjectTeacherMode && cleanedAllocSubjects.length > 0
+      ? cleanedAllocSubjects
+      : fullClassSubjects;
+
+  return {
+    level: resolvedLevel,
+    subjectMap: fullMap,
+    subjectsList: fullClassSubjects.map((s) => s.name),
+    teacherSubjects: fullClassSubjects,
+    gradebookSubjects,
   };
 }
 

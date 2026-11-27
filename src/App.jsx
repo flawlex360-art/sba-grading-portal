@@ -29,6 +29,8 @@ import {
 import {
   DEFAULT_JHS_SUBJECT_MAP,
   DEFAULT_PRIMARY_SUBJECT_MAP,
+  buildAccessibleClasses,
+  resolveActiveTeacherSubjects,
   resolveHeadTeacherName,
   saveStudentReportTransaction,
   saveParentContactsTransaction,
@@ -112,55 +114,21 @@ export default function App() {
     return activeLinks;
   };
 
-  // Get full class subjects (for Report Cards / Broadsheet) and Gradebook subjects (scoped for Subject Teachers)
-  const getTeacherSubjects = () => {
-    const ownerProf = classOwnerProfile || userProfile;
-    const effectiveClassName = activeClassEntry?.className || metadata?.classLevel || userProfile?.assignedClass || 'BS. 7';
-    const resolvedLevel = resolveSchoolLevel(effectiveClassName, ownerProf?.level || metadata?.level);
-    let fullClassSubjects = [];
-
-    const filteredOwnerSubjects = filterActiveSubjectsForLevel(ownerProf?.subjects, resolvedLevel);
-    if (filteredOwnerSubjects.length > 0) {
-      fullClassSubjects = filteredOwnerSubjects;
-    } else {
-      const fallbackMap =
-        resolvedLevel === SCHOOL_LEVELS.KG
-          ? DEFAULT_KG_SUBJECT_MAP
-          : resolvedLevel === SCHOOL_LEVELS.PRIMARY
-            ? DEFAULT_PRIMARY_SUBJECT_MAP
-            : DEFAULT_JHS_SUBJECT_MAP;
-      fullClassSubjects = Object.entries(fallbackMap).map(([name, key]) => ({ name, key }));
-    }
-
-    // Ensure any allocated subjects for the active class are also represented in fullClassSubjects
-    if (Array.isArray(activeClassEntry?.allocatedSubjects)) {
-      activeClassEntry.allocatedSubjects.forEach(allocSub => {
-        if (allocSub?.key && !fullClassSubjects.some(s => s.key === allocSub.key)) {
-          fullClassSubjects = [...fullClassSubjects, allocSub];
-        }
-      });
-    }
-
-    const fullMap = {};
-    fullClassSubjects.forEach(sub => {
-      fullMap[sub.name] = sub.key;
-    });
-
-    // Restrict Gradebook tabs to allocated subjects when present (for Subject Teachers or JHS Form Masters with subject allocations)
-    const gradebookSubjects = (Array.isArray(activeClassEntry?.allocatedSubjects) && activeClassEntry.allocatedSubjects.length > 0)
-      ? activeClassEntry.allocatedSubjects
-      : fullClassSubjects;
-
-    return {
-      level: resolvedLevel,
-      subjectMap: fullMap,
-      subjectsList: fullClassSubjects.map(s => s.name),
-      teacherSubjects: fullClassSubjects,
-      gradebookSubjects
-    };
-  };
-
-  const { level: currentSchoolLevel, subjectMap, subjectsList, teacherSubjects, gradebookSubjects } = getTeacherSubjects();
+  // Get full class subjects (for Report Cards / Broadsheet) and Gradebook subjects
+  // Class Teachers always get full subject access in their own class; Subject Teachers get their allocated subjects
+  const {
+    level: currentSchoolLevel,
+    subjectMap,
+    subjectsList,
+    teacherSubjects,
+    gradebookSubjects,
+  } = resolveActiveTeacherSubjects({
+    userProfile,
+    classOwnerProfile,
+    activeClassEntry,
+    metadata,
+    isSubjectTeacherMode,
+  });
   const isKgMode = currentSchoolLevel === SCHOOL_LEVELS.KG;
   const [isLoading, setIsLoading] = useState(true);
 
@@ -335,55 +303,6 @@ export default function App() {
       window.removeEventListener('afterprint', handleAfterPrint);
     };
   }, []);
-
-  // Auth Subscription Listener
-  const buildAccessibleClasses = (profile, uid) => {
-    if (!profile || !uid) return [];
-    const list = [];
-    const allocMap = profile.classAllocations || {};
-    const isDedicatedSubjectTeacher = profile.role === 'subject_teacher';
-
-    // 1. If the teacher is a Form Master / Class Teacher, add their home class first
-    // Note: KG (KG 1–2) and Primary (BS. 1–6) are strictly Class Teaching (allocatedSubjects: null)
-    if (!isDedicatedSubjectTeacher && profile.assignedClass && profile.assignedClass !== 'Subject Teacher') {
-      const homeIsJhs = isJhsClass(profile.assignedClass);
-      const homeAlloc = homeIsJhs ? allocMap[uid] : null;
-      list.push({
-        classUid: uid,
-        className: profile.assignedClass,
-        isFormMaster: true,
-        allocatedSubjects: homeIsJhs && Array.isArray(homeAlloc?.subjects) && homeAlloc.subjects.length > 0
-          ? homeAlloc.subjects
-          : null
-      });
-    }
-
-    // 2. Add any additional JHS classes allocated to this teacher (strictly JHS classes only)
-    const canHaveSubjectAllocations =
-      isDedicatedSubjectTeacher ||
-      !profile.assignedClass ||
-      profile.assignedClass === 'Subject Teacher' ||
-      isJhsClass(profile.assignedClass);
-
-    if (canHaveSubjectAllocations) {
-      Object.entries(allocMap).forEach(([targetUid, alloc]) => {
-        const cUid = alloc?.classUid || targetUid;
-        if (!cUid) return;
-        if (list.some(item => item.classUid === cUid)) return;
-        if (alloc?.className && !isJhsClass(alloc.className)) return;
-        if (Array.isArray(alloc?.subjects) && alloc.subjects.length > 0) {
-          list.push({
-            classUid: cUid,
-            className: alloc.className || 'Assigned Class',
-            isFormMaster: false,
-            allocatedSubjects: alloc.subjects
-          });
-        }
-      });
-    }
-
-    return list;
-  };
 
   // Auth Subscription Listener with Strict Multi-Tenant Isolation & Self-Healing
   useEffect(() => {
@@ -1701,7 +1620,7 @@ if (userProfile?.isSeniorSuperUser) {
             students={students}
             metadata={metadata}
             teacherSubjects={isSubjectTeacherMode ? gradebookSubjects : teacherSubjects}
-            allocatedSubjects={gradebookSubjects}
+            allocatedSubjects={isSubjectTeacherMode ? gradebookSubjects : (activeClassEntry?.allocatedSubjects || null)}
             isSubjectTeacherMode={isSubjectTeacherMode}
           />
         )}

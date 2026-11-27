@@ -34,7 +34,7 @@ export default function TrendAnalysis({
   const [selectedStudent, setSelectedStudent] = useState('class');
   // 'overall' | 'my_subjects' | 'subjects'
   const [viewMode, setViewMode] = useState(
-    isSubjectTeacherMode ? 'subjects' : (hasOwnSubjectArea ? 'my_subjects' : 'overall')
+    isSubjectTeacherMode ? 'subjects' : 'overall'
   );
   const [selectedSubject, setSelectedSubject] = useState('all');
 
